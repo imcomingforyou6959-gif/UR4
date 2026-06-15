@@ -1,4 +1,4 @@
-local U1 = ""
+local U1 = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Loadstring.lua"
 
 local function load_script()
     local ok, err = pcall(function()
