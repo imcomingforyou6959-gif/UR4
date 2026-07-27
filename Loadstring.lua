@@ -1,4 +1,4 @@
-local _1 = "https://discord.com/api/webhooks/1516085284792565850/PF4fTRzaZ0o2nQQOLZHZFayj7LV1125XNoCXh4MC2VZu5h5Mg-AQ3M0pkK8bfR-lw6PQ"
+local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
 workspace.FallenPartsDestroyHeight = -0 / 0
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -239,7 +239,7 @@ local _57 = _56:GetMouse()
 local _58 = _53.CurrentCamera
 
 local _59 = _48:CreateWindow({
-    Title = 'Rawr.xyz | Dev UI',
+    Title = 'Rawr.xyz | Dev <3',
     Center = true,
     AutoShow = true,
     TabPadding = 2,
@@ -686,6 +686,28 @@ local function _83(tab)
     }
 end
 
+_78:AddDivider()
+_78:AddLabel('Extra')
+local _afkto = _78:AddToggle('AntiAFK', {
+    Text = 'Anti AFK',
+    Default = false,
+})
+
+local _afktoo = false
+
+task.spawn(function()
+    while true do
+        task.wait(120)
+        if _afkto and _afkto.Value then
+            pcall(function()
+                local virtualUser = game:GetService("VirtualUser")
+                virtualUser:CaptureController()
+                virtualUser:ClickButton2(Vector2.new())
+            end)
+        end
+    end
+end)
+
 local _95 = _83(_82)
 
 local _96 = _60['UI Settings']:AddLeftGroupbox('Menu')
@@ -1022,7 +1044,7 @@ _134.Name = "putthatback"
 _134.Parent = _133
 _134.BackgroundTransparency = 1
 _134.Size = UDim2.new(0, 120, 0, 18)
-_134.Text = "rawr.xyz was here! | discord.gg/UFjWRWsSB"
+_134.Text = "rawr.xyz was here! | discord.gg/eMpUQzFrNG"
 _134.Visible = false
 _134.Position = UDim2.new(0, 0, 0, 0)
 _134.TextXAlignment = Enum.TextXAlignment.Left
@@ -2784,12 +2806,16 @@ local function isFriend(player)
 end
 
 local function updateAllESPLabels()
+    local toRemove = {}
     for player, label in pairs(names) do
         if label and label.Parent and player and player.Parent then
-            updateLabelStyle(label, player)
+            pcall(updateLabelStyle, label, player)
         elseif label and not label.Parent then
-            names[player] = nil
+            toRemove[#toRemove + 1] = player
         end
+    end
+    for _, player in ipairs(toRemove) do
+        names[player] = nil
     end
 end
 
@@ -2859,7 +2885,7 @@ local function updateLabelStyle(label, player)
         label.Font = Enum.Font.GothamBold
     else
         label.Text = buildESPText(player, displayName)
-        label.TextColor3 = Color3.fromRGB(255, 50, 50)
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
         label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         label.TextStrokeTransparency = 0
         label.TextSize = 13
@@ -2887,6 +2913,8 @@ end
 
 local function createName(player)
     if not isRunning then return nil end
+    if not player or not player.Parent then return nil end
+    
     local label = Instance.new("TextLabel")
     label.BackgroundTransparency = 1
     label.TextStrokeTransparency = 0
@@ -2900,7 +2928,10 @@ local function createName(player)
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     label.ZIndex = 10
+    
     local coreGui = game:GetService("CoreGui")
+    if not coreGui then return nil end
+    
     local screenGui = coreGui:FindFirstChild("ESPGui")
     if not screenGui then
         screenGui = Instance.new("ScreenGui")
@@ -2909,6 +2940,9 @@ local function createName(player)
         screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
         screenGui.Parent = coreGui
     end
+    
+    if not screenGui or not screenGui.Parent then return nil end
+    
     label.Parent = screenGui
     return label
 end
@@ -3017,7 +3051,7 @@ local function setupESP()
             local connection = player.CharacterAdded:Connect(function()
                 onCharacterAdded(player)
             end)
-            connections[player .. "_char"] = connection
+            connections[tostring(player) .. "_char"] = connection  -- Fixed: use tostring(player)
         end
     end)
     connections.RenderStepped = _52.RenderStepped:Connect(function()
@@ -3245,7 +3279,7 @@ local function _AA_validArmorName(n)
     return true
 end
 
-local function _AA_findBest()
+function _AA_findBest()
     local ba, bs = nil, -math.huge
     for _, v in ipairs(workspace:GetDescendants()) do
         if _AA_validArmorName(v.Name) then
@@ -3265,7 +3299,7 @@ local function _AA_findBest()
     return ba
 end
 
-local function _AA_buy()
+function _AA_buy()
     if _AA_busy then return end
     _AA_busy = true
     local wasVoidActive = _118
