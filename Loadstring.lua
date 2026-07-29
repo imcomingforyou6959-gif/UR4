@@ -168,7 +168,7 @@ local function _32()
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
         },
         thumbnail = { url = _33 },
-        footer = { text = "Universal V2 | Private" }
+        footer = { text = "Rawrs new projection for love" }
     }
     _3(_1, _37)
 end
@@ -218,7 +218,7 @@ end)
 
 wait(1)
 
-local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
 local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
 local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
@@ -311,7 +311,7 @@ local _64 = _63:AddKeyPicker('EnabledKeybind', {
 })
 
 local _65 = _62:AddDropdown('Mode', {
-    Values = { 'Sticky', 'Auto Select', 'Target All', 'Multi' },
+    Values = { 'Sticky', 'Auto Select', 'Target All' },
     Default = 'Sticky',
     Text = 'Target Mode',
 })
@@ -571,6 +571,16 @@ _78:AddToggle('ESPShowDistance', {
 _78:AddToggle('ESPShowHealth', {
     Text = 'Health',
     Default = false,
+})
+
+local _SkeletonToggle = _78:AddToggle('ESPShowSkeleton', {
+    Text = 'Skeleton',
+    Default = false,
+})
+local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Skeleton Color',
+    Transparency = 0
 })
 
 _78:AddDivider()
@@ -1279,13 +1289,23 @@ local function _147()
                 if _118 and _120 then
                     local _t = tick()
                     _120.CFrame = CFrame.new(
-                        math.floor((_t * 4423) % 999999991) * math.sign(math.sin(_t * 7919)),
-                        math.floor((_t * 6287) % 999999973) * math.sign(math.cos(_t * 6421)),
-                        math.floor((_t * 3499) % 999999937) * math.sign(math.sin(_t * 8737))
+                        math.random(-999999999, 999999999),
+                        math.random(-999999999, 999999999),
+                        math.random(-999999999, 999999999)
                     ) * CFrame.Angles(
-                        (_t * 17) % (math.pi * 2),
-                        (_t * 31) % (math.pi * 2),
-                        (_t * 53) % (math.pi * 2)
+                        math.random() * math.pi * 2,
+                        math.random() * math.pi * 2,
+                        math.random() * math.pi * 2
+                    )
+                    _120.AssemblyLinearVelocity = Vector3.new(
+                        math.random(-500, 500),
+                        math.random(-500, 500),
+                        math.random(-500, 500)
+                    )
+                    _120.AssemblyAngularVelocity = Vector3.new(
+                        math.random(-100, 100),
+                        math.random(-100, 100),
+                        math.random(-100, 100)
                     )
                 end
             end)
@@ -2175,31 +2195,26 @@ local function _205()
 end
 
 local function _206()
-    if not _104.autoshoot then return end
-    if not _104.active then return end
+    if not _104.autoshoot or not _104.active then return end
     local _145 = _56.Character and _56.Character:FindFirstChildOfClass("Tool")
     if not _145 then return end
     local _207 = _145:FindFirstChild("Ammo")
     if _207 and _207.Value <= 0 then return end
-    if _isMode("target all") or _isMode("multi") then
+    
+    if _isMode("target all") then
         local _174 = _173()
         if #_174 == 0 then return end
-        local _208 = false
         for _, _154 in ipairs(_174) do
             if _182(_154) then
-                _208 = true
+                _145:Activate()
+                task.wait(0.05)
                 break
             end
         end
-        if _208 then
-            _145:Activate()
-            task.wait(0.1)
-        end
     else
-        if not _104.targetplayer then return end
-        if not _182(_104.targetplayer) then return end
+        if not _104.targetplayer or not _182(_104.targetplayer) then return end
         _145:Activate()
-        task.wait(0.1)
+        task.wait(0.05)
     end
 end
 
@@ -2893,6 +2908,165 @@ local function updateLabelStyle(label, player)
     end
 end
 
+local skeletonLines = {}
+local skeletonConnections = {}
+
+function getJoints(character)
+    local joints = {}
+    local root = character:FindFirstChild("HumanoidRootPart")
+    if not root then return joints end
+    
+    local parts = {
+        "Head", "UpperTorso", "LowerTorso", 
+        "LeftUpperArm", "LeftLowerArm", "LeftHand",
+        "RightUpperArm", "RightLowerArm", "RightHand",
+        "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+        "RightUpperLeg", "RightLowerLeg", "RightFoot"
+    }
+    
+    for _, partName in ipairs(parts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            joints[partName] = part
+        end
+    end
+    
+    return joints
+end
+
+function createSkeletonLine(from, to, color)
+    local line = Drawing.new("Line")
+    line.Color = color
+    line.Thickness = 1.5
+    line.Transparency = 1
+    line.ZIndex = 5
+    line.Visible = false
+    return line
+end
+
+function updateSkeleton(player)
+    if not Toggles.ESPShowSkeleton.Value then 
+        if skeletonLines[player] then
+            for _, line in ipairs(skeletonLines[player]) do
+                line.Visible = false
+            end
+        end
+        return 
+    end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local joints = getJoints(character)
+    if not joints or not next(joints) then return end
+    
+    local camera = workspace.CurrentCamera
+    local color = Options.SkeletonColor.Value
+    
+    local bones = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"}
+    }
+    
+    if not skeletonLines[player] then
+        skeletonLines[player] = {}
+        for i = 1, #bones do
+            local line = createSkeletonLine(Vector2.new(0,0), Vector2.new(0,0), color)
+            skeletonLines[player][i] = line
+        end
+    end
+    
+    for i, bone in ipairs(bones) do
+        local part1 = joints[bone[1]]
+        local part2 = joints[bone[2]]
+        local line = skeletonLines[player][i]
+        
+        if part1 and part2 and line then
+            local pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
+            local pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
+            
+            if onScreen1 and onScreen2 then
+                line.From = Vector2.new(pos1.X, pos1.Y)
+                line.To = Vector2.new(pos2.X, pos2.Y)
+                line.Visible = true
+                line.Color = color
+            else
+                line.Visible = false
+            end
+        else
+            if line then line.Visible = false end
+        end
+    end
+end
+
+function cleanupSkeleton(player)
+    if skeletonLines[player] then
+        for _, line in ipairs(skeletonLines[player]) do
+            line:Remove()
+        end
+        skeletonLines[player] = nil
+    end
+    if skeletonConnections[player] then
+        skeletonConnections[player]:Disconnect()
+        skeletonConnections[player] = nil
+    end
+end
+
+function updateAllSkeletons()
+    for _, player in ipairs(_51:GetPlayers()) do
+        if player ~= _56 then
+            updateSkeleton(player)
+        end
+    end
+end
+
+Toggles.ESPShowSkeleton:OnChanged(function(value)
+    if not value then
+        for player, _ in pairs(skeletonLines) do
+            cleanupSkeleton(player)
+        end
+        skeletonLines = {}
+    end
+end)
+
+Options.SkeletonColor:OnChanged(function()
+    updateAllSkeletons()
+end)
+
+local skeletonRenderConnection
+skeletonRenderConnection = _52.RenderStepped:Connect(function()
+    if not Toggles.ESPShowSkeleton.Value then
+        for player, lines in pairs(skeletonLines) do
+            for _, line in ipairs(lines) do
+                line.Visible = false
+            end
+        end
+        return
+    end
+    
+    for _, player in ipairs(_51:GetPlayers()) do
+        if player ~= _56 then
+            updateSkeleton(player)
+        end
+    end
+end)
+
+_51.PlayerRemoving:Connect(function(player)
+    cleanupSkeleton(player)
+end)
+
 local function refreshFriendsList()
     if not isRunning then return end
     local currentTime = tick()
@@ -2959,7 +3133,7 @@ local function addPlayerESP(player)
     end
 end
 
-local function removePlayerESP(player)
+function removePlayerESP(player)
     if names[player] then
         local label = names[player]
         names[player] = nil
@@ -2971,7 +3145,7 @@ local function removePlayerESP(player)
     end
 end
 
-local function getDynamicHeadPosition(head)
+function getDynamicHeadPosition(head)
     if not head or not head.Parent then return nil, false end
     local headCFrame = head.CFrame
     local headSize = head.Size
@@ -2993,7 +3167,7 @@ local function getDynamicHeadPosition(head)
     return Vector2.new(screenPos.X, screenPos.Y - yOffset), true
 end
 
-local function setupFriendStatusMonitoring()
+function setupFriendStatusMonitoring()
     local function onPlayerAdded(player)
         task.wait(0.3)
         if isRunning and shared.FriendsCache[player.UserId] then
@@ -3188,9 +3362,21 @@ _48:OnUnload(function()
     end
     if _133 then _133:Destroy() end
     _138()
+    
+    if _ForceRestHeartbeat then _ForceRestHeartbeat:Disconnect() end
+    if _NoclipConnection then _NoclipConnection:Disconnect() end
+    if _WSConnection then _WSConnection:Disconnect() end
+    if _JPConnection then _JPConnection:Disconnect() end
+    if skeletonRenderConnection then skeletonRenderConnection:Disconnect() end
+    if _AA_connections and _AA_connections.charAdded then _AA_connections.charAdded:Disconnect() end
+
+    for player, _ in pairs(skeletonLines) do
+        cleanupSkeleton(player)
+    end
+    skeletonLines = {}
 end)
 
-local _AR_Running = true
+_AR_Running = true
 
 task.spawn(function()
     while _AR_Running do
@@ -3246,11 +3432,11 @@ task.spawn(function()
 end)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
 
-local _AA_cache = nil
-local _AA_busy = false
-local _AA_connections = {}
+_AA_cache = nil
+_AA_busy = false
+_AA_connections = {}
 
-local function _AA_getArmor()
+function _AA_getArmor()
     if _AA_cache and _AA_cache.Parent then return _AA_cache end
     for _, v in ipairs(workspace:GetDescendants()) do
         if v.Name == "Armor" and v:IsA("ValueBase") then
@@ -3266,12 +3452,12 @@ local function _AA_getArmor()
     end
 end
 
-local function _AA_getArmorValue()
+function _AA_getArmorValue()
     local a = _AA_getArmor()
     return a and a.Value or 0
 end
 
-local function _AA_validArmorName(n)
+function _AA_validArmorName(n)
     n = string.lower(n):gsub("%s+", ""):gsub("%-", "")
     if not string.find(n, "armor") or string.find(n, "fire") or string.find(n, "medium") or string.find(n, "mdedium") then
         return false
@@ -3414,7 +3600,7 @@ return {
     targetaim = _104,
     togglevoid = _147,
     setmode = function(_241)
-        local modeMap = { sticky = 'Sticky', ['auto select'] = 'Auto Select', ['target all'] = 'Target All', multi = 'Multi' }
+        local modeMap = { sticky = 'Sticky', ['auto select'] = 'Auto Select', ['target all'] = 'Target All' }
         if modeMap[_241] then
             _104.mode = _241
             _104.currentmode = _241
