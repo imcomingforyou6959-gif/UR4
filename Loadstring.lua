@@ -168,7 +168,7 @@ local function _32()
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
         },
         thumbnail = { url = _33 },
-        footer = { text = "Rawrs new projection for love" }
+        footer = { text = "Universal V2 | Private" }
     }
     _3(_1, _37)
 end
@@ -218,7 +218,7 @@ end)
 
 wait(1)
 
-local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
+local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
 local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
@@ -707,7 +707,7 @@ local _afktoo = false
 
 task.spawn(function()
     while true do
-        task.wait(120)
+        task.wait(400)
         if _afkto and _afkto.Value then
             pcall(function()
                 local virtualUser = game:GetService("VirtualUser")
@@ -1166,9 +1166,15 @@ end
 Toggles.Noclip:OnChanged(_NoclipToggleChanged)
 
 local function _WalkSpeedLoop()
-    if not Toggles.WalkSpeedEnabled.Value then return end
+    if not Toggles.WalkSpeedEnabled.Value then 
+        return 
+    end
+    
     local char = _56.Character
-    if not char then return end
+    if not char then 
+        return 
+    end
+    
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         hum.WalkSpeed = Options.WalkSpeed.Value
@@ -1176,7 +1182,12 @@ local function _WalkSpeedLoop()
 end
 
 local function _WalkSpeedChanged()
-    if not _WSConnection then
+    if _WSConnection then
+        _WSConnection:Disconnect()
+        _WSConnection = nil
+    end
+    
+    if Toggles.WalkSpeedEnabled.Value then
         _WSConnection = _52.RenderStepped:Connect(_WalkSpeedLoop)
     end
 end
@@ -2462,7 +2473,7 @@ Options.Mode:OnChanged(function(value)
         _198()
         _165()
     end
-    if (value == "auto select" or value == "target all" or value == "multi") and _105 then
+    if (value == "auto select" or value == "target all") and _105 then
         _150()
         if Toggles.Spectate.Value then
             Toggles.Spectate:SetValue(false)
@@ -2821,16 +2832,12 @@ local function isFriend(player)
 end
 
 local function updateAllESPLabels()
-    local toRemove = {}
     for player, label in pairs(names) do
         if label and label.Parent and player and player.Parent then
-            pcall(updateLabelStyle, label, player)
+            updateLabelStyle(label, player)
         elseif label and not label.Parent then
-            toRemove[#toRemove + 1] = player
+            names[player] = nil
         end
-    end
-    for _, player in ipairs(toRemove) do
-        names[player] = nil
     end
 end
 
@@ -2910,21 +2917,45 @@ end
 
 local skeletonLines = {}
 local skeletonConnections = {}
+local bones = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"}
+}
+
+local partNames = {
+    "Head", "UpperTorso", "LowerTorso", 
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot"
+}
+
+local screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+local screenPadding = 100
+
+function isOnScreen(position)
+    return position.X > -screenPadding and position.X < screenSize.X + screenPadding and
+           position.Y > -screenPadding and position.Y < screenSize.Y + screenPadding
+end
 
 function getJoints(character)
     local joints = {}
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then return joints end
     
-    local parts = {
-        "Head", "UpperTorso", "LowerTorso", 
-        "LeftUpperArm", "LeftLowerArm", "LeftHand",
-        "RightUpperArm", "RightLowerArm", "RightHand",
-        "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
-        "RightUpperLeg", "RightLowerLeg", "RightFoot"
-    }
-    
-    for _, partName in ipairs(parts) do
+    for _, partName in ipairs(partNames) do
         local part = character:FindFirstChild(partName)
         if part and part:IsA("BasePart") then
             joints[partName] = part
@@ -2934,7 +2965,7 @@ function getJoints(character)
     return joints
 end
 
-function createSkeletonLine(from, to, color)
+function createSkeletonLine(color)
     local line = Drawing.new("Line")
     line.Color = color
     line.Thickness = 1.5
@@ -2944,10 +2975,14 @@ function createSkeletonLine(from, to, color)
     return line
 end
 
+local fromVec = Vector2.new()
+local toVec = Vector2.new()
+
 function updateSkeleton(player)
     if not Toggles.ESPShowSkeleton.Value then 
-        if skeletonLines[player] then
-            for _, line in ipairs(skeletonLines[player]) do
+        local lines = skeletonLines[player]
+        if lines then
+            for _, line in ipairs(lines) do
                 line.Visible = false
             end
         end
@@ -2961,47 +2996,54 @@ function updateSkeleton(player)
     if not joints or not next(joints) then return end
     
     local camera = workspace.CurrentCamera
-    local color = Options.SkeletonColor.Value
+    if not camera then return end
     
-    local bones = {
-        {"Head", "UpperTorso"},
-        {"UpperTorso", "LowerTorso"},
-        {"UpperTorso", "LeftUpperArm"},
-        {"LeftUpperArm", "LeftLowerArm"},
-        {"LeftLowerArm", "LeftHand"},
-        {"UpperTorso", "RightUpperArm"},
-        {"RightUpperArm", "RightLowerArm"},
-        {"RightLowerArm", "RightHand"},
-        {"LowerTorso", "LeftUpperLeg"},
-        {"LeftUpperLeg", "LeftLowerLeg"},
-        {"LeftLowerLeg", "LeftFoot"},
-        {"LowerTorso", "RightUpperLeg"},
-        {"RightUpperLeg", "RightLowerLeg"},
-        {"RightLowerLeg", "RightFoot"}
-    }
-    
-    if not skeletonLines[player] then
-        skeletonLines[player] = {}
-        for i = 1, #bones do
-            local line = createSkeletonLine(Vector2.new(0,0), Vector2.new(0,0), color)
-            skeletonLines[player][i] = line
+    screenSize = camera.ViewportSize
+
+    local rootPart = joints["HumanoidRootPart"] or character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+        if not onScreen or not isOnScreen(rootPos) then
+            local lines = skeletonLines[player]
+            if lines then
+                for _, line in ipairs(lines) do
+                    line.Visible = false
+                end
+            end
+            return
         end
     end
+    
+    local color = Options.SkeletonColor.Value
+    
+    local lines = skeletonLines[player]
+    if not lines then
+        lines = {}
+        for i = 1, #bones do
+            lines[i] = createSkeletonLine(color)
+        end
+        skeletonLines[player] = lines
+    end
+    
+    local anyVisible = false
     
     for i, bone in ipairs(bones) do
         local part1 = joints[bone[1]]
         local part2 = joints[bone[2]]
-        local line = skeletonLines[player][i]
+        local line = lines[i]
         
         if part1 and part2 and line then
             local pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
             local pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
             
-            if onScreen1 and onScreen2 then
-                line.From = Vector2.new(pos1.X, pos1.Y)
-                line.To = Vector2.new(pos2.X, pos2.Y)
+            if (onScreen1 or onScreen2) and (isOnScreen(pos1) or isOnScreen(pos2)) then
+                fromVec = Vector2.new(pos1.X, pos1.Y)
+                toVec = Vector2.new(pos2.X, pos2.Y)
+                line.From = fromVec
+                line.To = toVec
                 line.Visible = true
                 line.Color = color
+                anyVisible = true
             else
                 line.Visible = false
             end
@@ -3012,53 +3054,66 @@ function updateSkeleton(player)
 end
 
 function cleanupSkeleton(player)
-    if skeletonLines[player] then
-        for _, line in ipairs(skeletonLines[player]) do
+    local lines = skeletonLines[player]
+    if lines then
+        for _, line in ipairs(lines) do
             line:Remove()
         end
         skeletonLines[player] = nil
     end
-    if skeletonConnections[player] then
-        skeletonConnections[player]:Disconnect()
+    
+    local conn = skeletonConnections[player]
+    if conn then
+        conn:Disconnect()
         skeletonConnections[player] = nil
-    end
-end
-
-function updateAllSkeletons()
-    for _, player in ipairs(_51:GetPlayers()) do
-        if player ~= _56 then
-            updateSkeleton(player)
-        end
     end
 end
 
 Toggles.ESPShowSkeleton:OnChanged(function(value)
     if not value then
-        for player, _ in pairs(skeletonLines) do
-            cleanupSkeleton(player)
-        end
-        skeletonLines = {}
-    end
-end)
-
-Options.SkeletonColor:OnChanged(function()
-    updateAllSkeletons()
-end)
-
-local skeletonRenderConnection
-skeletonRenderConnection = _52.RenderStepped:Connect(function()
-    if not Toggles.ESPShowSkeleton.Value then
         for player, lines in pairs(skeletonLines) do
             for _, line in ipairs(lines) do
                 line.Visible = false
             end
         end
-        return
     end
+end)
+
+Options.SkeletonColor:OnChanged(function()
+    for _, lines in pairs(skeletonLines) do
+        for _, line in ipairs(lines) do
+            line.Color = Options.SkeletonColor.Value
+        end
+    end
+end)
+
+local skeletonRenderConnection
+skeletonRenderConnection = _52.RenderStepped:Connect(function()
+    if not Toggles.ESPShowSkeleton.Value then return end
     
-    for _, player in ipairs(_51:GetPlayers()) do
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    local players = _51:GetPlayers()
+    for _, player in ipairs(players) do
         if player ~= _56 then
-            updateSkeleton(player)
+            local character = player.Character
+            if character then
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+                    if onScreen and isOnScreen(rootPos) then
+                        updateSkeleton(player)
+                    else
+                        local lines = skeletonLines[player]
+                        if lines then
+                            for _, line in ipairs(lines) do
+                                line.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
         end
     end
 end)
@@ -3085,9 +3140,18 @@ local function refreshFriendsList()
     isRefreshingFriends = false
 end
 
+local screenGui
+
 local function createName(player)
-    if not isRunning then return nil end
-    if not player or not player.Parent then return nil end
+    if not isRunning or not player or not player.Parent then return nil end
+    
+    if not screenGui then
+        screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "ESPGui"
+        screenGui.ResetOnSpawn = false
+        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        screenGui.Parent = game:GetService("CoreGui")
+    end
     
     local label = Instance.new("TextLabel")
     label.BackgroundTransparency = 1
@@ -3102,30 +3166,12 @@ local function createName(player)
     label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     label.ZIndex = 10
-    
-    local coreGui = game:GetService("CoreGui")
-    if not coreGui then return nil end
-    
-    local screenGui = coreGui:FindFirstChild("ESPGui")
-    if not screenGui then
-        screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "ESPGui"
-        screenGui.ResetOnSpawn = false
-        screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        screenGui.Parent = coreGui
-    end
-    
-    if not screenGui or not screenGui.Parent then return nil end
-    
     label.Parent = screenGui
     return label
 end
 
 local function addPlayerESP(player)
-    if not isRunning then return end
-    if player == ESPLocalPlayer then return end
-    if names[player] then return end
-    if not player or not player.Parent then return end
+    if not isRunning or player == ESPLocalPlayer or names[player] then return end
     local label = createName(player)
     if label then
         names[player] = label
@@ -3178,165 +3224,231 @@ function setupFriendStatusMonitoring()
     end
     connections.FriendStatusMonitor = _51.PlayerAdded:Connect(onPlayerAdded)
 end
+local ESP = {
+    labels = {},
+    cache = {},
+    lastUpdate = 0,
+    interval = 0.05
+}
 
-local function setupESP()
-    if not isRunning then return end
-    task.spawn(function()
-        refreshFriendsList()
-    end)
-    for _, player in ipairs(_51:GetPlayers()) do
-        if player ~= ESPLocalPlayer then
-            addPlayerESP(player)
-        end
+local function createLabel(player)
+    if not ESPGui then
+        ESPGui = Instance.new("ScreenGui")
+        ESPGui.Name = "ESPGui"
+        ESPGui.ResetOnSpawn = false
+        ESPGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        ESPGui.Parent = game:GetService("CoreGui")
     end
-    connections.PlayerAdded = _51.PlayerAdded:Connect(function(player)
-        if player ~= ESPLocalPlayer then
-            addPlayerESP(player)
-            task.wait(0.1)
-            if isRunning and shared.FriendsCache[player.UserId] then
-                if names[player] then
-                    updateLabelStyle(names[player], player)
-                end
-            end
-            pcall(_BL_ValidateCurrentTarget)
-            pcall(_WL_ValidateCurrentTarget)
-            task.defer(_WL_RefreshDropdown)
-            task.defer(_BL_RefreshDropdown)
-        end
-    end)
-    connections.PlayerRemoving = _51.PlayerRemoving:Connect(function(player)
-        removePlayerESP(player)
-    end)
-    local function onCharacterAdded(player)
-        if names[player] and isRunning then
-            updateLabelStyle(names[player], player)
-        end
-    end
-    for _, player in ipairs(_51:GetPlayers()) do
-        if player ~= ESPLocalPlayer then
-            local connection = player.CharacterAdded:Connect(function()
-                onCharacterAdded(player)
-            end)
-            connections[player] = connection
-        end
-    end
-    connections.CharacterAddedGlobal = _51.PlayerAdded:Connect(function(player)
-        if player ~= ESPLocalPlayer then
-            local connection = player.CharacterAdded:Connect(function()
-                onCharacterAdded(player)
-            end)
-            connections[tostring(player) .. "_char"] = connection  -- Fixed: use tostring(player)
-        end
-    end)
-    connections.RenderStepped = _52.RenderStepped:Connect(function()
-        if not isRunning then return end
-        if not espToggleOn("ESPEnabled") then
-            setAllESPVisible(false)
-            return
-        end
-        updateCurrentTarget()
-        local currentTime = tick()
-        if currentTime - lastUpdateTime < UPDATE_INTERVAL then
-            return
-        end
-        lastUpdateTime = currentTime
-        for player, label in pairs(names) do
-            if not label or not label.Parent then
-                removePlayerESP(player)
-                continue
-            end
-            if not player or not player.Parent then
-                removePlayerESP(player)
-                continue
-            end
-            local character = player.Character
-            if not character or not character.Parent then
-                if label.Visible then label.Visible = false end
-                continue
-            end
-            local humanoid = character:FindFirstChild("Humanoid")
-            if not humanoid or humanoid.Health <= 0 then
-                if label.Visible then label.Visible = false end
-                continue
-            end
-            local head = character:FindFirstChild("Head")
-            if not head then
-                if label.Visible then label.Visible = false end
-                continue
-            end
-            updateLabelStyle(label, player)
-            if label.Text == "" then
-                if label.Visible then label.Visible = false end
-                continue
-            end
-            local screenPos, isOnScreen = getDynamicHeadPosition(head)
-            if isOnScreen and screenPos then
-                label.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
-                if not label.Visible then label.Visible = true end
-                local distance = (Camera.CFrame.Position - head.Position).Magnitude
-                local textSize = 13
-                if distance > 150 then
-                    textSize = math.clamp(13 - ((distance - 150) / 200), 10, 13)
-                end
-                label.TextSize = textSize
-                label.TextTransparency = 0
-                label.TextStrokeTransparency = 0
-            else
-                if label.Visible then label.Visible = false end
-            end
-        end
-    end)
-    spawnedTasks[1] = task.spawn(function()
-        if not isRunning then return end
-        task.wait(0.5)
-        if isRunning then
-            refreshFriendsList()
-        end
-    end)
-    spawnedTasks[2] = task.spawn(function()
-        while isRunning do
-            task.wait(2)
-            if isRunning then
-                refreshFriendsList()
-            end
-        end
-    end)
-    connections.AncestryChanged = ESPLocalPlayer.AncestryChanged:Connect(function()
-        if not ESPLocalPlayer.Parent then
-            cleanup()
-        end
-    end)
-    connections.CameraChanged = _53:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-        Camera = _53.CurrentCamera
-    end)
-    setupFriendStatusMonitoring()
+    
+    local label = Instance.new("TextLabel")
+    label.BackgroundTransparency = 1
+    label.TextStrokeTransparency = 0
+    label.TextSize = 13
+    label.Font = Enum.Font.GothamBold
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.BorderSizePixel = 0
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.Visible = false
+    label.ZIndex = 10
+    label.Parent = ESPGui
+    ESP.labels[player] = label
+    return label
 end
 
-Toggles.ESPEnabled:OnChanged(function(value)
-    if not value then
-        setAllESPVisible(false)
+local function removeLabel(player)
+    if ESP.labels[player] then
+        ESP.labels[player]:Destroy()
+        ESP.labels[player] = nil
+    end
+    ESP.cache[player] = nil
+end
+
+local function getHeadPos(head)
+    if not head then return end
+    local pos, onScreen = Camera:WorldToScreenPoint(head.Position + Vector3.new(0, head.Size.Y/2, 0))
+    if onScreen and pos.Z > 0 then
+        local dist = (Camera.CFrame.Position - head.Position).Magnitude
+        local yOffset = 22
+        if dist > 150 then yOffset = 12 end
+        return Vector2.new(pos.X, pos.Y - yOffset), dist, true
+    end
+end
+
+local function buildText(player)
+    local parts = {}
+    if Toggles.ESPShowNames and Toggles.ESPShowNames.Value then
+        table.insert(parts, player.DisplayName)
+    end
+    if Toggles.ESPShowDistance and Toggles.ESPShowDistance.Value then
+        local char = player.Character
+        local head = char and char:FindFirstChild("Head")
+        if head then
+            local dist = math.floor((Camera.CFrame.Position - head.Position).Magnitude)
+            table.insert(parts, "[" .. dist .. "m]")
+        end
+    end
+    if Toggles.ESPShowHealth and Toggles.ESPShowHealth.Value then
+        local char = player.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        if hum then
+            table.insert(parts, math.floor(hum.Health) .. " HP")
+        end
+    end
+    return #parts > 0 and table.concat(parts, " ") or ""
+end
+
+local function updateLabel(player)
+    local label = ESP.labels[player]
+    if not label then return end
+    
+    local char = player.Character
+    if not char or not char.Parent then
+        label.Visible = false
+        return
+    end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum or hum.Health <= 0 then
+        label.Visible = false
+        return
+    end
+    
+    local head = char:FindFirstChild("Head")
+    if not head then
+        label.Visible = false
+        return
+    end
+    
+    local text = buildText(player)
+    if text == "" then
+        label.Visible = false
+        return
+    end
+    
+    local pos, dist, onScreen = getHeadPos(head)
+    if not onScreen then
+        label.Visible = false
+        return
+    end
+    
+    if label.Text ~= text then
+        label.Text = text
+    end
+    
+    local posX, posY = math.round(pos.X), math.round(pos.Y)
+    if label.Position.X.Offset ~= posX or label.Position.Y.Offset ~= posY then
+        label.Position = UDim2.new(0, posX, 0, posY)
+    end
+    
+    local size = 13
+    if dist > 150 then
+        size = math.clamp(13 - ((dist - 150) / 200), 8, 13)
+    end
+    if label.TextSize ~= size then
+        label.TextSize = size
+    end
+    
+    if ESP.cache[player] and ESP.cache[player] == char then
+        if not label.Visible then label.Visible = true end
+        return
+    end
+    
+    local isFriend = shared.FriendsCache and shared.FriendsCache[player.UserId]
+    local isTarget = _104 and _104.targetplayer == player
+    
+    if isTarget then
+        label.TextColor3 = Color3.fromRGB(255, 0, 0)
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.TextSize = 14
+        label.Font = Enum.Font.GothamBold
+    elseif isFriend then
+        label.TextColor3 = Color3.fromRGB(0, 200, 255)
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.Font = Enum.Font.GothamBold
     else
-        updateAllESPLabels()
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
+        label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        label.Font = Enum.Font.GothamBold
+    end
+    
+    ESP.cache[player] = char
+    label.Visible = true
+end
+
+local function updateAllLabels()
+    if not Toggles.ESPEnabled or not Toggles.ESPEnabled.Value then
+        for _, label in pairs(ESP.labels) do
+            if label then label.Visible = false end
+        end
+        return
+    end
+    
+    local now = tick()
+    if now - ESP.lastUpdate < ESP.interval then return end
+    ESP.lastUpdate = now
+    
+    for player in pairs(ESP.labels) do
+        if player and player.Parent then
+            updateLabel(player)
+        else
+            removeLabel(player)
+        end
+    end
+end
+
+local function setupESP()
+    for _, player in ipairs(_51:GetPlayers()) do
+        if player ~= _56 then
+            createLabel(player)
+        end
+    end
+    
+    _51.PlayerAdded:Connect(function(player)
+        if player ~= _56 then
+            createLabel(player)
+            task.wait(0.1)
+            if shared.FriendsCache and shared.FriendsCache[player.UserId] then
+                updateLabel(player)
+            end
+        end
+    end)
+    
+    _51.PlayerRemoving:Connect(removeLabel)
+    
+    _56.CharacterAdded:Connect(function()
+        for player in pairs(ESP.labels) do
+            ESP.cache[player] = nil
+        end
+    end)
+    
+    for _, player in ipairs(_51:GetPlayers()) do
+        if player ~= _56 then
+            player.CharacterAdded:Connect(function()
+                ESP.cache[player] = nil
+                updateLabel(player)
+            end)
+        end
+    end
+    
+    _52.RenderStepped:Connect(updateAllLabels)
+    
+    _53:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        Camera = _53.CurrentCamera
+    end)
+end
+
+Toggles.ESPEnabled:OnChanged(function(v)
+    if not v then
+        for _, label in pairs(ESP.labels) do
+            if label then label.Visible = false end
+        end
     end
 end)
 
-Toggles.ESPShowNames:OnChanged(function()
-    if espToggleOn("ESPEnabled") then
-        updateAllESPLabels()
-    end
-end)
-
-Toggles.ESPShowDistance:OnChanged(function()
-    if espToggleOn("ESPEnabled") then
-        updateAllESPLabels()
-    end
-end)
-
-Toggles.ESPShowHealth:OnChanged(function()
-    if espToggleOn("ESPEnabled") then
-        updateAllESPLabels()
-    end
-end)
+Toggles.ESPShowNames:OnChanged(updateAllLabels)
+Toggles.ESPShowDistance:OnChanged(updateAllLabels)
+Toggles.ESPShowHealth:OnChanged(updateAllLabels)
 
 setupESP()
 
@@ -3356,10 +3468,7 @@ _48:OnUnload(function()
     if _254 then _254:Disconnect() end
     if _255 then _255:Disconnect() end
     if _237 then _237:Disconnect() end
-    if _121 then
-        _121:Disconnect()
-        _121 = nil
-    end
+    if _121 then _121:Disconnect() _121 = nil end
     if _133 then _133:Destroy() end
     _138()
     
@@ -3367,13 +3476,11 @@ _48:OnUnload(function()
     if _NoclipConnection then _NoclipConnection:Disconnect() end
     if _WSConnection then _WSConnection:Disconnect() end
     if _JPConnection then _JPConnection:Disconnect() end
-    if skeletonRenderConnection then skeletonRenderConnection:Disconnect() end
+    if skeletonConnection then skeletonConnection:Disconnect() end
     if _AA_connections and _AA_connections.charAdded then _AA_connections.charAdded:Disconnect() end
 
-    for player, _ in pairs(skeletonLines) do
-        cleanupSkeleton(player)
-    end
-    skeletonLines = {}
+    for player in pairs(skeletonLines) do cleanupSkeleton(player) end
+    skeletonLines, skeletonCache = {}, {}
 end)
 
 _AR_Running = true
