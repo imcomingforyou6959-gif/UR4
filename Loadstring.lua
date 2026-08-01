@@ -1885,6 +1885,7 @@ local function _197()
     end
 end
 
+-- Auto Stomp Integration with Multiple Game Support
 local StompEnabled = false
 local StompToggle = _78:AddToggle('AutoStomp', {
     Text = 'Auto Stomp',
@@ -1895,9 +1896,11 @@ StompToggle:OnChanged(function(value)
     StompEnabled = value
 end)
 
+-- Game detection for different Da Hood versions
 local function getStompRemote()
     local replicatedStorage = game:GetService("ReplicatedStorage")
     
+    -- Check for GameRemotes.MainGameEvent (your original game)
     local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
     if gameRemotes then
         local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
@@ -1906,6 +1909,7 @@ local function getStompRemote()
         end
     end
     
+    -- Check for MainRemotes.MainRemoteEvent (different Da Hood game)
     local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
     if mainRemotes then
         local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
@@ -1914,6 +1918,7 @@ local function getStompRemote()
         end
     end
     
+    -- Check for MainEvent directly
     local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
     if mainEvent then
         return mainEvent
@@ -1922,6 +1927,7 @@ local function getStompRemote()
     return nil
 end
 
+-- Cache the remote on first check
 local stompRemote = nil
 local function getRemote()
     if stompRemote and stompRemote.Parent then
@@ -2031,6 +2037,7 @@ function autoStompTarget()
     
     localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
     
+    -- Fire stomp immediately
     for i = 1, 10 do
         fireStomp()
     end
@@ -2069,7 +2076,7 @@ function autoStompTarget()
         end
     end)
     
-    task.delay(0.5, function()
+    task.delay(0.3, function()
         stomping = false
         if stompConnection then
             stompConnection:Disconnect()
