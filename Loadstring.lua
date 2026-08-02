@@ -1882,6 +1882,7 @@ local function _197()
         end
     end
 end
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/SupportingModules.lua'))()
 
 -- always afk
 local AlwaysAFKEnabled = false
@@ -2506,6 +2507,9 @@ local _237 = _52.RenderStepped:Connect(function()
                 autoGrabTarget()
             end
         end
+        if stompGrabCounter == 8 then
+            grabState.ping = getPing()
+        end
     else
         _134.Visible = false
         _135.Visible = false
@@ -2979,211 +2983,87 @@ local function updateLabelStyle(label, player)
 end
 
 local skeletonLines = {}
-local skeletonConnections = {}
-local bones = {
-    {"Head", "UpperTorso"},
-    {"UpperTorso", "LowerTorso"},
-    {"UpperTorso", "LeftUpperArm"},
-    {"LeftUpperArm", "LeftLowerArm"},
-    {"LeftLowerArm", "LeftHand"},
-    {"UpperTorso", "RightUpperArm"},
-    {"RightUpperArm", "RightLowerArm"},
-    {"RightLowerArm", "RightHand"},
-    {"LowerTorso", "LeftUpperLeg"},
-    {"LeftUpperLeg", "LeftLowerLeg"},
-    {"LeftLowerLeg", "LeftFoot"},
-    {"LowerTorso", "RightUpperLeg"},
-    {"RightUpperLeg", "RightLowerLeg"},
-    {"RightLowerLeg", "RightFoot"}
-}
+local bones = {{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
 
-local partNames = {
-    "Head", "UpperTorso", "LowerTorso", 
-    "LeftUpperArm", "LeftLowerArm", "LeftHand",
-    "RightUpperArm", "RightLowerArm", "RightHand",
-    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
-    "RightUpperLeg", "RightLowerLeg", "RightFoot"
-}
-
+local partNames = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
 local screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
 local screenPadding = 100
 
-function isOnScreen(position)
-    return position.X > -screenPadding and position.X < screenSize.X + screenPadding and
-           position.Y > -screenPadding and position.Y < screenSize.Y + screenPadding
+function isOnScreen(pos)
+    return pos.X > -screenPadding and pos.X < screenSize.X + screenPadding and pos.Y > -screenPadding and pos.Y < screenSize.Y + screenPadding
 end
 
 function getJoints(character)
-    local joints = {}
-    local root = character:FindFirstChild("HumanoidRootPart")
+    local joints, root = {}, character:FindFirstChild("HumanoidRootPart")
     if not root then return joints end
-    
-    for _, partName in ipairs(partNames) do
-        local part = character:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            joints[partName] = part
-        end
+    for _, n in ipairs(partNames) do
+        local p = character:FindFirstChild(n)
+        if p and p:IsA("BasePart") then joints[n] = p end
     end
-    
     return joints
 end
 
-function createSkeletonLine(color)
-    local line = Drawing.new("Line")
-    line.Color = color
-    line.Thickness = 1.5
-    line.Transparency = 1
-    line.ZIndex = 5
-    line.Visible = false
-    return line
-end
-
-local fromVec = Vector2.new()
-local toVec = Vector2.new()
-
 function updateSkeleton(player)
-    if not Toggles.ESPShowSkeleton.Value then 
-        local lines = skeletonLines[player]
-        if lines then
-            for _, line in ipairs(lines) do
-                line.Visible = false
-            end
-        end
-        return 
-    end
-    
-    local character = player.Character
-    if not character then return end
-    
-    local joints = getJoints(character)
+    if not Toggles.ESPShowSkeleton.Value then return end
+    local char = player.Character
+    if not char then return end
+    local joints = getJoints(char)
     if not joints or not next(joints) then return end
-    
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    
-    screenSize = camera.ViewportSize
-
-    local rootPart = joints["HumanoidRootPart"] or character:FindFirstChild("HumanoidRootPart")
-    if rootPart then
-        local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-        if not onScreen or not isOnScreen(rootPos) then
-            local lines = skeletonLines[player]
-            if lines then
-                for _, line in ipairs(lines) do
-                    line.Visible = false
-                end
-            end
-            return
-        end
-    end
-    
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    screenSize = cam.ViewportSize
+    local rootPos, onScreen = cam:WorldToViewportPoint(joints["HumanoidRootPart"].Position)
+    if not onScreen or not isOnScreen(rootPos) then return end
     local color = Options.SkeletonColor.Value
     
-    local lines = skeletonLines[player]
-    if not lines then
-        lines = {}
-        for i = 1, #bones do
-            lines[i] = createSkeletonLine(color)
+    if not skeletonLines[player] then
+        local lines = {}
+        for _ = 1, #bones do
+            local l = Drawing.new("Line")
+            l.Color, l.Thickness, l.Transparency, l.ZIndex, l.Visible = color, 1.5, 1, 5, false
+            lines[_] = l
         end
         skeletonLines[player] = lines
     end
     
-    local anyVisible = false
-    
     for i, bone in ipairs(bones) do
-        local part1 = joints[bone[1]]
-        local part2 = joints[bone[2]]
-        local line = lines[i]
-        
-        if part1 and part2 and line then
-            local pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
-            local pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
-            
-            if (onScreen1 or onScreen2) and (isOnScreen(pos1) or isOnScreen(pos2)) then
-                fromVec = Vector2.new(pos1.X, pos1.Y)
-                toVec = Vector2.new(pos2.X, pos2.Y)
-                line.From = fromVec
-                line.To = toVec
-                line.Visible = true
-                line.Color = color
-                anyVisible = true
-            else
-                line.Visible = false
-            end
-        else
-            if line then line.Visible = false end
-        end
+        local p1, p2, line = joints[bone[1]], joints[bone[2]], skeletonLines[player][i]
+        if p1 and p2 and line then
+            local s1, v1 = cam:WorldToViewportPoint(p1.Position)
+            local s2, v2 = cam:WorldToViewportPoint(p2.Position)
+            if (v1 or v2) and (isOnScreen(s1) or isOnScreen(s2)) then
+                line.From, line.To, line.Visible, line.Color = Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), true, color
+            else line.Visible = false end
+        elseif line then line.Visible = false end
     end
 end
 
 function cleanupSkeleton(player)
-    local lines = skeletonLines[player]
-    if lines then
-        for _, line in ipairs(lines) do
-            line:Remove()
-        end
+    if skeletonLines[player] then
+        for _, l in ipairs(skeletonLines[player]) do l:Remove() end
         skeletonLines[player] = nil
-    end
-    
-    local conn = skeletonConnections[player]
-    if conn then
-        conn:Disconnect()
-        skeletonConnections[player] = nil
     end
 end
 
-Toggles.ESPShowSkeleton:OnChanged(function(value)
-    if not value then
-        for player, lines in pairs(skeletonLines) do
-            for _, line in ipairs(lines) do
-                line.Visible = false
-            end
-        end
-    end
-end)
+Toggles.ESPShowSkeleton:OnChanged(function(v) if not v then for _, lines in pairs(skeletonLines) do for _, l in ipairs(lines) do l.Visible = false end end end end)
+Options.SkeletonColor:OnChanged(function() for _, lines in pairs(skeletonLines) do for _, l in ipairs(lines) do l.Color = Options.SkeletonColor.Value end end end)
 
-Options.SkeletonColor:OnChanged(function()
-    for _, lines in pairs(skeletonLines) do
-        for _, line in ipairs(lines) do
-            line.Color = Options.SkeletonColor.Value
-        end
-    end
-end)
-
-local skeletonRenderConnection
-skeletonRenderConnection = _52.RenderStepped:Connect(function()
+local skeletonRenderConnection = _52.RenderStepped:Connect(function()
     if not Toggles.ESPShowSkeleton.Value then return end
-    
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    
-    local players = _51:GetPlayers()
-    for _, player in ipairs(players) do
-        if player ~= _56 then
-            local character = player.Character
-            if character then
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-                    if onScreen and isOnScreen(rootPos) then
-                        updateSkeleton(player)
-                    else
-                        local lines = skeletonLines[player]
-                        if lines then
-                            for _, line in ipairs(lines) do
-                                line.Visible = false
-                            end
-                        end
-                    end
-                end
+    local cam, players = workspace.CurrentCamera, _51:GetPlayers()
+    if not cam then return end
+    for _, p in ipairs(players) do
+        if p ~= _56 and p.Character then
+            local rp = p.Character:FindFirstChild("HumanoidRootPart")
+            if rp then
+                local _, vis = cam:WorldToViewportPoint(rp.Position)
+                if vis then updateSkeleton(p) else if skeletonLines[p] then for _, l in ipairs(skeletonLines[p]) do l.Visible = false end end end
             end
         end
     end
 end)
 
-_51.PlayerRemoving:Connect(function(player)
-    cleanupSkeleton(player)
-end)
+_51.PlayerRemoving:Connect(cleanupSkeleton)
 
 local function refreshFriendsList()
     if not isRunning then return end
@@ -3205,7 +3085,7 @@ end
 
 local screenGui
 
-local function createName(player)
+function createName(player)
     if not isRunning or not player or not player.Parent then return nil end
     
     if not screenGui then
@@ -3233,7 +3113,7 @@ local function createName(player)
     return label
 end
 
-local function addPlayerESP(player)
+function addPlayerESP(player)
     if not isRunning or player == ESPLocalPlayer or names[player] then return end
     local label = createName(player)
     if label then
@@ -3287,14 +3167,15 @@ function setupFriendStatusMonitoring()
     end
     connections.FriendStatusMonitor = _51.PlayerAdded:Connect(onPlayerAdded)
 end
-local ESP = {
+
+ESP = {
     labels = {},
     cache = {},
     lastUpdate = 0,
     interval = 0.05
 }
 
-local function createLabel(player)
+function createLabel(player)
     if not ESPGui then
         ESPGui = Instance.new("ScreenGui")
         ESPGui.Name = "ESPGui"
@@ -3319,7 +3200,7 @@ local function createLabel(player)
     return label
 end
 
-local function removeLabel(player)
+function removeLabel(player)
     if ESP.labels[player] then
         ESP.labels[player]:Destroy()
         ESP.labels[player] = nil
@@ -3327,7 +3208,7 @@ local function removeLabel(player)
     ESP.cache[player] = nil
 end
 
-local function getHeadPos(head)
+function getHeadPos(head)
     if not head then return end
     local pos, onScreen = Camera:WorldToScreenPoint(head.Position + Vector3.new(0, head.Size.Y/2, 0))
     if onScreen and pos.Z > 0 then
@@ -3338,7 +3219,7 @@ local function getHeadPos(head)
     end
 end
 
-local function buildText(player)
+function buildText(player)
     local parts = {}
     if Toggles.ESPShowNames and Toggles.ESPShowNames.Value then
         table.insert(parts, player.DisplayName)
@@ -3361,7 +3242,7 @@ local function buildText(player)
     return #parts > 0 and table.concat(parts, " ") or ""
 end
 
-local function updateLabel(player)
+function updateLabel(player)
     local label = ESP.labels[player]
     if not label then return end
     
@@ -3439,7 +3320,7 @@ local function updateLabel(player)
     label.Visible = true
 end
 
-local function updateAllLabels()
+function updateAllLabels()
     if not Toggles.ESPEnabled or not Toggles.ESPEnabled.Value then
         for _, label in pairs(ESP.labels) do
             if label then label.Visible = false end
@@ -3460,7 +3341,7 @@ local function updateAllLabels()
     end
 end
 
-local function setupESP()
+function setupESP()
     for _, player in ipairs(_51:GetPlayers()) do
         if player ~= _56 then
             createLabel(player)
