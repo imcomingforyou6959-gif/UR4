@@ -703,8 +703,6 @@ local _afkto = _78:AddToggle('AntiAFK', {
     Default = false,
 })
 
-local _afktoo = false
-
 task.spawn(function()
     while true do
         task.wait(400)
@@ -1885,212 +1883,57 @@ local function _197()
     end
 end
 
--- Auto Stomp Integration with Multiple Game Support
-local StompEnabled = false
-local StompToggle = _78:AddToggle('AutoStomp', {
-    Text = 'Auto Stomp',
+-- always afk
+local AlwaysAFKEnabled = false
+local afkThread = nil
+
+local function fireAFK()
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    
+    local remotes = {
+        {Name = "AFKStateChanged", Args = {false}},
+        {Name = "AFK", Args = {"ON"}},
+        {Name = "AFK", Args = {true}},
+        {Name = "MainEvent", Args = {"RequestAFKDisplay", true}},
+        {Name = "SetAFK", Args = {true}},
+        {Name = "ToggleAFK", Args = {true}},
+        {Name = "UpdateAFK", Args = {true}},
+    }
+    
+    for _, remoteData in ipairs(remotes) do
+        pcall(function()
+            local remote = replicatedStorage:FindFirstChild(remoteData.Name)
+            if remote then
+                remote:FireServer(unpack(remoteData.Args))
+            end
+        end)
+    end
+end
+
+local AFKToggle = _78:AddToggle('AlwaysAFK', {
+    Text = 'Always AFK',
     Default = false,
 })
 
-StompToggle:OnChanged(function(value)
-    StompEnabled = value
-end)
-
--- Game detection for different Da Hood versions
-local function getStompRemote()
-    local replicatedStorage = game:GetService("ReplicatedStorage")
+AFKToggle:OnChanged(function(value)
+    AlwaysAFKEnabled = value
     
-    -- Check for GameRemotes.MainGameEvent (your original game)
-    local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
-    if gameRemotes then
-        local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
-        if mainGameEvent then
-            return mainGameEvent
-        end
-    end
-    
-    -- Check for MainRemotes.MainRemoteEvent (different Da Hood game)
-    local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
-    if mainRemotes then
-        local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
-        if mainRemoteEvent then
-            return mainRemoteEvent
-        end
-    end
-    
-    -- Check for MainEvent directly
-    local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
-    if mainEvent then
-        return mainEvent
-    end
-    
-    return nil
-end
-
--- Cache the remote on first check
-local stompRemote = nil
-local function getRemote()
-    if stompRemote and stompRemote.Parent then
-        return stompRemote
-    end
-    stompRemote = getStompRemote()
-    return stompRemote
-end
-
-Grabbed = function(Plr)
-    if Plr and Plr.Character then
-        local char = Plr.Character
-        if char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char:FindFirstChild("GRABBING_CONSTRAINT") then
-            return true
-        end
-    end
-    return false
-end
-
-function isDead(Player)
-    local Character = Player.Character
-    if not Character then return false end
-    
-    local BodyEffects = Character:FindFirstChild("BodyEffects")
-    if BodyEffects and BodyEffects:FindFirstChild("Dead") and BodyEffects.Dead.Value == true then
-        return true
-    end
-    
-    return false
-end
-
-function getBestStompPosition(targetChar)
-    local parts = {"UpperTorso", "Torso", "HumanoidRootPart", "LowerTorso", "Head"}
-    
-    for _, partName in ipairs(parts) do
-        local part = targetChar:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            return part
-        end
-    end
-    
-    return nil
-end
-
-function getPredictedPosition(part)
-    if not part then return nil end
-    
-    local velocity = part.Velocity
-    local predictionTime = 0.15
-    
-    local predictedPos = part.Position + (velocity * predictionTime)
-    
-    if part.AssemblyLinearVelocity then
-        predictedPos = part.Position + (part.AssemblyLinearVelocity * predictionTime)
-    end
-    
-    return CFrame.new(predictedPos)
-end
-
-function fireStomp()
-    local remote = getRemote()
-    if not remote then return end
-    
-    pcall(function()
-        remote:FireServer("Stomp")
-    end)
-end
-
-local stomping = false
-local stompConnection = nil
-local lastPosition = Vector3.new(0, 0, 0)
-local lastUpdateTime = 0
-
-function autoStompTarget()
-    if not StompEnabled then return end
-    if _118 then return end
-    if stomping then return end
-    
-    local target = _104.targetplayer
-    if not target then return end
-    
-    local targetChar = target.Character
-    if not targetChar then return end
-    
-    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
-    if not BodyEffects then return end
-    
-    local KOCheck = BodyEffects:FindFirstChild("K.O")
-    if not KOCheck or KOCheck.Value ~= true then return end
-    if Grabbed(target) then return end
-    if isDead(target) then return end
-    
-    local localChar = _56.Character
-    if not localChar then return end
-    
-    local localHRP = localChar:FindFirstChild("HumanoidRootPart")
-    if not localHRP then return end
-    
-    local targetPart = getBestStompPosition(targetChar)
-    if not targetPart then return end
-    
-    stomping = true
-    local lastpos = localHRP.CFrame
-    
-    local predictedCFrame = getPredictedPosition(targetPart)
-    local stompCFrame = predictedCFrame or targetPart.CFrame
-    
-    localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
-    
-    -- Fire stomp immediately
-    for i = 1, 10 do
-        fireStomp()
-    end
-    
-    if stompConnection then stompConnection:Disconnect() end
-    stompConnection = _52.RenderStepped:Connect(function()
-        if not stomping then
-            stompConnection:Disconnect()
-            stompConnection = nil
-            return
+    if value then
+        if afkThread then
+            task.cancel(afkThread)
+            afkThread = nil
         end
         
-        local currentTargetPart = getBestStompPosition(targetChar)
-        if currentTargetPart then
-            local predictedCFrame = getPredictedPosition(currentTargetPart)
-            local stompCFrame = predictedCFrame or currentTargetPart.CFrame
-            
-            local currentTime = tick()
-            if currentTime - lastUpdateTime > 0.05 then
-                if lastPosition ~= Vector3.new(0, 0, 0) then
-                    local movementDelta = currentTargetPart.Position - lastPosition
-                    local timeDelta = currentTime - lastUpdateTime
-                    if timeDelta > 0 then
-                        local calculatedVelocity = movementDelta / timeDelta
-                        local blendedVelocity = (calculatedVelocity * 0.5) + (currentTargetPart.Velocity * 0.5)
-                        local advancedPrediction = currentTargetPart.Position + (blendedVelocity * 0.2)
-                        stompCFrame = CFrame.new(advancedPrediction)
-                    end
-                end
-                lastPosition = currentTargetPart.Position
-                lastUpdateTime = currentTime
+        afkThread = task.spawn(function()
+            while AlwaysAFKEnabled do
+                fireAFK()
+                task.wait(2.1)
             end
-            
-            localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
-            fireStomp()
-        end
-    end)
-    
-    task.delay(0.3, function()
-        stomping = false
-        if stompConnection then
-            stompConnection:Disconnect()
-            stompConnection = nil
-        end
-        lastPosition = Vector3.new(0, 0, 0)
-        localHRP.CFrame = lastpos
-    end)
-end
-
-task.spawn(function()
-    while task.wait() do
-        if StompEnabled and _104.active and _104.targetplayer then
-            autoStompTarget()
+        end)
+    else
+        if afkThread then
+            task.cancel(afkThread)
+            afkThread = nil
         end
     end
 end)
@@ -2643,16 +2486,26 @@ if _130 then
     setreadonly(_233, true)
 end
 
+local stompGrabCounter = 0
+
 local _237 = _52.RenderStepped:Connect(function()
     if _104.active then
         _205()
         _194()
         _198()
-        if _130 then
-            _141()
-        end
+        if _130 then _141() end
         _206()
         _151()
+        
+        stompGrabCounter = (stompGrabCounter + 1) % 15
+        if stompGrabCounter == 0 and _104.targetplayer then
+            if StompEnabled and not stomping and not _118 and not _AA_busy then
+                autoStompTarget()
+            end
+            if GrabEnabled and not grabState.grabbing and not grabState.active and not stomping and not _118 and not _AA_busy then
+                autoGrabTarget()
+            end
+        end
     else
         _134.Visible = false
         _135.Visible = false
