@@ -703,6 +703,8 @@ local _afkto = _78:AddToggle('AntiAFK', {
     Default = false,
 })
 
+local _afktoo = false
+
 task.spawn(function()
     while true do
         task.wait(400)
@@ -1882,7 +1884,496 @@ local function _197()
         end
     end
 end
-loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/SupportingModules.lua'))()
+
+-- SHARED FUNCTIONS
+Grabbed = function(Plr)
+    if Plr and Plr.Character then
+        local char = Plr.Character
+        if char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char:FindFirstChild("GRABBING_CONSTRAINT") then
+            return true
+        end
+    end
+    return false
+end
+
+function isDead(Player)
+    local Character = Player.Character
+    if not Character then return false end
+    
+    local BodyEffects = Character:FindFirstChild("BodyEffects")
+    if BodyEffects and BodyEffects:FindFirstChild("Dead") and BodyEffects.Dead.Value == true then
+        return true
+    end
+    
+    return false
+end
+
+-- AUTO STOMP
+local StompEnabled = false
+local StompToggle = _78:AddToggle('AutoStomp', {
+    Text = 'Auto Stomp',
+    Default = false,
+})
+
+StompToggle:OnChanged(function(value)
+    StompEnabled = value
+end)
+
+local stompRemote = nil
+local function getStompRemote()
+    if stompRemote and stompRemote.Parent then
+        return stompRemote
+    end
+    
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    
+    local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
+    if gameRemotes then
+        local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
+        if mainGameEvent then
+            stompRemote = mainGameEvent
+            return stompRemote
+        end
+    end
+    
+    local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+    if mainRemotes then
+        local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
+        if mainRemoteEvent then
+            stompRemote = mainRemoteEvent
+            return stompRemote
+        end
+    end
+    
+    local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
+    if mainEvent then
+        stompRemote = mainEvent
+        return stompRemote
+    end
+    
+    return nil
+end
+
+function fireStomp()
+    local remote = getStompRemote()
+    if not remote then return end
+    pcall(function()
+        remote:FireServer("Stomp")
+    end)
+end
+
+local stomping = false
+local stompConnection = nil
+local stompVelocityHistory = {}
+local stompMaxHistory = 5
+
+function getBestStompPosition(targetChar)
+    local parts = {"UpperTorso", "Torso", "HumanoidRootPart", "LowerTorso", "Head"}
+    for _, partName in ipairs(parts) do
+        local part = targetChar:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            return part
+        end
+    end
+    return nil
+end
+
+function getStompPredictedPosition(part)
+    if not part then return nil end
+    
+    local velocity = part.Velocity
+    if part.AssemblyLinearVelocity then
+        velocity = part.AssemblyLinearVelocity
+    end
+    
+    local speed = velocity.Magnitude
+    
+    if speed > 50 then
+        local predictionTime = 0.25
+        local predictedPos = part.Position + (velocity * predictionTime)
+        return CFrame.new(predictedPos)
+    elseif speed > 20 then
+        local predictionTime = 0.2
+        local predictedPos = part.Position + (velocity * predictionTime)
+        return CFrame.new(predictedPos)
+    else
+        local predictionTime = 0.1
+        local predictedPos = part.Position + (velocity * predictionTime)
+        return CFrame.new(predictedPos)
+    end
+end
+
+function findSafeReturnPosition(originalPos)
+    local directions = {
+        Vector3.new(0, 5, 0),
+        Vector3.new(5, 0, 0),
+        Vector3.new(-5, 0, 0),
+        Vector3.new(0, 0, 5),
+        Vector3.new(0, 0, -5),
+        Vector3.new(5, 5, 0),
+        Vector3.new(-5, 5, 0),
+        Vector3.new(0, 5, 5),
+        Vector3.new(0, 5, -5),
+        Vector3.new(0, 10, 0),
+    }
+    
+    for _, offset in ipairs(directions) do
+        local checkPos = originalPos + offset
+        local ray = Ray.new(checkPos, Vector3.new(0, -20, 0))
+        local hit = workspace:FindPartOnRay(ray, _56.Character, false, true)
+        
+        if not hit then
+            return CFrame.new(checkPos)
+        end
+    end
+    
+    return CFrame.new(originalPos + Vector3.new(0, 4, 0))
+end
+
+function autoStompTarget()
+    if not StompEnabled then return end
+    if _118 then return end
+    if stomping then return end
+    if _AA_busy then return end
+    
+    local target = _104.targetplayer
+    if not target then return end
+    
+    local targetChar = target.Character
+    if not targetChar then return end
+    
+    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
+    if not BodyEffects then return end
+    
+    local KOCheck = BodyEffects:FindFirstChild("K.O")
+    if not KOCheck or KOCheck.Value ~= true then return end
+    if Grabbed(target) then return end
+    if isDead(target) then return end
+    
+    local localChar = _56.Character
+    if not localChar then return end
+    
+    local localHRP = localChar:FindFirstChild("HumanoidRootPart")
+    if not localHRP then return end
+    
+    local targetPart = getBestStompPosition(targetChar)
+    if not targetPart then return end
+    
+    stomping = true
+    stompVelocityHistory = {}
+    local lastpos = localHRP.CFrame
+    
+    local predictedCFrame = getStompPredictedPosition(targetPart)
+    local stompCFrame = predictedCFrame or targetPart.CFrame
+    localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
+    
+    for i = 1, 10 do
+        fireStomp()
+    end
+    
+    if stompConnection then stompConnection:Disconnect() end
+    stompConnection = _52.RenderStepped:Connect(function()
+        if not stomping then
+            stompConnection:Disconnect()
+            stompConnection = nil
+            return
+        end
+        
+        local currentTargetPart = getBestStompPosition(targetChar)
+        if currentTargetPart then
+            local velocity = currentTargetPart.Velocity
+            if currentTargetPart.AssemblyLinearVelocity then
+                velocity = currentTargetPart.AssemblyLinearVelocity
+            end
+            
+            table.insert(stompVelocityHistory, velocity)
+            if #stompVelocityHistory > stompMaxHistory then
+                table.remove(stompVelocityHistory, 1)
+            end
+            
+            local avgVelocity = Vector3.new(0, 0, 0)
+            for _, v in ipairs(stompVelocityHistory) do
+                avgVelocity = avgVelocity + v
+            end
+            avgVelocity = avgVelocity / #stompVelocityHistory
+            
+            local speed = avgVelocity.Magnitude
+            local predictionTime = 0.15
+            
+            if speed > 80 then
+                predictionTime = 0.35
+            elseif speed > 50 then
+                predictionTime = 0.3
+            elseif speed > 30 then
+                predictionTime = 0.25
+            elseif speed > 15 then
+                predictionTime = 0.2
+            end
+            
+            local predictedPos = currentTargetPart.Position + (avgVelocity * predictionTime)
+            local stompCFrame = CFrame.new(predictedPos)
+            
+            localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
+            fireStomp()
+        end
+    end)
+    
+    task.delay(0.5, function()
+        stomping = false
+        if stompConnection then
+            stompConnection:Disconnect()
+            stompConnection = nil
+        end
+        stompVelocityHistory = {}
+        
+        local safeReturn = findSafeReturnPosition(lastpos.Position)
+        pcall(function()
+            localHRP.CFrame = safeReturn
+        end)
+    end)
+end
+
+local GrabEnabled = false
+local isGrabbing = false
+local grabReturnPos = nil
+local grabbedTarget = nil
+local lastGrabAttempt = 0
+
+local GRAB_CONFIG = {
+    HEIGHT_ABOVE_TARGET = 2.5,
+    GRAB_DURATION = 1,
+    KEY_PRESS_INTERVAL = 0.7,
+    POSITION_UPDATE_INTERVAL = 0.03,
+    CHECK_INTERVAL = 0.1,
+    RETURN_DELAY = 0.15,
+    MAX_DISTANCE = 50,
+    TELEPORT_SPEED = 1,
+    GRAB_COOLDOWN = 0.8,
+}
+
+local GrabToggle = _78:AddToggle('AutoGrab', {
+    Text = 'Auto Grab',
+    Default = false,
+})
+
+GrabToggle:OnChanged(function(value)
+    GrabEnabled = value
+    if not value and isGrabbing then
+        isGrabbing = false
+        grabbedTarget = nil
+        if grabReturnPos then
+            local char = _56.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    pcall(function()
+                        hrp.CFrame = grabReturnPos
+                    end)
+                end
+            end
+            grabReturnPos = nil
+        end
+    end
+end)
+
+function fireGrabRemote()
+    local success = pcall(function()
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
+        if gameRemotes then
+            local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
+            if mainGameEvent then
+                mainGameEvent:FireServer("Grabbing", false)
+                return true
+            end
+        end
+    end)
+    
+    if success then return true end
+    
+    local success2 = pcall(function()
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local mainGameEvent = replicatedStorage:FindFirstChild("MainGameEvent")
+        if mainGameEvent then
+            mainGameEvent:FireServer("Grabbing", false)
+            return true
+        end
+    end)
+    
+    if success2 then return true end
+    
+    pcall(function()
+        keypress(0x47)
+        task.wait(0.01)
+        keyrelease(0x47)
+    end)
+    
+    return true
+end
+
+function isGrabbed(target)
+    if not target then return false end
+    local targetChar = target.Character
+    if not targetChar then return false end
+    
+    if targetChar:FindFirstChild("GRABBING_CONSTRAINT") then
+        return true
+    end
+    
+    local playerFolder = workspace.Players:FindFirstChild(target.Name)
+    if playerFolder then
+        if playerFolder:FindFirstChild("GRABBING_CONSTRAINT") then
+            return true
+        end
+        local bodyEffects = playerFolder:FindFirstChild("BodyEffects")
+        if bodyEffects then
+            local grabbed = bodyEffects:FindFirstChild("Grabbed")
+            if grabbed and grabbed.Value == true then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+function autoGrabTarget()
+    if not GrabEnabled then return end
+    if isGrabbing then return end
+    if _118 then return end
+    if stomping then return end
+    if _AA_busy then return end
+    
+    if tick() - lastGrabAttempt < GRAB_CONFIG.GRAB_COOLDOWN then return end
+    
+    local target = _104.targetplayer
+    if not target then return end
+    
+    if isGrabbed(target) then return end
+    
+    local targetChar = target.Character
+    if not targetChar or not targetChar.Parent then return end
+    
+    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
+    if not BodyEffects then return end
+    
+    local KOCheck = BodyEffects:FindFirstChild("K.O")
+    if not KOCheck or KOCheck.Value ~= true then return end
+    
+    local deadCheck = BodyEffects:FindFirstChild("Dead")
+    if deadCheck and deadCheck.Value == true then return end
+    
+    local localChar = _56.Character
+    if not localChar then return end
+    
+    local localHRP = localChar:FindFirstChild("HumanoidRootPart")
+    if not localHRP then return end
+    
+    local targetPart = targetChar:FindFirstChild("UpperTorso") 
+        or targetChar:FindFirstChild("Torso") 
+        or targetChar:FindFirstChild("HumanoidRootPart")
+        or targetChar:FindFirstChild("LowerTorso")
+    
+    if not targetPart then return end
+    
+    lastGrabAttempt = tick()
+    
+    grabReturnPos = localHRP.CFrame
+    grabbedTarget = target
+    isGrabbing = true
+    
+    local grabPos = targetPart.Position + Vector3.new(0, GRAB_CONFIG.HEIGHT_ABOVE_TARGET, 0)
+    localHRP.CFrame = CFrame.new(grabPos)
+    
+    fireGrabRemote()
+    task.wait(0.05)
+    fireGrabRemote()
+    task.wait(0.05)
+    
+    local startTime = tick()
+    local lastFire = tick()
+    local fireCount = 0
+    local grabbedSuccess = false
+    
+    while isGrabbing and tick() - startTime < GRAB_CONFIG.GRAB_DURATION do
+        if isGrabbed(target) then 
+            grabbedSuccess = true
+            break
+        end
+        
+        local now = tick()
+        
+        targetChar = target.Character
+        if targetChar and targetChar.Parent then
+            targetPart = targetChar:FindFirstChild("UpperTorso") 
+                or targetChar:FindFirstChild("Torso") 
+                or targetChar:FindFirstChild("HumanoidRootPart")
+                or targetChar:FindFirstChild("LowerTorso")
+            
+            if targetPart then
+                grabPos = targetPart.Position + Vector3.new(0, GRAB_CONFIG.HEIGHT_ABOVE_TARGET, 0)
+                localHRP.CFrame = CFrame.new(grabPos)
+            end
+        else
+            break
+        end
+        
+        if now - lastFire >= GRAB_CONFIG.KEY_PRESS_INTERVAL then
+            fireGrabRemote()
+            lastFire = now
+            fireCount = fireCount + 1
+        end
+        
+        task.wait(0.01)
+    end
+    
+    task.wait(0.1)
+    
+    if isGrabbed(target) then
+        grabbedSuccess = true
+    end
+    
+    if grabReturnPos then
+        pcall(function()
+            localHRP.CFrame = grabReturnPos
+        end)
+    end
+    
+    isGrabbing = false
+    grabbedTarget = nil
+    grabReturnPos = nil
+    
+    if grabbedSuccess then
+        lastGrabAttempt = tick()
+    end
+end
+
+task.spawn(function()
+    while task.wait() do
+        if GrabEnabled and _104.active and _104.targetplayer and not isGrabbing then
+            pcall(autoGrabTarget)
+        end
+        task.wait(GRAB_CONFIG.CHECK_INTERVAL)
+    end
+end)
+
+task.spawn(function()
+    while task.wait() do
+        if _104.active and _104.targetplayer then
+            local target = _104.targetplayer
+            if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+                if StompEnabled then
+                    autoStompTarget()
+                end
+                if GrabEnabled then
+                    autoGrabTarget()
+                end
+            end
+        else
+            task.wait(0.5)
+        end
+    end
+end)
 
 -- always afk
 local AlwaysAFKEnabled = false
@@ -2487,29 +2978,16 @@ if _130 then
     setreadonly(_233, true)
 end
 
-local stompGrabCounter = 0
-
 local _237 = _52.RenderStepped:Connect(function()
     if _104.active then
         _205()
         _194()
         _198()
-        if _130 then _141() end
+        if _130 then
+            _141()
+        end
         _206()
         _151()
-        
-        stompGrabCounter = (stompGrabCounter + 1) % 15
-        if stompGrabCounter == 0 and _104.targetplayer then
-            if StompEnabled and not stomping and not _118 and not _AA_busy then
-                autoStompTarget()
-            end
-            if GrabEnabled and not grabState.grabbing and not grabState.active and not stomping and not _118 and not _AA_busy then
-                autoGrabTarget()
-            end
-        end
-        if stompGrabCounter == 8 then
-            grabState.ping = getPing()
-        end
     else
         _134.Visible = false
         _135.Visible = false
@@ -2764,7 +3242,7 @@ local function updateCurrentTarget()
     end
 end
 
-local function cleanup()
+function cleanup()
     isRunning = false
     for _, connection in pairs(connections) do
         pcall(function()
@@ -2798,7 +3276,7 @@ local function cleanup()
     end)
 end
 
-local function fetchAllFriends()
+function fetchAllFriends()
     if not isRunning then return {} end
     local friendIds = {}
     local cursor = nil
@@ -2847,7 +3325,7 @@ local function fetchAllFriends()
     return friendIds
 end
 
-local function getPlayerTeam(player)
+function getPlayerTeam(player)
     if not player or not player.Character then return nil end
     local character = player.Character
     local humanoid = character:FindFirstChild("Humanoid")
@@ -2886,19 +3364,19 @@ local function getPlayerTeam(player)
     return nil
 end
 
-local function isSameTeam(player)
+function isSameTeam(player)
     local localTeam = getPlayerTeam(ESPLocalPlayer)
     local playerTeam = getPlayerTeam(player)
     if not localTeam or not playerTeam then return false end
     return localTeam == playerTeam
 end
 
-local function isFriend(player)
+function isFriend(player)
     if not player or not player.UserId then return false end
     return shared.FriendsCache[player.UserId] ~= nil
 end
 
-local function updateAllESPLabels()
+function updateAllESPLabels()
     for player, label in pairs(names) do
         if label and label.Parent and player and player.Parent then
             updateLabelStyle(label, player)
@@ -2908,11 +3386,11 @@ local function updateAllESPLabels()
     end
 end
 
-local function espToggleOn(toggleName)
+function espToggleOn(toggleName)
     return Toggles and Toggles[toggleName] and Toggles[toggleName].Value
 end
 
-local function buildESPText(player, nameText)
+function buildESPText(player, nameText)
     local parts = {}
     if espToggleOn("ESPShowNames") then
         table.insert(parts, nameText)
@@ -2935,7 +3413,7 @@ local function buildESPText(player, nameText)
     return table.concat(parts, " ")
 end
 
-local function setAllESPVisible(visible)
+function setAllESPVisible(visible)
     for _, label in pairs(names) do
         if label and label.Parent then
             label.Visible = visible
@@ -2943,7 +3421,7 @@ local function setAllESPVisible(visible)
     end
 end
 
-local function updateLabelStyle(label, player)
+function updateLabelStyle(label, player)
     if not label or not player or not isRunning then return end
     if not espToggleOn("ESPEnabled") then return end
     updateCurrentTarget()
@@ -2982,90 +3460,213 @@ local function updateLabelStyle(label, player)
     end
 end
 
-local skeletonLines = {}
-local bones = {{"Head","UpperTorso"},{"UpperTorso","LowerTorso"},{"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},{"UpperTorso","RightUpperArm"},{"RightUpperArm","RightLowerArm"},{"RightLowerArm","RightHand"},{"LowerTorso","LeftUpperLeg"},{"LeftUpperLeg","LeftLowerLeg"},{"LeftLowerLeg","LeftFoot"},{"LowerTorso","RightUpperLeg"},{"RightUpperLeg","RightLowerLeg"},{"RightLowerLeg","RightFoot"}}
+skeletonLines = {}
+skeletonConnections = {}
+bones = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"}
+}
 
-local partNames = {"Head","UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand","RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg","LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot"}
-local screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-local screenPadding = 100
+partNames = {
+    "Head", "UpperTorso", "LowerTorso", 
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot"
+}
 
-function isOnScreen(pos)
-    return pos.X > -screenPadding and pos.X < screenSize.X + screenPadding and pos.Y > -screenPadding and pos.Y < screenSize.Y + screenPadding
+screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+screenPadding = 100
+
+function isOnScreen(position)
+    return position.X > -screenPadding and position.X < screenSize.X + screenPadding and
+           position.Y > -screenPadding and position.Y < screenSize.Y + screenPadding
 end
 
 function getJoints(character)
-    local joints, root = {}, character:FindFirstChild("HumanoidRootPart")
+    joints = {}
+    root = character:FindFirstChild("HumanoidRootPart")
     if not root then return joints end
-    for _, n in ipairs(partNames) do
-        local p = character:FindFirstChild(n)
-        if p and p:IsA("BasePart") then joints[n] = p end
+    
+    for _, partName in ipairs(partNames) do
+        part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            joints[partName] = part
+        end
     end
+    
     return joints
 end
 
+function createSkeletonLine(color)
+    line = Drawing.new("Line")
+    line.Color = color
+    line.Thickness = 1.5
+    line.Transparency = 1
+    line.ZIndex = 5
+    line.Visible = false
+    return line
+end
+
+fromVec = Vector2.new()
+toVec = Vector2.new()
+
 function updateSkeleton(player)
-    if not Toggles.ESPShowSkeleton.Value then return end
-    local char = player.Character
-    if not char then return end
-    local joints = getJoints(char)
-    if not joints or not next(joints) then return end
-    local cam = workspace.CurrentCamera
-    if not cam then return end
-    screenSize = cam.ViewportSize
-    local rootPos, onScreen = cam:WorldToViewportPoint(joints["HumanoidRootPart"].Position)
-    if not onScreen or not isOnScreen(rootPos) then return end
-    local color = Options.SkeletonColor.Value
+    if not Toggles.ESPShowSkeleton.Value then 
+        lines = skeletonLines[player]
+        if lines then
+            for _, line in ipairs(lines) do
+                line.Visible = false
+            end
+        end
+        return 
+    end
     
-    if not skeletonLines[player] then
-        local lines = {}
-        for _ = 1, #bones do
-            local l = Drawing.new("Line")
-            l.Color, l.Thickness, l.Transparency, l.ZIndex, l.Visible = color, 1.5, 1, 5, false
-            lines[_] = l
+    character = player.Character
+    if not character then return end
+    
+    joints = getJoints(character)
+    if not joints or not next(joints) then return end
+    
+    camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    screenSize = camera.ViewportSize
+
+    rootPart = joints["HumanoidRootPart"] or character:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+        if not onScreen or not isOnScreen(rootPos) then
+            lines = skeletonLines[player]
+            if lines then
+                for _, line in ipairs(lines) do
+                    line.Visible = false
+                end
+            end
+            return
+        end
+    end
+    
+    color = Options.SkeletonColor.Value
+    
+    lines = skeletonLines[player]
+    if not lines then
+        lines = {}
+        for i = 1, #bones do
+            lines[i] = createSkeletonLine(color)
         end
         skeletonLines[player] = lines
     end
     
+    anyVisible = false
+    
     for i, bone in ipairs(bones) do
-        local p1, p2, line = joints[bone[1]], joints[bone[2]], skeletonLines[player][i]
-        if p1 and p2 and line then
-            local s1, v1 = cam:WorldToViewportPoint(p1.Position)
-            local s2, v2 = cam:WorldToViewportPoint(p2.Position)
-            if (v1 or v2) and (isOnScreen(s1) or isOnScreen(s2)) then
-                line.From, line.To, line.Visible, line.Color = Vector2.new(s1.X, s1.Y), Vector2.new(s2.X, s2.Y), true, color
-            else line.Visible = false end
-        elseif line then line.Visible = false end
+        part1 = joints[bone[1]]
+        part2 = joints[bone[2]]
+        line = lines[i]
+        
+        if part1 and part2 and line then
+            pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
+            pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
+            
+            if (onScreen1 or onScreen2) and (isOnScreen(pos1) or isOnScreen(pos2)) then
+                fromVec = Vector2.new(pos1.X, pos1.Y)
+                toVec = Vector2.new(pos2.X, pos2.Y)
+                line.From = fromVec
+                line.To = toVec
+                line.Visible = true
+                line.Color = color
+                anyVisible = true
+            else
+                line.Visible = false
+            end
+        else
+            if line then line.Visible = false end
+        end
     end
 end
 
 function cleanupSkeleton(player)
-    if skeletonLines[player] then
-        for _, l in ipairs(skeletonLines[player]) do l:Remove() end
+    lines = skeletonLines[player]
+    if lines then
+        for _, line in ipairs(lines) do
+            line:Remove()
+        end
         skeletonLines[player] = nil
+    end
+    
+    conn = skeletonConnections[player]
+    if conn then
+        conn:Disconnect()
+        skeletonConnections[player] = nil
     end
 end
 
-Toggles.ESPShowSkeleton:OnChanged(function(v) if not v then for _, lines in pairs(skeletonLines) do for _, l in ipairs(lines) do l.Visible = false end end end end)
-Options.SkeletonColor:OnChanged(function() for _, lines in pairs(skeletonLines) do for _, l in ipairs(lines) do l.Color = Options.SkeletonColor.Value end end end)
-
-local skeletonRenderConnection = _52.RenderStepped:Connect(function()
-    if not Toggles.ESPShowSkeleton.Value then return end
-    local cam, players = workspace.CurrentCamera, _51:GetPlayers()
-    if not cam then return end
-    for _, p in ipairs(players) do
-        if p ~= _56 and p.Character then
-            local rp = p.Character:FindFirstChild("HumanoidRootPart")
-            if rp then
-                local _, vis = cam:WorldToViewportPoint(rp.Position)
-                if vis then updateSkeleton(p) else if skeletonLines[p] then for _, l in ipairs(skeletonLines[p]) do l.Visible = false end end end
+Toggles.ESPShowSkeleton:OnChanged(function(value)
+    if not value then
+        for player, lines in pairs(skeletonLines) do
+            for _, line in ipairs(lines) do
+                line.Visible = false
             end
         end
     end
 end)
 
-_51.PlayerRemoving:Connect(cleanupSkeleton)
+Options.SkeletonColor:OnChanged(function()
+    for _, lines in pairs(skeletonLines) do
+        for _, line in ipairs(lines) do
+            line.Color = Options.SkeletonColor.Value
+        end
+    end
+end)
 
-local function refreshFriendsList()
+skeletonRenderConnection = _52.RenderStepped:Connect(function()
+    if not Toggles.ESPShowSkeleton.Value then return end
+    
+    camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    players = _51:GetPlayers()
+    for _, player in ipairs(players) do
+        if player ~= _56 then
+            character = player.Character
+            if character then
+                rootPart = character:FindFirstChild("HumanoidRootPart")
+                if rootPart then
+                    rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+                    if onScreen and isOnScreen(rootPos) then
+                        updateSkeleton(player)
+                    else
+                        lines = skeletonLines[player]
+                        if lines then
+                            for _, line in ipairs(lines) do
+                                line.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+_51.PlayerRemoving:Connect(function(player)
+    cleanupSkeleton(player)
+end)
+
+function refreshFriendsList()
     if not isRunning then return end
     local currentTime = tick()
     if isRefreshingFriends or (currentTime - lastRefreshAttempt < REFRESH_COOLDOWN) then
@@ -3082,8 +3683,6 @@ local function refreshFriendsList()
     end
     isRefreshingFriends = false
 end
-
-local screenGui
 
 function createName(player)
     if not isRunning or not player or not player.Parent then return nil end
@@ -3157,7 +3756,7 @@ function getDynamicHeadPosition(head)
 end
 
 function setupFriendStatusMonitoring()
-    local function onPlayerAdded(player)
+     function onPlayerAdded(player)
         task.wait(0.3)
         if isRunning and shared.FriendsCache[player.UserId] then
             if names[player] then
@@ -3167,8 +3766,7 @@ function setupFriendStatusMonitoring()
     end
     connections.FriendStatusMonitor = _51.PlayerAdded:Connect(onPlayerAdded)
 end
-
-ESP = {
+local ESP = {
     labels = {},
     cache = {},
     lastUpdate = 0,
