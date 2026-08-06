@@ -11,23 +11,30 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
   
+  // Check API key
   const apiKey = req.headers['x-api-key'];
-  const validKey = process.env.LOADER_API_KEY || 'MySecretKey123!';
+  const validKey = 'LOADER-REQUEST-X28278462876237CV-RAWR';
   
   if (!apiKey || apiKey !== validKey) {
-    return res.status(401).json({ error: 'Invalid or missing API key' });
+    return res.status(401).json({ error: 'Invalid API key' });
   }
   
   try {
-    const targetUrl = req.body.url || 'https://raw.githubusercontent.com/imcomingforyou6959-git/UR4/refs/heads/main/Loadstring.lua';
+    // THE GITHUB URL IS HARDCODED HERE - HIDDEN FROM USERS!
+    const targetUrl = 'https://raw.githubusercontent.com/imcomingforyou6959-git/UR4/refs/heads/main/Loadstring.lua';
+    
     const response = await fetch(targetUrl);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch script: ${response.status}`);
+      throw new Error(`Failed to fetch: ${response.status}`);
     }
     
     const script = await response.text();
-    return res.status(200).send(script);
+    
+    // Optional: Add a watermark to verify it came through proxy
+    const watermarked = `-- Loaded via Vercel proxy | ${new Date().toISOString()}\n${script}`;
+    
+    return res.status(200).send(watermarked);
     
   } catch (error) {
     console.error('Proxy error:', error);
