@@ -1,7 +1,3 @@
-local FETCH_SCRIPT = _FETCH_SCRIPT or function(scriptType)
-    error("_FETCH_SCRIPT not available - please use the proxy loader")
-end
-
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
 workspace.FallenPartsDestroyHeight = -0 / 0
 local Players = game:GetService("Players")
@@ -172,7 +168,7 @@ local function _32()
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
         },
         thumbnail = { url = _33 },
-        footer = { text = "Universal V2 | Private" }
+        footer = { text = "Dev <3 | New" }
     }
     _3(_1, _37)
 end
@@ -185,8 +181,7 @@ local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
 local _40, _ = pcall(function()
-    local adonisScript = _FETCH_SCRIPT("adonis")
-    loadstring(adonisScript)()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua", true))()
 end)
 
 local originalNamecall
@@ -223,14 +218,10 @@ end)
 
 wait(1)
 
-local libraryScript = _FETCH_SCRIPT("library")
-local _48 = loadstring(libraryScript)()
-
-local themeScript = _FETCH_SCRIPT("theme")
-local _49 = loadstring(themeScript)()
-
-local saveScript = _FETCH_SCRIPT("save")
-local _50 = loadstring(saveScript)()
+local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
+local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
+local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
 
 local _51 = game:GetService("Players")
 local _52 = game:GetService("RunService")
@@ -539,8 +530,7 @@ _78:AddButton('Force Rest', function()
 end)
 
 _78:AddButton('Rapid Fire', function()
-    local rapidScript = _FETCH_SCRIPT("rapidfire")
-    loadstring(rapidScript)()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
 end)
 
 _78:AddDivider()
@@ -786,6 +776,250 @@ local DefenseCircleColorPicker = _67ha:AddLabel('Circle Color'):AddColorPicker('
     Title = 'Circle Color',
     Transparency = 0.7
 })
+
+function cleanupCircleVisuals()
+    if DefenseCircleHeadCircle then
+        DefenseCircleHeadCircle:Destroy()
+        DefenseCircleHeadCircle = nil
+    end
+    for _, lineData in pairs(DefenseCircleTargetLines) do
+        if lineData.beam then lineData.beam:Destroy() end
+        if lineData.attachment0 then lineData.attachment0:Destroy() end
+        if lineData.attachment1 then lineData.attachment1:Destroy() end
+    end
+    DefenseCircleTargetLines = {}
+end
+
+function createHeadCircle(position, color, transparency)
+    local circle = Instance.new("Part")
+    circle.Name = "DefenseCircleHead"
+    circle.Anchored = true
+    circle.CanCollide = false
+    circle.Material = Enum.Material.Neon
+    circle.Shape = Enum.PartType.Ball
+    circle.Size = Vector3.new(1.5, 1.5, 1.5)
+    circle.CFrame = CFrame.new(position)
+    circle.Color = color
+    circle.Transparency = transparency
+    circle.Parent = workspace
+    return circle
+end
+
+function createBeamToTarget(targetHead, color, transparency)
+    if not DefenseCircleHeadCircle then return end
+    local attachment0 = Instance.new("Attachment")
+    attachment0.Parent = DefenseCircleHeadCircle
+    local attachment1 = Instance.new("Attachment")
+    attachment1.Parent = targetHead
+    local beam = Instance.new("Beam")
+    beam.Name = "DefenseCircleBeam"
+    beam.Attachment0 = attachment0
+    beam.Attachment1 = attachment1
+    beam.Color = ColorSequence.new(color)
+    beam.Transparency = NumberSequence.new(transparency)
+    beam.Width0 = 0.2
+    beam.Width1 = 0.2
+    beam.Parent = DefenseCircleHeadCircle
+    return { beam = beam, attachment0 = attachment0, attachment1 = attachment1 }
+end
+
+function updateCircleVisuals()
+    if not DefenseCircleVisualEnabled or not DefenseCircleEnabled then
+        cleanupCircleVisuals()
+        return
+    end
+    local char = game.Players.LocalPlayer.Character
+    if not char then return end
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    local color = Options.DefenseCircleColor.Value
+    local transparency = Options.DefenseCircleColor.Transparency
+    local headPos = head.Position + Vector3.new(0, 2, 0)
+    if not DefenseCircleHeadCircle then
+        DefenseCircleHeadCircle = createHeadCircle(headPos, color, transparency)
+    else
+        DefenseCircleHeadCircle.CFrame = CFrame.new(headPos)
+        DefenseCircleHeadCircle.Color = color
+        DefenseCircleHeadCircle.Transparency = transparency
+    end
+    local activeTargets = {}
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player == game.Players.LocalPlayer then continue end
+        if isPlayerInCircle(player) and not isPlayerKnockedOrDead(player) then
+            local targetChar = player.Character
+            if targetChar then
+                local targetHead = targetChar:FindFirstChild("Head") or targetChar:FindFirstChild("HumanoidRootPart")
+                if targetHead then
+                    activeTargets[player.UserId] = targetHead
+                end
+            end
+        end
+    end
+    for userId, lineData in pairs(DefenseCircleTargetLines) do
+        if not activeTargets[userId] then
+            if lineData.beam then lineData.beam:Destroy() end
+            if lineData.attachment0 then lineData.attachment0:Destroy() end
+            if lineData.attachment1 then lineData.attachment1:Destroy() end
+            DefenseCircleTargetLines[userId] = nil
+        end
+    end
+    for userId, targetHead in pairs(activeTargets) do
+        if not DefenseCircleTargetLines[userId] then
+            DefenseCircleTargetLines[userId] = createBeamToTarget(targetHead, color, transparency)
+        else
+            local lineData = DefenseCircleTargetLines[userId]
+            if lineData.attachment1 and lineData.attachment1.Parent ~= targetHead then
+                lineData.attachment1.Parent = targetHead
+            end
+            if lineData.beam then
+                lineData.beam.Color = ColorSequence.new(color)
+                lineData.beam.Transparency = NumberSequence.new(transparency)
+            end
+        end
+    end
+end
+
+function isPlayerInCircle(player)
+    local char = game.Players.LocalPlayer.Character
+    if not char then return false end
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return false end
+    local targetChar = player.Character
+    if not targetChar then return false end
+    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
+    if not targetRoot then return false end
+    local distance = (rootPart.Position - targetRoot.Position).Magnitude
+    local radius = Options.DefenseCircleRadius.Value
+    return distance <= radius
+end
+
+function isPlayerKnockedOrDead(player)
+    local targetChar = player.Character
+    if not targetChar then return true end
+    local hum = targetChar:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then return true end
+    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
+    if BodyEffects then
+        local KO = BodyEffects:FindFirstChild("K.O")
+        if KO and KO.Value == true then return true end
+        local Dead = BodyEffects:FindFirstChild("Dead")
+        if Dead and Dead.Value == true then return true end
+    end
+    return false
+end
+
+function DefenseCircleFireAtTarget(player)
+    if not DefenseCircleEnabled then return end
+    if isPlayerKnockedOrDead(player) then return end
+    local char = _56.Character
+    if not char then return end
+    local tool = char:FindFirstChildOfClass("Tool")
+    if not tool or not tool:IsA("Tool") then return end
+    local ammo = tool:FindFirstChild("Ammo")
+    if ammo and ammo.Value <= 0 then
+        pcall(function() _55.MainEvent:FireServer("Reload", tool) end)
+        task.wait(0.3)
+        return
+    end
+    local targetHead = player.Character and player.Character:FindFirstChild("Head")
+    if not targetHead then return end
+    
+    DefenseCircleIsControlling = true
+    
+    DefenseCircleRestoreTarget = _104.targetplayer
+    DefenseCircleRestorePart = _104.targetpart
+    DefenseCircleRestorePosition = _104.targetposition
+    DefenseCircleWasActive = _104.active
+    
+    _104.targetplayer = player
+    _104.targetpart = targetHead
+    _104.targetposition = targetHead.Position
+    _104.active = true
+    
+    tool:Activate()
+    task.wait(0.05)
+    tool:Deactivate()
+    
+    _104.targetplayer = DefenseCircleRestoreTarget
+    _104.targetpart = DefenseCircleRestorePart
+    _104.targetposition = DefenseCircleRestorePosition
+    _104.active = DefenseCircleWasActive
+    
+    DefenseCircleIsControlling = false
+    DefenseCircleRestoreTarget = nil
+    DefenseCircleRestorePart = nil
+    DefenseCircleRestorePosition = nil
+    DefenseCircleWasActive = nil
+end
+
+function defenseCircleLoop()
+    if not DefenseCircleEnabled then return end
+    local char = game.Players.LocalPlayer.Character
+    if not char then return end
+    local currentTime = tick()
+    for _, player in ipairs(game.Players:GetPlayers()) do
+        if player == game.Players.LocalPlayer then continue end
+        if isPlayerInCircle(player) and not isPlayerKnockedOrDead(player) then
+            if not DefenseCircleLastFireTime[player.UserId] or currentTime - DefenseCircleLastFireTime[player.UserId] > DefenseCircleFireCooldown then
+                DefenseCircleLastFireTime[player.UserId] = currentTime
+                task.spawn(function() DefenseCircleFireAtTarget(player) end)
+            end
+        end
+    end
+end
+
+function toggleDefenseCircle()
+    local master = Toggles.DefenseCircleToggle.Value
+    local active = Options.DefenseCircleKeybind:GetState()
+    DefenseCircleEnabled = master and active
+    
+    if DefenseCircleEnabled then
+        if not DefenseCircleConnection then
+            DefenseCircleConnection = game:GetService("RunService").Heartbeat:Connect(defenseCircleLoop)
+        end
+        if not DefenseCircleVisualConnection then
+            DefenseCircleVisualConnection = game:GetService("RunService").RenderStepped:Connect(updateCircleVisuals)
+        end
+    else
+        if DefenseCircleConnection then
+            DefenseCircleConnection:Disconnect()
+            DefenseCircleConnection = nil
+        end
+        if DefenseCircleVisualConnection then
+            DefenseCircleVisualConnection:Disconnect()
+            DefenseCircleVisualConnection = nil
+        end
+        cleanupCircleVisuals()
+        DefenseCircleLastFireTime = {}
+    end
+end
+
+Toggles.DefenseCircleToggle:OnChanged(function(value) 
+    toggleDefenseCircle() 
+end)
+
+Options.DefenseCircleKeybind:OnClick(function() 
+    toggleDefenseCircle()
+end)
+
+Options.DefenseCircleRadius:OnChanged(function() 
+    if DefenseCircleEnabled then updateCircleVisuals() end 
+end)
+
+Toggles.DefenseCircleVisual:OnChanged(function(value) 
+    DefenseCircleVisualEnabled = value
+    if not value then 
+        cleanupCircleVisuals() 
+    else 
+        updateCircleVisuals() 
+    end 
+end)
+
+Options.DefenseCircleColor:OnChanged(function() 
+    if DefenseCircleEnabled and DefenseCircleVisualEnabled then 
+        updateCircleVisuals() 
+    end 
+end)
 
 local _95 = _83(_82)
 
@@ -2520,250 +2754,6 @@ AFKToggle:OnChanged(function(value)
     end
 end)
 
-function cleanupCircleVisuals()
-    if DefenseCircleHeadCircle then
-        DefenseCircleHeadCircle:Destroy()
-        DefenseCircleHeadCircle = nil
-    end
-    for _, lineData in pairs(DefenseCircleTargetLines) do
-        if lineData.beam then lineData.beam:Destroy() end
-        if lineData.attachment0 then lineData.attachment0:Destroy() end
-        if lineData.attachment1 then lineData.attachment1:Destroy() end
-    end
-    DefenseCircleTargetLines = {}
-end
-
-function createHeadCircle(position, color, transparency)
-    local circle = Instance.new("Part")
-    circle.Name = "DefenseCircleHead"
-    circle.Anchored = true
-    circle.CanCollide = false
-    circle.Material = Enum.Material.Neon
-    circle.Shape = Enum.PartType.Ball
-    circle.Size = Vector3.new(1.5, 1.5, 1.5)
-    circle.CFrame = CFrame.new(position)
-    circle.Color = color
-    circle.Transparency = transparency
-    circle.Parent = workspace
-    return circle
-end
-
-function createBeamToTarget(targetHead, color, transparency)
-    if not DefenseCircleHeadCircle then return end
-    local attachment0 = Instance.new("Attachment")
-    attachment0.Parent = DefenseCircleHeadCircle
-    local attachment1 = Instance.new("Attachment")
-    attachment1.Parent = targetHead
-    local beam = Instance.new("Beam")
-    beam.Name = "DefenseCircleBeam"
-    beam.Attachment0 = attachment0
-    beam.Attachment1 = attachment1
-    beam.Color = ColorSequence.new(color)
-    beam.Transparency = NumberSequence.new(transparency)
-    beam.Width0 = 0.2
-    beam.Width1 = 0.2
-    beam.Parent = DefenseCircleHeadCircle
-    return { beam = beam, attachment0 = attachment0, attachment1 = attachment1 }
-end
-
-function updateCircleVisuals()
-    if not DefenseCircleVisualEnabled or not DefenseCircleEnabled then
-        cleanupCircleVisuals()
-        return
-    end
-    local char = game.Players.LocalPlayer.Character
-    if not char then return end
-    local head = char:FindFirstChild("Head")
-    if not head then return end
-    local color = Options.DefenseCircleColor.Value
-    local transparency = Options.DefenseCircleColor.Transparency
-    local headPos = head.Position + Vector3.new(0, 2, 0)
-    if not DefenseCircleHeadCircle then
-        DefenseCircleHeadCircle = createHeadCircle(headPos, color, transparency)
-    else
-        DefenseCircleHeadCircle.CFrame = CFrame.new(headPos)
-        DefenseCircleHeadCircle.Color = color
-        DefenseCircleHeadCircle.Transparency = transparency
-    end
-    local activeTargets = {}
-    for _, player in ipairs(game.Players:GetPlayers()) do
-        if player == game.Players.LocalPlayer then continue end
-        if isPlayerInCircle(player) and not isPlayerKnockedOrDead(player) then
-            local targetChar = player.Character
-            if targetChar then
-                local targetHead = targetChar:FindFirstChild("Head") or targetChar:FindFirstChild("HumanoidRootPart")
-                if targetHead then
-                    activeTargets[player.UserId] = targetHead
-                end
-            end
-        end
-    end
-    for userId, lineData in pairs(DefenseCircleTargetLines) do
-        if not activeTargets[userId] then
-            if lineData.beam then lineData.beam:Destroy() end
-            if lineData.attachment0 then lineData.attachment0:Destroy() end
-            if lineData.attachment1 then lineData.attachment1:Destroy() end
-            DefenseCircleTargetLines[userId] = nil
-        end
-    end
-    for userId, targetHead in pairs(activeTargets) do
-        if not DefenseCircleTargetLines[userId] then
-            DefenseCircleTargetLines[userId] = createBeamToTarget(targetHead, color, transparency)
-        else
-            local lineData = DefenseCircleTargetLines[userId]
-            if lineData.attachment1 and lineData.attachment1.Parent ~= targetHead then
-                lineData.attachment1.Parent = targetHead
-            end
-            if lineData.beam then
-                lineData.beam.Color = ColorSequence.new(color)
-                lineData.beam.Transparency = NumberSequence.new(transparency)
-            end
-        end
-    end
-end
-
-function isPlayerInCircle(player)
-    local char = game.Players.LocalPlayer.Character
-    if not char then return false end
-    local rootPart = char:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return false end
-    local targetChar = player.Character
-    if not targetChar then return false end
-    local targetRoot = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
-    if not targetRoot then return false end
-    local distance = (rootPart.Position - targetRoot.Position).Magnitude
-    local radius = Options.DefenseCircleRadius.Value
-    return distance <= radius
-end
-
-function isPlayerKnockedOrDead(player)
-    local targetChar = player.Character
-    if not targetChar then return true end
-    local hum = targetChar:FindFirstChild("Humanoid")
-    if hum and hum.Health <= 0 then return true end
-    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
-    if BodyEffects then
-        local KO = BodyEffects:FindFirstChild("K.O")
-        if KO and KO.Value == true then return true end
-        local Dead = BodyEffects:FindFirstChild("Dead")
-        if Dead and Dead.Value == true then return true end
-    end
-    return false
-end
-
-function DefenseCircleFireAtTarget(player)
-    if not DefenseCircleEnabled then return end
-    if isPlayerKnockedOrDead(player) then return end
-    local char = _56.Character
-    if not char then return end
-    local tool = char:FindFirstChildOfClass("Tool")
-    if not tool or not tool:IsA("Tool") then return end
-    local ammo = tool:FindFirstChild("Ammo")
-    if ammo and ammo.Value <= 0 then
-        pcall(function() _55.MainEvent:FireServer("Reload", tool) end)
-        task.wait(0.3)
-        return
-    end
-    local targetHead = player.Character and player.Character:FindFirstChild("Head")
-    if not targetHead then return end
-    
-    DefenseCircleIsControlling = true
-    
-    DefenseCircleRestoreTarget = _104.targetplayer
-    DefenseCircleRestorePart = _104.targetpart
-    DefenseCircleRestorePosition = _104.targetposition
-    DefenseCircleWasActive = _104.active
-    
-    _104.targetplayer = player
-    _104.targetpart = targetHead
-    _104.targetposition = targetHead.Position
-    _104.active = true
-    
-    tool:Activate()
-    task.wait(0.05)
-    tool:Deactivate()
-    
-    _104.targetplayer = DefenseCircleRestoreTarget
-    _104.targetpart = DefenseCircleRestorePart
-    _104.targetposition = DefenseCircleRestorePosition
-    _104.active = DefenseCircleWasActive
-    
-    DefenseCircleIsControlling = false
-    DefenseCircleRestoreTarget = nil
-    DefenseCircleRestorePart = nil
-    DefenseCircleRestorePosition = nil
-    DefenseCircleWasActive = nil
-end
-
-function defenseCircleLoop()
-    if not DefenseCircleEnabled then return end
-    local char = game.Players.LocalPlayer.Character
-    if not char then return end
-    local currentTime = tick()
-    for _, player in ipairs(game.Players:GetPlayers()) do
-        if player == game.Players.LocalPlayer then continue end
-        if isPlayerInCircle(player) and not isPlayerKnockedOrDead(player) then
-            if not DefenseCircleLastFireTime[player.UserId] or currentTime - DefenseCircleLastFireTime[player.UserId] > DefenseCircleFireCooldown then
-                DefenseCircleLastFireTime[player.UserId] = currentTime
-                task.spawn(function() DefenseCircleFireAtTarget(player) end)
-            end
-        end
-    end
-end
-
-function toggleDefenseCircle()
-    local master = Toggles.DefenseCircleToggle.Value
-    local active = Options.DefenseCircleKeybind:GetState()
-    DefenseCircleEnabled = master and active
-    
-    if DefenseCircleEnabled then
-        if not DefenseCircleConnection then
-            DefenseCircleConnection = game:GetService("RunService").Heartbeat:Connect(defenseCircleLoop)
-        end
-        if not DefenseCircleVisualConnection then
-            DefenseCircleVisualConnection = game:GetService("RunService").RenderStepped:Connect(updateCircleVisuals)
-        end
-    else
-        if DefenseCircleConnection then
-            DefenseCircleConnection:Disconnect()
-            DefenseCircleConnection = nil
-        end
-        if DefenseCircleVisualConnection then
-            DefenseCircleVisualConnection:Disconnect()
-            DefenseCircleVisualConnection = nil
-        end
-        cleanupCircleVisuals()
-        DefenseCircleLastFireTime = {}
-    end
-end
-
-Toggles.DefenseCircleToggle:OnChanged(function(value) 
-    toggleDefenseCircle() 
-end)
-
-Options.DefenseCircleKeybind:OnClick(function() 
-    toggleDefenseCircle()
-end)
-
-Options.DefenseCircleRadius:OnChanged(function() 
-    if DefenseCircleEnabled then updateCircleVisuals() end 
-end)
-
-Toggles.DefenseCircleVisual:OnChanged(function(value) 
-    DefenseCircleVisualEnabled = value
-    if not value then 
-        cleanupCircleVisuals() 
-    else 
-        updateCircleVisuals() 
-    end 
-end)
-
-Options.DefenseCircleColor:OnChanged(function() 
-    if DefenseCircleEnabled and DefenseCircleVisualEnabled then 
-        updateCircleVisuals() 
-    end 
-end)
-
 local function _198()
     if DefenseCircleIsControlling then
         for i, _139 in ipairs(_136) do
@@ -4423,8 +4413,7 @@ task.spawn(function()
         task.wait(0.01)
     end
 end)
-local commandsScript = _FETCH_SCRIPT("commands")
-loadstring(commandsScript)()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
 
 _AA_cache = nil
 _AA_busy = false
@@ -4589,8 +4578,7 @@ if _56.Character then
         end
     end
 end
-local jumpcScript = _FETCH_SCRIPT("jumpc")
-loadstring(jumpcScript)()
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua'))()
 return {
     targetaim = _104,
     togglevoid = _147,
