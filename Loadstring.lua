@@ -1,5 +1,5 @@
 local FETCH_SCRIPT = _FETCH_SCRIPT or function(scriptType)
-    error("errror")
+    error("_FETCH_SCRIPT not available - please use the proxy loader")
 end
 
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
