@@ -1,5 +1,5 @@
 local CONFIG = {
-   OWNERS = {"engravingangels", "Devsf3x", "extra", "extra1"},
+   OWNERS = {"engravingangels", "Devsf3x", "Jewhaveme", "extra1"},
    ADMINS = {"Chaycebo2002", "Randool", "extra2"},
    COMMANDS = {
         FLING = "/f", 
