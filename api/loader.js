@@ -1,11 +1,20 @@
 export default async function handler(req, res) {
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, X-Script-Type');
   
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
+  // Only allow POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  
+  // Check API key
   const apiKey = req.headers['x-api-key'];
   const validKey = 'LOADER-REQUEST-X28278462876237CV-RAWR';
   
@@ -14,8 +23,12 @@ export default async function handler(req, res) {
   }
   
   try {
+    // Get script type from header
     const scriptType = req.headers['x-script-type'] || 'main';
     
+    console.log(`[Proxy] Requested: ${scriptType}`);
+    
+    // ALL URLs hardcoded here - HIDDEN from users!
     const scriptMap = {
       'main': 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Loadstring.lua',
       'adonis': 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua',
@@ -30,10 +43,13 @@ export default async function handler(req, res) {
     const targetUrl = scriptMap[scriptType];
     
     if (!targetUrl) {
-      return res.status(400).json({ error: 'Unknown script type: ' + scriptType });
+      return res.status(400).json({ 
+        error: 'Unknown script type: ' + scriptType,
+        available: Object.keys(scriptMap)
+      });
     }
     
-    console.log(`[Proxy] Fetching: ${scriptType} -> ${targetUrl}`);
+    console.log(`[Proxy] Fetching: ${targetUrl}`);
     const response = await fetch(targetUrl);
     
     if (!response.ok) {
@@ -41,10 +57,17 @@ export default async function handler(req, res) {
     }
     
     const script = await response.text();
+    
+    // Check if we got valid Lua code
+    if (!script || script.length < 10) {
+      throw new Error('Script is empty or too short');
+    }
+    
+    // Return the script
     return res.status(200).send(script);
     
   } catch (error) {
-    console.error('Proxy error:', error);
+    console.error('[Proxy Error]', error);
     return res.status(500).json({ 
       error: 'Failed to fetch script',
       details: error.message 
