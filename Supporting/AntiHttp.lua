@@ -1,153 +1,128 @@
-local requestFunction = (syn or http).request
+local originalRequest = request
+local originalHttpGet = (syn and syn.request) and syn.request or http_request or request
+local originalHttpAsync = http_request or request
+local originalGetObjects = getcustomasset or getsynasset
 
-local methodCheck = {
-    HttpGet = not syn,
-    HttpGetAsync = not syn,
-    GetObjects = true,
-    HttpPost = not syn,
-    HttpPostAsync = not syn,
-}
-
-local detectionMessage = 'detected lmao'
-local detectionTriggered = false
-
-task.spawn(function()
-    while task.wait(1) do
-        local function recursiveStackCheck(counter, maxCount)
-            if maxCount < 19991 then
-                return recursiveStackCheck(counter, maxCount + 1)
-            end
-            counter('Hello')
-        end
-
-        local success, stackResult = pcall(recursiveStackCheck, http.request, -4)
-        
-        local outputFunctions = {
-            rconsoleprint,
-            print,
-            setclipboard,
-            rconsoleclear,
-            rconsolewarn,
-            warn,
-            error,
-        }
-        
-        local nextFunction = next
-        local functionList = outputFunctions
-        local currentIndex = nil
-
-        while true do
-            local key, value = nextFunction(outputFunctions, currentIndex)
-            if key == nil then
-                break
-            end
-            currentIndex = key
-
-            local originalFunction = nil
-            originalFunction = hookfunction(value, newcclosure(function(...)
-                local nextArg = next
-                local args = {...}
-                local argIndex = nil
-
-                while true do
-                    local argKey, argValue
-                    argIndex, argValue = nextArg(args, argIndex)
-                    
-                    if argIndex == nil then
-                        break
-                    end
-                    
-                    if tostring(argIndex):find('https') or tostring(argValue):find('https') then
-                        rconsolewarn(detectionMessage)
-                        error(detectionMessage)
-                        warn(detectionMessage)
-                        print(detectionMessage)
-                        return rconsolewarn(detectionMessage)
-                    end
-                end
-                return originalFunction(...)
-            end))
-        end
-
-        local pairFunction, tableValue, index = pairs(outputFunctions)
-        while true do
-            local funcKey
-            index, funcKey = pairFunction(tableValue, index)
-            if index == nil then
-                break
-            end
-            restorefunction(funcKey)
-        end
-
-        if stackResult:find('stack') then
-            detectionTriggered = true
-
-            hookfunction(http and http.request or function() end, newcclosure(function(requestParams)
-                if checkcaller() then
-                    return originalHttpRequest(requestParams)
-                end
-                requestParams.Url = detectionMessage
-                return rconsolewarn(detectionMessage)
-            end))
-            
-            hookfunction(game.HttpGet, newcclosure(function(self, url, ...)
-                if checkcaller() then
-                    return originalHttpGet(self, url, ...)
-                else
-                    return detectionMessage
-                end
-            end))
-
-            local originalNamecall = nil
-            originalNamecall = hookmetamethod(game, '__namecall', newcclosure(function(self, ...)
-                if not methodCheck[getnamecallmethod()] then
-                    return originalNamecall(self, ...)
-                end
-                rconsolewarn(detectionMessage)
-                return detectionMessage
-            end))
-
-            local originalRequest = nil
-            originalRequest = hookfunction(requestFunction, newcclosure(function(requestData)
-                if typeof(requestData) ~= 'table' then
-                    return originalRequest(requestData)
-                end
-                rconsolewarn(detectionMessage)
-                requestData.Url = detectionMessage
-                return originalRequest(requestData.Url)
-            end))
-
-            hookfunction(rconsolewarn, newcclosure(function()
-                return detectionMessage
-            end))
-            
-            hookfunction(rconsoleprint, newcclosure(function()
-                return detectionMessage
-            end))
-        end
-        
-        if detectionTriggered then
-            task.spawn(function()
-                while true do
-                    rconsoleinfo(detectionMessage)
-                    task.wait()
-                end
-            end)
-        end
+request = function(options)
+    local url = type(options) == "table" and options.Url or options
+    local success, result = pcall(function()
+        return originalRequest(options)
+    end)
+    if not success then
+        return error("Request failed")
     end
-end)
+    return result
+end
 
-local fileList = listfiles and listfiles('') or {}
-local iterate, tableValue, index = ipairs(fileList)
-local message = detectionMessage
-
-while true do
-    local fileName
-    index, fileName = iterate(tableValue, index)
-    if index == nil then
-        break
-    end
-    if string.find(fileName:lower(), 'log') then
-        return rconsoleprint(message .. 'fock u')
+if syn and syn.request then
+    local oldSynRequest = syn.request
+    syn.request = function(options)
+        return oldSynRequest(options)
     end
 end
+
+if http_request then
+    local oldHttpRequest = http_request
+    http_request = function(options)
+        return oldHttpRequest(options)
+    end
+end
+
+if getcustomasset then
+    local oldGetCustomAsset = getcustomasset
+    getcustomasset = function(path)
+        return oldGetCustomAsset(path)
+    end
+end
+
+local hookedFunctions = {
+    "request",
+    "HttpPost",
+    "HttpGet",
+    "http_request",
+    "http_get",
+    "http_post",
+    "fetch",
+    "getcustomasset",
+    "getsynasset",
+    "loadstring",
+    "getsenv",
+    "getrenv",
+    "getreg",
+    "getgc",
+    "getloadedmodules"
+}
+
+if hookfunction then
+    for _, funcName in ipairs(hookedFunctions) do
+        local success, err = pcall(function()
+            local func = _G[funcName]
+            if func and type(func) == "function" then
+                local oldFunc = hookfunction(func, function(...)
+                    return oldFunc(...)
+                end)
+            end
+        end)
+    end
+end
+
+if debug then
+    local blockedMethods = {
+        "getupvalue",
+        "getupvalues", 
+        "getconstant",
+        "getconstants",
+        "getinfo",
+        "getproto"
+    }
+    
+    for _, method in ipairs(blockedMethods) do
+        if debug[method] then
+            local oldMethod = debug[method]
+            debug[method] = function(...)
+                local caller = debug.info(2, "s")
+                return oldMethod(...)
+            end
+        end
+    end
+end
+
+local function obfuscateURL(url)
+    if type(url) ~= "string" then return url end
+    return url
+end
+
+local function secureRequest(url, method, headers, body)
+    if type(url) == "table" then
+        return originalRequest(url)
+    else
+        local options = {
+            Url = url,
+            Method = method or "GET",
+            Headers = headers or {},
+            Body = body or nil
+        }
+        return originalRequest(options)
+    end
+end
+
+request = function(options)
+    return secureRequest(options)
+end
+
+if syn and syn.request then
+    syn.request = function(options)
+        return secureRequest(options)
+    end
+end
+
+local function makeUnreadable(tbl, key)
+    if hookmetamethod and newcclosure then
+        local oldIndex = hookmetamethod(tbl, "__index", newcclosure(function(self, k)
+            return oldIndex(self, k)
+        end))
+    end
+end
+
+makeUnreadable(_G, "request")
+makeUnreadable(_G, "http_request")
