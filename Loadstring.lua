@@ -723,6 +723,60 @@ task.spawn(function()
     end
 end)
 
+-- Circle Defense
+local _69ha = _60.Main:AddRightTabbox()
+local _67ha = _69ha:AddTab('Defense')
+
+-- Varis
+DefenseCircleEnabled = false
+DefenseCircleVisualEnabled = true
+DefenseCircleHeadCircle = nil
+DefenseCircleTargetLines = {}
+DefenseCircleLastFireTime = {}
+DefenseCircleFireCooldown = 0.15
+DefenseCircleConnection = nil
+DefenseCircleVisualConnection = nil
+DefenseCircleColor = Color3.fromRGB(255, 50, 50)
+DefenseCircleWasActive = false
+DefenseCircleRestoreTarget = nil
+DefenseCircleRestorePart = nil
+DefenseCircleRestorePosition = nil
+DefenseCircleIsControlling = false
+
+-- UI
+local DefenseCircleToggle = _67ha:AddToggle('DefenseCircleToggle', {
+    Text = 'Defense Circle',
+    Default = false,
+})
+
+local DefenseCircleKeybind = DefenseCircleToggle:AddKeyPicker('DefenseCircleKeybind', {
+    Default = 'V',
+    SyncToggleState = false, -- Set to false for save manager
+    Mode = 'Toggle',
+    Text = 'Defense Circle Bind',
+    NoUI = false
+})
+
+local DefenseCircleRadiusSlider = _67ha:AddSlider('DefenseCircleRadius', {
+    Text = 'Circle Radius',
+    Default = 50,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = ' studs',
+})
+
+local DefenseCircleVisualToggle = _67ha:AddToggle('DefenseCircleVisual', {
+    Text = 'Show Circle Visual',
+    Default = true,
+})
+
+local DefenseCircleColorPicker = _67ha:AddLabel('Circle Color'):AddColorPicker('DefenseCircleColor', {
+    Default = Color3.fromRGB(255, 50, 50),
+    Title = 'Circle Color',
+    Transparency = 0.7
+})
+
 local _95 = _83(_82)
 
 local _96 = _60['UI Settings']:AddLeftGroupbox('Menu')
@@ -2455,60 +2509,6 @@ AFKToggle:OnChanged(function(value)
         end
     end
 end)
-
--- Circle Defense
-local _69ha = _60.Main:AddRightTabbox()
-local _67ha = _69ha:AddTab('Defense')
-
--- Varis
-DefenseCircleEnabled = false
-DefenseCircleVisualEnabled = true
-DefenseCircleHeadCircle = nil
-DefenseCircleTargetLines = {}
-DefenseCircleLastFireTime = {}
-DefenseCircleFireCooldown = 0.15
-DefenseCircleConnection = nil
-DefenseCircleVisualConnection = nil
-DefenseCircleColor = Color3.fromRGB(255, 50, 50)
-DefenseCircleWasActive = false
-DefenseCircleRestoreTarget = nil
-DefenseCircleRestorePart = nil
-DefenseCircleRestorePosition = nil
-DefenseCircleIsControlling = false
-
--- UI
-local DefenseCircleToggle = _67ha:AddToggle('DefenseCircleToggle', {
-    Text = 'Defense Circle',
-    Default = false,
-})
-
-local DefenseCircleKeybind = DefenseCircleToggle:AddKeyPicker('DefenseCircleKeybind', {
-    Default = 'V',
-    SyncToggleState = false, -- Set to false for save manager
-    Mode = 'Toggle',
-    Text = 'Defense Circle Bind',
-    NoUI = false
-})
-
-local DefenseCircleRadiusSlider = _67ha:AddSlider('DefenseCircleRadius', {
-    Text = 'Circle Radius',
-    Default = 50,
-    Min = 0,
-    Max = 100,
-    Rounding = 0,
-    Suffix = ' studs',
-})
-
-local DefenseCircleVisualToggle = _67ha:AddToggle('DefenseCircleVisual', {
-    Text = 'Show Circle Visual',
-    Default = true,
-})
-
-local DefenseCircleColorPicker = _67ha:AddLabel('Circle Color'):AddColorPicker('DefenseCircleColor', {
-    Default = Color3.fromRGB(255, 50, 50),
-    Title = 'Circle Color',
-    Transparency = 0.7
-})
 
 function cleanupCircleVisuals()
     if DefenseCircleHeadCircle then
