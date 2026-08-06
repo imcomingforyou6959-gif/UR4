@@ -1,3 +1,35 @@
+local PROXY_URL = "https://ur-4.vercel.app/api/loader"
+local PROXY_KEY = "LOADER-REQUEST-X28278462876237CV-RAWR"
+local HttpService = game:GetService("HttpService")
+
+local function FetchViaProxy(url)
+    local requestFunc = syn and syn.request or (http and http.request) or (request)
+    
+    if requestFunc then
+        local result = requestFunc({
+            Url = PROXY_URL,
+            Method = "POST",
+            Headers = {
+                ["X-API-Key"] = PROXY_KEY,
+                ["X-Target-URL"] = url,
+                ["Content-Type"] = "application/json"
+            },
+            Body = HttpService:JSONEncode({})
+        })
+        
+        if result and result.Body then
+            return result.Body
+        end
+    end
+    
+    return game:HttpGet(url)
+end
+
+local originalHttpGet = game.HttpGet
+game.HttpGet = function(url)
+    return FetchViaProxy(url)
+end
+
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
 workspace.FallenPartsDestroyHeight = -0 / 0
 local Players = game:GetService("Players")
@@ -181,7 +213,8 @@ local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
 local _40, _ = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua", true))()
+    local adonisScript = FetchViaProxy("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua")
+    loadstring(adonisScript)()
 end)
 
 local originalNamecall
@@ -219,9 +252,9 @@ end)
 wait(1)
 
 local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
-local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
-local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
-local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
+local _48 = loadstring(FetchViaProxy(_47 .. 'Library.lua'))()
+local _49 = loadstring(FetchViaProxy(_47 .. 'addons/ThemeManager.lua'))()
+local _50 = loadstring(FetchViaProxy(_47 .. 'addons/SaveManager.lua'))()
 
 local _51 = game:GetService("Players")
 local _52 = game:GetService("RunService")
@@ -530,7 +563,8 @@ _78:AddButton('Force Rest', function()
 end)
 
 _78:AddButton('Rapid Fire', function()
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
+    local rapidScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua')
+    loadstring(rapidScript)()
 end)
 
 _78:AddDivider()
@@ -4413,7 +4447,8 @@ task.spawn(function()
         task.wait(0.01)
     end
 end)
-loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
+local commandsScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua')
+loadstring(commandsScript)()
 
 _AA_cache = nil
 _AA_busy = false
@@ -4578,7 +4613,8 @@ if _56.Character then
         end
     end
 end
-loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua'))()
+local jumpcScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua')
+loadstring(jumpcScript)()
 return {
     targetaim = _104,
     togglevoid = _147,
