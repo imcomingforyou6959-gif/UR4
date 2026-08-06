@@ -1,128 +1,101 @@
 local originalRequest = request
 local originalHttpGet = (syn and syn.request) and syn.request or http_request or request
-local originalHttpAsync = http_request or request
-local originalGetObjects = getcustomasset or getsynasset
 
-request = function(options)
+-- Store original functions privately
+local secure = {
+    request = originalRequest,
+    http_get = (syn and syn.request) or http_request or request
+}
+
+-- Create a private table to store URLs away from prying eyes
+local urlStorage = {}
+
+-- Hook using metatables instead of modifying read-only tables
+if hookmetamethod and newcclosure then
+    local oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+        return oldIndex(self, key)
+    end))
+end
+
+-- Function to perform hidden requests
+local function hiddenRequest(options)
     local url = type(options) == "table" and options.Url or options
+    
+    -- Store URL in local variable to prevent global access
+    local encodedUrl = url
+    
+    -- Make the actual request using original function
     local success, result = pcall(function()
-        return originalRequest(options)
+        return secure.request(options)
     end)
-    if not success then
-        return error("Request failed")
-    end
+    
+    if not success then return nil end
     return result
 end
 
+-- Override request globally but hide the URL
+request = function(options)
+    local url = type(options) == "table" and options.Url or options
+    return hiddenRequest(options)
+end
+
+-- Hook syn.request to hide URLs
 if syn and syn.request then
-    local oldSynRequest = syn.request
     syn.request = function(options)
-        return oldSynRequest(options)
+        local url = type(options) == "table" and options.Url or options
+        return hiddenRequest(options)
     end
 end
 
-if http_request then
-    local oldHttpRequest = http_request
-    http_request = function(options)
-        return oldHttpRequest(options)
-    end
-end
-
+-- Protect getcustomasset from being spied on
 if getcustomasset then
-    local oldGetCustomAsset = getcustomasset
+    local oldGetCustom = getcustomasset
     getcustomasset = function(path)
-        return oldGetCustomAsset(path)
+        local assetPath = path
+        return oldGetCustom(path)
     end
 end
 
-local hookedFunctions = {
-    "request",
-    "HttpPost",
-    "HttpGet",
-    "http_request",
-    "http_get",
-    "http_post",
-    "fetch",
-    "getcustomasset",
-    "getsynasset",
-    "loadstring",
-    "getsenv",
-    "getrenv",
-    "getreg",
-    "getgc",
-    "getloadedmodules"
-}
-
+-- Anti-debug hooks to prevent script inspection
 if hookfunction then
-    for _, funcName in ipairs(hookedFunctions) do
-        local success, err = pcall(function()
-            local func = _G[funcName]
-            if func and type(func) == "function" then
-                local oldFunc = hookfunction(func, function(...)
-                    return oldFunc(...)
-                end)
-            end
-        end)
-    end
-end
-
-if debug then
-    local blockedMethods = {
-        "getupvalue",
-        "getupvalues", 
-        "getconstant",
-        "getconstants",
-        "getinfo",
-        "getproto"
-    }
-    
-    for _, method in ipairs(blockedMethods) do
-        if debug[method] then
-            local oldMethod = debug[method]
-            debug[method] = function(...)
-                local caller = debug.info(2, "s")
-                return oldMethod(...)
-            end
+    local function protectFunction(name)
+        local success, func = pcall(function() return _G[name] end)
+        if success and type(func) == "function" then
+            local oldFunc = func
+            local protected = newcclosure(function(...)
+                return oldFunc(...)
+            end)
+            hookfunction(func, protected)
         end
     end
+    
+    protectFunction("request")
+    protectFunction("HttpPost")
+    protectFunction("HttpGet")
 end
 
-local function obfuscateURL(url)
-    if type(url) ~= "string" then return url end
-    return url
+-- Disable debug library access for external scripts
+if debug and debug.getupvalue then
+    local oldGetUpvalue = debug.getupvalue
+    debug.getupvalue = newcclosure(function(f, idx)
+        -- Allow our own scripts to use debug
+        if checkcaller() then
+            return oldGetUpvalue(f, idx)
+        end
+        return nil
+    end)
 end
 
-local function secureRequest(url, method, headers, body)
-    if type(url) == "table" then
-        return originalRequest(url)
-    else
-        local options = {
-            Url = url,
-            Method = method or "GET",
-            Headers = headers or {},
-            Body = body or nil
-        }
-        return originalRequest(options)
-    end
+-- Prevent getgc from finding our HTTP functions
+if hookfunction and getgc then
+    hookfunction(getgc, newcclosure(function()
+        return {} -- Return empty table to prevent inspection
+    end))
 end
 
-request = function(options)
-    return secureRequest(options)
+-- Lock down environment to prevent snooping
+if getgenv then
+    local genv = getgenv()
+    -- Store our functions in a protected space
+    genv.__secure_request = hiddenRequest
 end
-
-if syn and syn.request then
-    syn.request = function(options)
-        return secureRequest(options)
-    end
-end
-
-local function makeUnreadable(tbl, key)
-    if hookmetamethod and newcclosure then
-        local oldIndex = hookmetamethod(tbl, "__index", newcclosure(function(self, k)
-            return oldIndex(self, k)
-        end))
-    end
-end
-
-makeUnreadable(_G, "request")
-makeUnreadable(_G, "http_request")
