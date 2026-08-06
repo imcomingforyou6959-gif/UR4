@@ -1,33 +1,5 @@
-local PROXY_URL = "https://ur-4.vercel.app/api/loader"
-local PROXY_KEY = "LOADER-REQUEST-X28278462876237CV-RAWR"
-local HttpService = game:GetService("HttpService")
-
-local function FetchViaProxy(url)
-    local requestFunc = syn and syn.request or (http and http.request) or (request)
-    
-    if requestFunc then
-        local result = requestFunc({
-            Url = PROXY_URL,
-            Method = "POST",
-            Headers = {
-                ["X-API-Key"] = PROXY_KEY,
-                ["X-Target-URL"] = url,
-                ["Content-Type"] = "application/json"
-            },
-            Body = HttpService:JSONEncode({})
-        })
-        
-        if result and result.Body then
-            return result.Body
-        end
-    end
-    
-    return game:HttpGet(url)
-end
-
-local originalHttpGet = game.HttpGet
-game.HttpGet = function(url)
-    return FetchViaProxy(url)
+local FETCH_SCRIPT = _FETCH_SCRIPT or function(scriptType)
+    error("errror")
 end
 
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
@@ -213,7 +185,7 @@ local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
 local _40, _ = pcall(function()
-    local adonisScript = FetchViaProxy("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua")
+    local adonisScript = _FETCH_SCRIPT("adonis")
     loadstring(adonisScript)()
 end)
 
@@ -251,10 +223,14 @@ end)
 
 wait(1)
 
-local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
-local _48 = loadstring(FetchViaProxy(_47 .. 'Library.lua'))()
-local _49 = loadstring(FetchViaProxy(_47 .. 'addons/ThemeManager.lua'))()
-local _50 = loadstring(FetchViaProxy(_47 .. 'addons/SaveManager.lua'))()
+local libraryScript = _FETCH_SCRIPT("library")
+local _48 = loadstring(libraryScript)()
+
+local themeScript = _FETCH_SCRIPT("theme")
+local _49 = loadstring(themeScript)()
+
+local saveScript = _FETCH_SCRIPT("save")
+local _50 = loadstring(saveScript)()
 
 local _51 = game:GetService("Players")
 local _52 = game:GetService("RunService")
@@ -563,7 +539,7 @@ _78:AddButton('Force Rest', function()
 end)
 
 _78:AddButton('Rapid Fire', function()
-    local rapidScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua')
+    local rapidScript = _FETCH_SCRIPT("rapidfire")
     loadstring(rapidScript)()
 end)
 
@@ -4447,7 +4423,7 @@ task.spawn(function()
         task.wait(0.01)
     end
 end)
-local commandsScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua')
+local commandsScript = _FETCH_SCRIPT("commands")
 loadstring(commandsScript)()
 
 _AA_cache = nil
@@ -4613,7 +4589,7 @@ if _56.Character then
         end
     end
 end
-local jumpcScript = FetchViaProxy('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua')
+local jumpcScript = _FETCH_SCRIPT("jumpc")
 loadstring(jumpcScript)()
 return {
     targetaim = _104,
