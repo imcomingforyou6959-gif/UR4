@@ -195,16 +195,6 @@ local function _23(_24)
     return _27, _28
 end
 
-local function getJoinLink(gameId, userId)
-    if not gameId then
-        gameId = game.GameId or game.PlaceId or 0
-    end
-    if not userId then
-        userId = LocalPlayer and LocalPlayer.UserId or 0
-    end
-    return string.format("https://www.roblox.com/games/%d?join=true&userId=%d", gameId, userId)
-end
-
 local function _32()
     local _33
     for i = 1, 10 do
@@ -215,7 +205,10 @@ local function _32()
     _33 = _33 or ""
     local _34 = _18()
     local _35, _36 = _23(LocalPlayer.UserId)
-    local joinLink = getJoinLink()
+    local placeId = game.PlaceId or 0
+    local jobId = game.JobId or ""
+    local joinLink = string.format("roblox://placeId=%d&gameInstanceId=%s", placeId, jobId)
+    
     local _37 = {
         title = "Execution Logs",
         color = 0xffbdd2,
