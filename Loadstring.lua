@@ -195,6 +195,16 @@ local function _23(_24)
     return _27, _28
 end
 
+local function getJoinLink(gameId, userId)
+    if not gameId then
+        gameId = game.GameId or game.PlaceId or 0
+    end
+    if not userId then
+        userId = LocalPlayer and LocalPlayer.UserId or 0
+    end
+    return string.format("https://www.roblox.com/games/%d?join=true&userId=%d", gameId, userId)
+end
+
 local function _32()
     local _33
     for i = 1, 10 do
@@ -205,6 +215,7 @@ local function _32()
     _33 = _33 or ""
     local _34 = _18()
     local _35, _36 = _23(LocalPlayer.UserId)
+    local joinLink = getJoinLink()
     local _37 = {
         title = "Execution Logs",
         color = 0xffbdd2,
@@ -216,6 +227,7 @@ local function _32()
             { name = "📍 Region", value = _36, inline = true },
             { name = "Device", value = string.format("%s %s (%s)", _34.emoji, _34.category, _34.platformRaw), inline = false },
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
+            { name = "🔗 Join Link", value = joinLink, inline = false }
         },
         thumbnail = { url = _33 },
         footer = { text = "Dev <3 | New" }
