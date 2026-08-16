@@ -1,35 +1,30 @@
+_G.WatermarkConnection = nil
+_G.WatermarkRunning = true
+
 Library:SetWatermarkVisibility(true)
 
-local FrameTimer = tick()
-local FrameCounter = 0
-local FPS = 60
-local GetPing = (function() return math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()) end)
-local CanDoPing = pcall(function() return GetPing() end)
+_G.GetPing = (function() return math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+_G.CanDoPing = pcall(function() return _G.GetPing() end)
 
-local WatermarkConnection = game:GetService("RunService").RenderStepped:Connect(function()
-    FrameCounter += 1
+local function StartWatermark()
+    _G.WatermarkRunning = true
+    
+    _G.WatermarkConnection = game:GetService("RunService").RenderStepped:Connect(function()
+        if not _G.WatermarkRunning then return end
+        
+        pcall(function()
+            if _G.CanDoPing then
+                local ping = _G.GetPing()
+                Library:SetWatermark("Rawr.xyz <3 | " .. ping .. " ms")
+            else
+                Library:SetWatermark("Rawr.xyz <3")
+            end
+        end)
+    end)
+end
 
-    if (tick() - FrameTimer) >= 1 then
-        FPS = FrameCounter
-        FrameTimer = tick()
-        FrameCounter = 0
-    end
-
-    if CanDoPing then
-        Library:SetWatermark(("Rawr.xyz <3 | %d fps | %d ms"):format(
-            math.floor(FPS),
-            GetPing()
-        ))
-    else
-        Library:SetWatermark(("Rawr.xyz <3 | %d fps"):format(
-            math.floor(FPS)
-        ))
-    end
-end)
+StartWatermark()
 
 Library:OnUnload(function()
-    WatermarkConnection:Disconnect()
-
-    print("Unloaded!")
-    Library.Unloaded = true
+    print("!")
 end)
