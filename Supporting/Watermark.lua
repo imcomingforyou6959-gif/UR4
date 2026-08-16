@@ -10,13 +10,3 @@ WatermarkConnection = game:GetService("RunService").RenderStepped:Connect(functi
         Library:SetWatermark("Rawr.xyz <3")
     end
 end)
-
-Library:OnUnload(function()
-    if WatermarkConnection then
-        WatermarkConnection:Disconnect()
-        WatermarkConnection = nil
-    end
-
-    print("Unloaded!")
-    Library.Unloaded = true
-end)
