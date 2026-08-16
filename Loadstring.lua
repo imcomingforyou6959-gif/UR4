@@ -327,6 +327,9 @@ local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
 local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
 
+Library:Notify('Thanks for using rawr <3')
+Library:Notify('I LOVE U')
+
 local _51 = game:GetService("Players")
 local _52 = game:GetService("RunService")
 local _53 = game:GetService("Workspace")
@@ -877,6 +880,121 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
+MovementSection = WorldTab:AddRightGroupbox('Extras <3')
+
+-- Camera Distance
+_G.old_camera_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
+
+MovementSection:AddToggle('UnlockCameraDistance', {
+    Text = 'Unlock Camera Distance',
+    Default = false,
+})
+
+Toggles.UnlockCameraDistance:OnChanged(function()
+    if Toggles.UnlockCameraDistance.Value then
+        game.Players.LocalPlayer.CameraMaxZoomDistance = 9e9
+    else
+        game.Players.LocalPlayer.CameraMaxZoomDistance = _G.old_camera_distance
+    end
+end)
+
+-- Anti Sit
+_G.anti_sit_connection = nil
+_G.anti_sit_char_connection = nil
+
+_G.do_anti_sit = function()
+    if _G.anti_sit_connection then
+        _G.anti_sit_connection:Disconnect()
+        _G.anti_sit_connection = nil
+    end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChild("Humanoid")
+
+    if hum then
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+
+        _G.anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
+            if hum.Sit then
+                task.wait(0)
+                hum.Sit = false
+                hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+            end
+        end)
+    end
+end
+
+MovementSection:AddToggle('AntiSit', {
+    Text = 'Anti Sit',
+    Default = false,
+})
+
+Toggles.AntiSit:OnChanged(function()
+    if _G.anti_sit_connection then
+        _G.anti_sit_connection:Disconnect()
+        _G.anti_sit_connection = nil
+    end
+
+    if _G.anti_sit_char_connection then
+        _G.anti_sit_char_connection:Disconnect()
+        _G.anti_sit_char_connection = nil
+    end
+
+    char = LocalPlayer.Character
+    hum = char and char:FindFirstChild("Humanoid")
+
+    if hum then
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+    end
+
+    if Toggles.AntiSit.Value then
+        _G.anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            _G.do_anti_sit()
+        end)
+
+        if LocalPlayer.Character then
+            _G.do_anti_sit()
+        end
+    end
+end)
+
+-- Show Chat
+MovementSection:AddToggle('ShowChat', {
+    Text = 'Show Chat',
+    Default = false,
+})
+
+Toggles.ShowChat:OnChanged(function()
+    local chat = LocalPlayer.PlayerGui:FindFirstChild("Chat")
+    
+    if chat then
+        local frame = chat:FindFirstChild("Frame")
+        if frame then
+            local channelFrame = frame:FindFirstChild("ChatChannelParentFrame")
+            local barFrame = frame:FindFirstChild("ChatBarParentFrame")
+            
+            if channelFrame then
+                channelFrame.Visible = Toggles.ShowChat.Value
+            end
+            
+            if barFrame then
+                if Toggles.ShowChat.Value then
+                    barFrame.Position = UDim2.new(0, 0, 1, -44)
+                else
+                    barFrame.Position = UDim2.new(0, 0, 0, 0)
+                end
+            end
+        end
+    else
+        local textChatService = game:GetService("TextChatService")
+        local config = textChatService:FindFirstChild("ChatWindowConfiguration")
+        if config then
+            config.Enabled = Toggles.ShowChat.Value
+        end
+    end
+end)
+
 _60['UI Settings'] = _59:AddTab('UI Settings')
 
 shared.hitman = {
@@ -1161,7 +1279,369 @@ _78:AddButton('Rapid Fire', function()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
 end)
 
-_78:AddDivider()
+AS_busy = false
+AS_cache = nil
+AS_randomEquipConnection = nil
+AS_shared_lock = false
+AS_blacklistedTools = {
+    "[Double-Barrel SG]",
+    "[Knife]",
+    "[Revolver]",
+    "[TacticalShotgun]",
+    "[Wallet]",
+    "[Cranberry]",
+    "[Mask]",
+    "[Donut]",
+    "[Chicken]",
+    "[SoloBike]",
+    "[Katana]",
+    "[Hair Glue]",
+    "[Phone]",
+    "[Cookie]",
+    "[Fists]",
+    "Combat",
+}
+
+function AS_isBlacklisted(toolName)
+    for _, blacklisted in ipairs(AS_blacklistedTools) do
+        if toolName == blacklisted then
+            return true
+        end
+    end
+    return false
+end
+
+function AS_getStimItem()
+    local shop = workspace.Ignored:FindFirstChild("Shop")
+    if not shop then return nil end
+    
+    local children = shop:GetChildren()
+    
+    for _, item in ipairs(children) do
+        if item.Name == "[Stim]" and item:FindFirstChild("ClickDetector") then
+            return item
+        end
+    end
+    
+    for _, item in ipairs(children) do
+        if item.Name:find("Stim") and item:FindFirstChild("ClickDetector") then
+            return item
+        end
+    end
+    
+    if #children >= 49 then
+        local stimItem = children[49]
+        if stimItem and stimItem:FindFirstChild("ClickDetector") then
+            return stimItem
+        end
+    end
+    
+    return nil
+end
+
+function AS_getStimTool()
+    local char = _56.Character
+    if not char then return nil end
+    
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Tool") and v.Name == "[Stim]" then
+            return v
+        end
+    end
+    
+    local bp = _56.Backpack
+    if bp then
+        for _, v in ipairs(bp:GetChildren()) do
+            if v:IsA("Tool") and v.Name == "[Stim]" then
+                return v
+            end
+        end
+    end
+    
+    return nil
+end
+
+function AS_hasStim()
+    return AS_getStimTool() ~= nil
+end
+
+function AS_getHealth()
+    local char = _56.Character
+    if not char then return 100, 100 end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum then return 100, 100 end
+    
+    return hum.Health, hum.MaxHealth
+end
+
+function AS_useStim()
+    local char = _56.Character
+    if not char then return false end
+    
+    local tool = AS_getStimTool()
+    if not tool then return false end
+    
+    if tool.Parent ~= char then
+        tool.Parent = char
+    end
+    
+    task.wait(0.05)
+    
+    pcall(function()
+        tool:Activate()
+    end)
+    
+    task.wait(0.05)
+    
+    pcall(function()
+        tool:Deactivate()
+    end)
+    
+    return true
+end
+
+function AS_startRandomEquip()
+    if AS_randomEquipConnection then return end
+    
+    AS_randomEquipConnection = _52.Heartbeat:Connect(function()
+        if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
+        
+        local char = _56.Character
+        if not char then return end
+        
+        local hasTool = false
+        for _, child in ipairs(char:GetChildren()) do
+            if child:IsA("Tool") and child.Name ~= "[Stim]" then
+                hasTool = true
+                break
+            end
+        end
+        if hasTool then return end
+        
+        local bp = _56.Backpack
+        if not bp then return end
+        
+        for _, tool in ipairs(bp:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name ~= "[Stim]" and not AS_isBlacklisted(tool.Name) then
+                tool.Parent = char
+                break
+            end
+        end
+    end)
+end
+
+function AS_stopRandomEquip()
+    if AS_randomEquipConnection then
+        AS_randomEquipConnection:Disconnect()
+        AS_randomEquipConnection = nil
+    end
+end
+
+function AS_buyStim()
+    if AS_busy then return end
+    if AS_hasStim() then return end
+    if _AA_busy then return end
+    if stomping then return end
+    if grabbing then return end
+    if AS_shared_lock then return end
+    
+    local char = _56.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+    
+    AS_busy = true
+    AS_shared_lock = true
+    
+    local wasVoidActive = _118
+    if wasVoidActive then
+        _118 = false
+        if _121 then
+            _121:Disconnect()
+            _121 = nil
+        end
+        if _120 and _119 then
+            local _148 = _56.Character and _56.Character:FindFirstChildOfClass("Humanoid")
+            if _148 then
+                _148.PlatformStand = true
+            end
+            _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            _120.CFrame = _119
+            task.wait(0.3)
+            if _148 then
+                _148.PlatformStand = false
+            end
+        end
+        _119 = nil
+        task.wait(0.2)
+    end
+    
+    local ch = _56.Character
+    if not ch then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+    
+    local rt = ch:FindFirstChild("HumanoidRootPart")
+    if not rt then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+    
+    local stimItem = AS_getStimItem()
+    if not stimItem then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+    
+    local clickDetector = stimItem:FindFirstChild("ClickDetector")
+    if not clickDetector then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+    
+    local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
+    local oc = rt.CFrame
+    
+    for attempt = 1, 3 do
+        if stomping or grabbing or _AA_busy then break end
+        if not _56.Character then break end
+        
+        rt = _56.Character:FindFirstChild("HumanoidRootPart")
+        if not rt then break end
+        
+        rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
+        
+        fireclickdetector(clickDetector)
+        task.wait(0.01)
+        fireclickdetector(clickDetector)
+        task.wait(0.01)
+        fireclickdetector(clickDetector)
+        
+        task.wait(0.1)
+        
+        if AS_hasStim() then
+            break
+        end
+    end
+    
+    pcall(function()
+        rt.CFrame = oc
+    end)
+    
+    AS_busy = false
+    AS_shared_lock = false
+    
+    if wasVoidActive then
+        if _120 then
+            _119 = _120.CFrame
+        end
+        _118 = true
+        _143()
+        _146()
+        if _121 then
+            _121:Disconnect()
+        end
+        _121 = _52.Heartbeat:Connect(function()
+            if _118 and _120 then
+                local _t = tick()
+                _120.CFrame = CFrame.new(
+                    math.floor((_t * 4423) % 999999991) * math.sign(math.sin(_t * 7919)),
+                    math.floor((_t * 6287) % 999999973) * math.sign(math.cos(_t * 6421)),
+                    math.floor((_t * 3499) % 999999937) * math.sign(math.sin(_t * 8737))
+                ) * CFrame.Angles(
+                    (_t * 17) % (math.pi * 2),
+                    (_t * 31) % (math.pi * 2),
+                    (_t * 53) % (math.pi * 2)
+                )
+            end
+        end)
+    end
+end
+
+function AS_autoStim()
+    if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
+    if _AA_busy then return end
+    if AS_busy then return end
+    if AS_shared_lock then return end
+    if stomping then return end
+    if grabbing then return end
+    
+    local hp, maxHp = AS_getHealth()
+    local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
+    
+    if not AS_hasStim() then
+        AS_buyStim()
+    elseif hp <= threshold and hp < maxHp then
+        AS_useStim()
+    end
+end
+
+_78:AddToggle('AutoStim', {
+    Text = 'Auto Stim',
+    Default = false,
+})
+
+_78:AddSlider('AutoStimThreshold', {
+    Text = 'Health Threshold',
+    Default = 50,
+    Min = 10,
+    Max = 100,
+    Rounding = 0,
+    Suffix = ' HP',
+})
+
+Toggles.AutoStim:OnChanged(function(value)
+    if value then
+        AS_startRandomEquip()
+        task.spawn(AS_autoStim)
+    else
+        AS_stopRandomEquip()
+    end
+end)
+
+_56.CharacterAdded:Connect(function()
+    AS_cache = nil
+    task.wait(1)
+    
+    if Toggles.AutoStim and Toggles.AutoStim.Value then
+        task.spawn(AS_autoStim)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.15) do
+        if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
+        if _AA_busy then continue end
+        if AS_busy then continue end
+        if AS_shared_lock then continue end
+        if stomping then continue end
+        if grabbing then continue end
+        
+        local char = _56.Character
+        if not char then continue end
+        
+        local hum = char:FindFirstChild("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        
+        local hp, maxHp = AS_getHealth()
+        local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
+        
+        if not AS_hasStim() then
+            task.spawn(AS_buyStim)
+        elseif hp <= threshold and hp < maxHp then
+            task.spawn(AS_useStim)
+        end
+    end
+end)
+
 _78:AddLabel('Auto Armor')
 local _AutoArmorToggle = _78:AddToggle('AutoArmor', {
     Text = 'Auto Armor',
@@ -1439,6 +1919,97 @@ antiStompToggle:OnChanged(function()
     end
 end)
 
+_78:AddToggle("AntiSlowdown", {
+    Text = "Anti Slowdown",
+    Default = false,
+    Tooltip = "Prevents walk speed from going below 25",
+    Callback = function(Value)
+        if Value then
+            task.spawn(function()
+                char = game.Players.LocalPlayer.Character
+                if char then
+                    hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.WalkSpeed < 25 then
+                        hum.WalkSpeed = 25
+                    end
+                end
+            end)
+        end
+    end
+})
+
+_78:AddToggle("AntiJumpCooldown", {
+    Text = "Anti Jump Cooldown",
+    Default = false,
+    Tooltip = "Prevents jump power from being reduced",
+    Callback = function(Value)
+        if Value then
+            task.spawn(function()
+                char = game.Players.LocalPlayer.Character
+                if char then
+                    hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.JumpPower = hum.JumpPower
+                    end
+                end
+            end)
+        end
+    end
+})
+
+-- ===== METAMETHOD HOOKS =====
+mt = getrawmetatable(game)
+oldNewIndex = mt.__newindex
+
+setreadonly(mt, false)
+mt.__newindex = newcclosure(function(self, key, value)
+    if not checkcaller() and Toggles.AntiSlowdown and Toggles.AntiSlowdown.Value then
+        if self:IsA("Humanoid") and key == "WalkSpeed" and value < 25 then
+            value = 25
+        end
+    end
+    return oldNewIndex(self, key, value)
+end)
+setreadonly(mt, true)
+
+oldNewIndex2 = hookmetamethod(game, "__newindex", function(self, Index, Value)
+    if not checkcaller() and Toggles.AntiJumpCooldown and Toggles.AntiJumpCooldown.Value then
+        if self:IsA("Humanoid") and Index == "JumpPower" then
+            return
+        end
+    end
+    return oldNewIndex2(self, Index, Value)
+end)
+
+-- ===== REFRESH FUNCTIONS =====
+Toggles.AntiSlowdown:OnChanged(function(value)
+    if value then
+        task.spawn(function()
+            char = game.Players.LocalPlayer.Character
+            if char then
+                hum = char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.WalkSpeed < 25 then
+                    hum.WalkSpeed = 25
+                end
+            end
+        end)
+    end
+end)
+
+Toggles.AntiJumpCooldown:OnChanged(function(value)
+    if value then
+        task.spawn(function()
+            char = game.Players.LocalPlayer.Character
+            if char then
+                hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.JumpPower = hum.JumpPower
+                end
+            end
+        end)
+    end
+end)
+
 -- Circle Defense
 local _69ha = _60.Main:AddRightTabbox()
 local _67ha = _69ha:AddTab('Defense')
@@ -1539,6 +2110,7 @@ _50:BuildConfigSection(_60['UI Settings'])
 _49:ApplyToTab(_60['UI Settings'])
 _50:LoadAutoloadConfig()
 
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Watermark.lua'))()
 task.wait(1)
 
 setfflag("DebugRunParallelLuaOnMainThread", "true")
@@ -2111,7 +2683,7 @@ local function _147()
                 _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 _120.CFrame = _119
-                task.wait(0.5)
+                task.wait(0.3)
                 if _148 then
                     _148.PlatformStand = false
                 end
@@ -5143,6 +5715,7 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gi
 _AA_cache = nil
 _AA_busy = false
 _AA_connections = {}
+_AA_dead = false
 
 function _AA_getArmor()
     if _AA_cache and _AA_cache.Parent then return _AA_cache end
@@ -5174,28 +5747,104 @@ function _AA_validArmorName(n)
 end
 
 function _AA_findBest()
+    local shop = workspace.Ignored:FindFirstChild("Shop")
+    if not shop then return nil end
+    
     local ba, bs = nil, -math.huge
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if _AA_validArmorName(v.Name) then
-            local pr = v:FindFirstChild("Price")
+    
+    for _, item in ipairs(shop:GetChildren()) do
+        if item:FindFirstChild("ClickDetector") and _AA_validArmorName(item.Name) then
+            local pr = item:FindFirstChild("Price")
             if pr and pr:IsA("ValueBase") then
                 local sc = pr.Value
-                if string.find(string.lower(v.Name), "full") then
+                if string.find(string.lower(item.Name), "full") then
                     sc = sc + 100000
                 end
                 if sc > bs then
                     bs = sc
-                    ba = v
+                    ba = item
                 end
             end
         end
     end
+    
+    if not ba then
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if _AA_validArmorName(v.Name) and v:FindFirstChild("ClickDetector") then
+                local pr = v:FindFirstChild("Price")
+                if pr and pr:IsA("ValueBase") then
+                    local sc = pr.Value
+                    if string.find(string.lower(v.Name), "full") then
+                        sc = sc + 100000
+                    end
+                    if sc > bs then
+                        bs = sc
+                        ba = v
+                    end
+                end
+            end
+        end
+    end
+    
     return ba
+end
+
+function _AA_findPartAndDetector(item)
+    if not item or not item.Parent then return nil, nil end
+    
+    local cd = item:FindFirstChild("ClickDetector")
+    if not cd then
+        for _, desc in ipairs(item:GetDescendants()) do
+            if desc:IsA("ClickDetector") then
+                cd = desc
+                break
+            end
+        end
+    end
+    
+    local pt = item:FindFirstChildWhichIsA("BasePart")
+    if not pt then
+        pt = item:FindFirstChild("Head") or item:FindFirstChild("Handle") or item:FindFirstChild("Part")
+    end
+    if not pt then
+        for _, desc in ipairs(item:GetDescendants()) do
+            if desc:IsA("BasePart") then
+                pt = desc
+                break
+            end
+        end
+    end
+    
+    return pt, cd
+end
+
+function _AA_isAlive()
+    local char = _56.Character
+    if not char then
+        _AA_dead = true
+        return false
+    end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then
+        _AA_dead = true
+        return false
+    end
+    
+    _AA_dead = false
+    return true
 end
 
 function _AA_buy()
     if _AA_busy then return end
+    if stomping then return end
+    if grabbing then return end
+    if AS_busy then return end
+    
+    if not _AA_isAlive() then return end
+    
     _AA_busy = true
+    
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
@@ -5219,17 +5868,38 @@ function _AA_buy()
         _119 = nil
         task.wait(0.3)
     end
+    
     local ch = _56.Character or _56.CharacterAdded:Wait()
-    local rt = ch:WaitForChild("HumanoidRootPart")
+    if not ch then
+        _AA_busy = false
+        return
+    end
+    
+    local rt = ch:FindFirstChild("HumanoidRootPart")
+    if not rt then
+        _AA_busy = false
+        return
+    end
+    
     local t0 = tick()
     local threshold = Options.AutoArmorThreshold and Options.AutoArmorThreshold.Value or 200
+    
     while _AA_getArmorValue() < threshold and tick() - t0 < 8 do
+        if not _AA_isAlive() then
+            break
+        end
+        
+        if stomping or grabbing or AS_busy then
+            break
+        end
+        
         local sv = _AA_getArmorValue()
         local it = _AA_findBest()
-        if not it then break end
-        local pt = it.PrimaryPart or it:FindFirstChildWhichIsA("BasePart")
-        local cd = it:FindFirstChild("ClickDetector")
+        if not it or not it.Parent then break end
+        
+        local pt, cd = _AA_findPartAndDetector(it)
         if not pt or not cd then break end
+        
         local oc = rt.CFrame
         rt.CFrame = pt.CFrame * CFrame.new(0, -3, 0)
         for i = 1, 5 do
@@ -5245,7 +5915,9 @@ function _AA_buy()
         rt.CFrame = oc
         task.wait(okk and 0.2 or 0.5)
     end
+    
     _AA_busy = false
+    
     if wasVoidActive then
         if _120 then
             _119 = _120.CFrame
@@ -5275,10 +5947,13 @@ end
 
 _AA_connections.charAdded = _56.CharacterAdded:Connect(function()
     _AA_cache = nil
+    _AA_dead = false
     task.wait(1)
     if Toggles.AutoArmor.Value then
         if Toggles.AutoArmorVoidIgnore.Value or not _118 then
-            _AA_buy()
+            if _AA_isAlive() then
+                _AA_buy()
+            end
         end
     end
 end)
@@ -5287,6 +5962,8 @@ task.spawn(function()
     while task.wait(0.2) do
         if not Toggles.AutoArmor.Value then continue end
         if not Toggles.AutoArmorVoidIgnore.Value and _118 then continue end
+        if not _AA_isAlive() then continue end
+        
         local v = _AA_getArmorValue()
         local threshold = Options.AutoArmorThreshold and Options.AutoArmorThreshold.Value or 200
         if v < threshold then
@@ -5299,7 +5976,9 @@ if _56.Character then
     task.wait(1)
     if Toggles.AutoArmor.Value then
         if Toggles.AutoArmorVoidIgnore.Value or not _118 then
-            _AA_buy()
+            if _AA_isAlive() then
+                _AA_buy()
+            end
         end
     end
 end
