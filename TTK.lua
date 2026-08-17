@@ -388,7 +388,7 @@ end
 task.spawn(_211)
 
 -- Sounds
-local _188 = _39.Main:AddLeftGroupbox("Sounds")
+local _188 = _39.Main:AddRightGroupbox("Sounds")
 
 _188:AddToggle("HitSoundEnabled", {
     Text = "Enable Hit Sounds",
