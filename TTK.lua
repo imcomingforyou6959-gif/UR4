@@ -191,6 +191,94 @@ _45:AddToggle("NoSway", {
     Default = false,
 })
 
+_45:AddToggle("NoRecoil", {
+    Text = "No Recoil",
+    Default = false,
+})
+
+local _NR_BlankCFunc = newcclosure(function() return end)
+local _NR_HookedFunctions = {}
+
+local function _NR_FindAndHook()
+    for _, _thing in next, getgc(true) do
+        if typeof(_thing) ~= "table" then continue end
+        
+        if rawget(_thing, "ApplyRecoil") then
+            local _funcs = {
+                "ApplyRecoil",
+                "_FireScriptedRecoil",
+                "_FireAdsShoulderImpact",
+                "_ApplyFireDriftImpulse",
+            }
+            
+            for _, _funcName in ipairs(_funcs) do
+                local _func = rawget(_thing, _funcName)
+                if _func and typeof(_func) == "function" then
+                    if not _NR_HookedFunctions[_func] then
+                        _NR_HookedFunctions[_func] = true
+                        hookfunction(_func, _NR_BlankCFunc)
+                    end
+                end
+            end
+        end
+        
+        if rawget(_thing, "Recoil") and rawget(_thing, "WeaponSwayPhase") then
+            local _recoilFunc = rawget(_thing, "Recoil")
+            if _recoilFunc and typeof(_recoilFunc) == "function" then
+                if debug.info(_recoilFunc, "s"):find("CameraController") then
+                    if not _NR_HookedFunctions[_recoilFunc] then
+                        _NR_HookedFunctions[_recoilFunc] = true
+                        hookfunction(_recoilFunc, _NR_BlankCFunc)
+                    end
+                end
+            end
+        end
+        
+        if rawget(_thing, "InitFromDef") then
+            local _initFunc = rawget(_thing, "InitFromDef")
+            if _initFunc and typeof(_initFunc) == "function" then
+                if not _NR_HookedFunctions[_initFunc] then
+                    _NR_HookedFunctions[_initFunc] = true
+                    
+                    local _oldInit = _initFunc
+                    hookfunction(_initFunc, newcclosure(function(p2, ...)
+                        _oldInit(p2, ...)
+                        
+                        pcall(function()
+                            p2.RecoilRecovery = 0
+                            p2.RecoilSpring = p2.RecoilSpring or {}
+                            p2.RecoilSpring.s = 0
+                            p2.RecoilPushSpring = p2.RecoilPushSpring or {}
+                            p2.RecoilPushSpring.s = 0
+                            p2.RecoilShakeSpring = p2.RecoilShakeSpring or {}
+                            p2.RecoilShakeSpring.s = 0
+                            p2.RecoilTiltSpring = p2.RecoilTiltSpring or {}
+                            p2.RecoilTiltSpring.s = 0
+                            p2.RecoilTiltShakeSpring = p2.RecoilTiltShakeSpring or {}
+                            p2.RecoilTiltShakeSpring.s = 0
+                            p2.RecoilTrailSpring = p2.RecoilTrailSpring or {}
+                            p2.RecoilTrailSpring.s = 0
+                        end)
+                    end))
+                end
+            end
+        end
+    end
+end
+
+_37.NoRecoil:OnChanged(function(_enabled)
+    if _enabled then
+        _NR_FindAndHook()
+    end
+end)
+
+task.spawn(function()
+    task.wait(1)
+    if _37.NoRecoil and _37.NoRecoil.Value then
+        _NR_FindAndHook()
+    end
+end)
+
 -- Checks Groupbox
 local _47 = _39.Main:AddLeftGroupbox("Checks")
 
@@ -252,6 +340,187 @@ _48:AddToggle("ESPSkeleton", {
     Default = Color3.fromRGB(255, 255, 255),
     Title = "Skeleton Color",
 })
+
+local _210 = "https://api.github.com/repos/imcomingforyou6959-gif/UR4/contents/assets/sounds"
+local _217 = false
+
+local function _211()
+    if not isfolder("assets") then makefolder("assets") end
+    if not isfolder("assets/sounds") then makefolder("assets/sounds") end
+    
+    local _212, _213 = pcall(function()
+        return game:HttpGet(_210)
+    end)
+    
+    if not _212 or not _213 then return end
+    
+    local _214 = _8:JSONDecode(_213)
+    local _218 = 0
+    local _219 = #_214
+    
+    for _, _215 in ipairs(_214) do
+        if _215.name:match("%.mp3$") or _215.name:match("%.ogg$") or _215.name:match("%.wav$") or _215.name:match("%.flac$") then
+            local _216 = "assets/sounds/" .. _215.name
+            
+            if not isfile(_216) then
+                task.spawn(function()
+                    pcall(function()
+                        writefile(_216, game:HttpGet(_215.download_url))
+                    end)
+                    _218 = _218 + 1
+                    if _218 >= _219 then
+                        _217 = true
+                    end
+                end)
+            else
+                _218 = _218 + 1
+            end
+        else
+            _219 = _219 - 1
+        end
+    end
+    
+    if _218 >= _219 then
+        _217 = true
+    end
+end
+
+task.spawn(_211)
+
+-- Sounds
+local _188 = _39.Main:AddLeftGroupbox("Sounds")
+
+_188:AddToggle("HitSoundEnabled", {
+    Text = "Enable Hit Sounds",
+    Default = false,
+})
+
+_188:AddDropdown("HitSoundType", {
+    Text = "Hit Sound",
+    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
+    Default = "Default",
+})
+
+_188:AddToggle("KillSoundEnabled", {
+    Text = "Enable Kill Sounds",
+    Default = false,
+})
+
+_188:AddDropdown("KillSoundType", {
+    Text = "Kill Sound",
+    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
+    Default = "Default",
+})
+
+local _189 = {
+    Bameware = "rbxassetid://3124331820",
+    Bell = "rbxassetid://6534947240",
+    Bubble = "rbxassetid://6534947588",
+    Pick = "rbxassetid://1347140027",
+    Pop = "rbxassetid://198598793",
+    Rust = "rbxassetid://1255040462",
+    Sans = "rbxassetid://3188795283",
+    Fart = "rbxassetid://130833677",
+    Big = "rbxassetid://5332005053",
+    Vine = "rbxassetid://5332680810",
+    Bruh = "rbxassetid://4578740568",
+    Skeet = "rbxassetid://5633695679",
+    Fatality = "rbxassetid://6534947869",
+    Bonk = "rbxassetid://5766898159",
+    Minecraft = "rbxassetid://4018616850",
+    TomScream = "rbxassetid://7553397015",
+    Prowler = "rbxassetid://131169447699141",
+    Fortnite = "rbxassetid://140073271098075",
+    iphone = "rbxassetid://131935970184832",
+    Lmk = "rbxassetid://118833207462382",
+    NoSounds = "rbxassetid://0",
+}
+
+local _190 = "rbxassetid://137166459647708"
+local _191 = "rbxassetid://122260391562335"
+
+local _192 = getcustomasset or getsynasset or function(path) return nil end
+local _193 = "assets/sounds/"
+local _208 = {}
+
+local function _194(_195)
+    if _195 == "Default" then return nil end
+    
+    if _189[_195] then
+        return _189[_195]
+    end
+    
+    if _208[_195] then
+        return _208[_195]
+    end
+    
+    local _exts = {".mp3", ".ogg", ".wav", ".flac"}
+    
+    for _, _ext in ipairs(_exts) do
+        local _196 = _193 .. _195 .. _ext
+        if isfile(_196) then
+            local _209 = _192(_196)
+            if _209 then
+                _208[_195] = _209
+                return _209
+            end
+        end
+    end
+    
+    return nil
+end
+
+local function _197()
+    local _198 = _4.Assets.Sounds
+
+    local _199 = _198:FindFirstChild("Hitmarker")
+    if _199 then
+        local _201 = _190
+        if _37.HitSoundEnabled and _37.HitSoundEnabled.Value then
+            local _200 = _36.HitSoundType and _36.HitSoundType.Value or "Default"
+            if _200 ~= "Default" then
+                local _resolved = _194(_200)
+                if _resolved then _201 = _resolved end
+            end
+        end
+        if _199.SoundId ~= _201 then
+            _199.SoundId = _201
+        end
+    end
+    
+    -- Kill
+    local _202 = _198:FindFirstChild("Kill")
+    if _202 then
+        local _204 = _191
+        if _37.KillSoundEnabled and _37.KillSoundEnabled.Value then
+            local _203 = _36.KillSoundType and _36.KillSoundType.Value or "Default"
+            if _203 ~= "Default" then
+                local _resolved = _194(_203)
+                if _resolved then _204 = _resolved end
+            end
+        end
+        if _202.SoundId ~= _204 then
+            _202.SoundId = _204
+        end
+    end
+end
+
+_37.HitSoundEnabled:OnChanged(_197)
+_36.HitSoundType:OnChanged(_197)
+_37.KillSoundEnabled:OnChanged(_197)
+_36.KillSoundType:OnChanged(_197)
+
+task.spawn(function()
+    task.wait(1)
+    pcall(_197)
+end)
+
+task.spawn(function()
+    while not _217 do
+        task.wait(1)
+    end
+    pcall(_197)
+end)
 
 local _40 = _39["UI Settings"]:AddLeftGroupbox("Menu")
 _40:AddToggle("KeybindMenuOpen", { Default = _33.KeybindFrame.Visible, Text = "Open Keybind Menu", Callback = function(v) _33.KeybindFrame.Visible = v end})
@@ -886,4 +1155,18 @@ _33:OnUnload(function()
     end
     
     _54, _55 = nil, nil
+    
+    pcall(function()
+        local _220 = _4.Assets.Sounds:FindFirstChild("Hitmarker")
+        if _220 then
+            _220.SoundId = "rbxassetid://137166459647708"
+        end
+        local _221 = _4.Assets.Sounds:FindFirstChild("Kill")
+        if _221 then
+            _221.SoundId = "rbxassetid://122260391562335"
+        end
+    end)
+    
+    _208 = {}
+    _217 = false
 end)
