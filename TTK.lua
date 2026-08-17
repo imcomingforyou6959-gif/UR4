@@ -397,7 +397,7 @@ _188:AddToggle("HitSoundEnabled", {
 
 _188:AddDropdown("HitSoundType", {
     Text = "Hit Sound",
-    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
+    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Bumble", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
     Default = "Default",
 })
 
@@ -408,7 +408,7 @@ _188:AddToggle("KillSoundEnabled", {
 
 _188:AddDropdown("KillSoundType", {
     Text = "Kill Sound",
-    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
+    Values = {"Default", "NoSounds", "Bameware", "Bell", "Bubble", "Pick", "Pop", "Rust", "Sans", "Fart", "Big", "Vine", "Bruh", "Skeet", "Fatality", "Bonk", "Bumble", "Minecraft", "TomScream", "Prowler", "Fortnite", "iphone", "Lmk", "1nn", "67", "BatHit", "Beep", "Bow", "Bubble2", "CSGO", "Cod", "Fairy1", "Fairy2", "Fatality2", "Hentai1", "Hentai2", "Hentai3", "Lazer", "MarioCoins", "MinecraftXP", "Neverlose", "OSU", "PubgPan", "Rifk7", "RustHeadshot", "SpanishMoan", "StaryKrow", "Steve", "TF2Crit", "TF2Default", "Windows", "boolean", "disable", "enable", "keypress", "keyrelease", "lobby", "moan1", "moan2", "moan3", "moan4", "orthodox", "pmsound", "rifk"},
     Default = "Default",
 })
 
