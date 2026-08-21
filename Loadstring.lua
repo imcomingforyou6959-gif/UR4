@@ -1300,6 +1300,7 @@ AS_blacklistedTools = {
     "[Cookie]",
     "[Fists]",
     "Combat",
+    "TipJar",
 }
 
 function AS_isBlacklisted(toolName)
