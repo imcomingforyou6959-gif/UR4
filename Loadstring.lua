@@ -995,6 +995,72 @@ Toggles.ShowChat:OnChanged(function()
     end
 end)
 
+-- Anti Fling
+_G.antiFlingEnabled = true
+_G.antiFlingConnections = {}
+
+MovementSection:AddToggle('AntiFling', {
+    Text = 'Anti-Fling',
+    Default = true,
+})
+
+_G.setupCharacterCollision = function(character)
+    local function disableCollide(part)
+        if _G.antiFlingEnabled and part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+
+    for _, part in ipairs(character:GetChildren()) do
+        disableCollide(part)
+    end
+
+    _G.antiFlingChildConn = character.ChildAdded:Connect(disableCollide)
+
+    _G.antiFlingSteppedConn = game:GetService("RunService").Stepped:Connect(function()
+        if _G.antiFlingEnabled and character:IsDescendantOf(workspace) then
+            for _, part in ipairs(character:GetChildren()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+
+    character.Destroying:Connect(function()
+        _G.antiFlingChildConn:Disconnect()
+        _G.antiFlingSteppedConn:Disconnect()
+    end)
+end
+
+_G.trackPlayer = function(player)
+    if player == LocalPlayer then return end
+    local charAddedConn = player.CharacterAdded:Connect(_G.setupCharacterCollision)
+    if player.Character then
+        _G.setupCharacterCollision(player.Character)
+    end
+    return charAddedConn
+end
+
+Toggles.AntiFling:OnChanged(function(value)
+    _G.antiFlingEnabled = value
+end)
+
+for _, player in ipairs(Players:GetPlayers()) do
+    _G.antiFlingConnections[player] = _G.trackPlayer(player)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    _G.antiFlingConnections[player] = _G.trackPlayer(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if _G.antiFlingConnections[player] then
+        _G.antiFlingConnections[player]:Disconnect()
+        _G.antiFlingConnections[player] = nil
+    end
+end)
+
 _60['UI Settings'] = _59:AddTab('UI Settings')
 
 shared.hitman = {
@@ -1301,6 +1367,7 @@ AS_blacklistedTools = {
     "[Fists]",
     "Combat",
     "TipJar",
+    "Wallet",
 }
 
 function AS_isBlacklisted(toolName)
@@ -2009,6 +2076,147 @@ Toggles.AntiJumpCooldown:OnChanged(function(value)
             end
         end)
     end
+end)
+
+_G = _G or {}
+_G.x7f3k9m2 = false
+_G.q4w8r2t6 = "Notify"
+_G.z9m3x5c7 = 73315316
+_G.b8n4v6d2 = {}
+_G.j2h5g8f1 = {}
+_G.lastNotifyTime = {}
+
+_G.l5p9j1h7 = _78:AddToggle('ModDetectorEnabled', {
+    Text = 'Mod Detector',
+    Default = false,
+})
+
+_G.l5p9j1h7:OnChanged(function(v3k7m9n2)
+    _G.x7f3k9m2 = v3k7m9n2
+    if not v3k7m9n2 then
+        _G.b8n4v6d2 = {}
+        _G.j2h5g8f1 = {}
+        _G.lastNotifyTime = {}
+    end
+end)
+
+local ModDetectorAction = _78:AddDropdown('ModDetectorAction', {
+    Values = { 'Kick', 'Notify', 'Unload' },
+    Default = 'Notify',
+    Text = 'Mod Detection',
+})
+
+ModDetectorAction:OnChanged(function(newAction)
+    _G.q4w8r2t6 = newAction
+end)
+
+function w3e5r7t9(a1s2d3f4)
+    if not a1s2d3f4 then return false end
+    if a1s2d3f4 == _56 then return false end
+    if _G.b8n4v6d2[a1s2d3f4.UserId] then return false end
+    
+    local k8j4h6g2 = false
+    local m9n7b5v3 = 0
+    
+    while m9n7b5v3 < 3 do
+        local c4x6z8a1, q2w4e6r8 = pcall(function()
+            return a1s2d3f4:IsInGroup(_G.z9m3x5c7)
+        end)
+        
+        if c4x6z8a1 then
+            k8j4h6g2 = q2w4e6r8 == true
+            print("[ModDetector] " .. a1s2d3f4.Name .. " | " .. a1s2d3f4.DisplayName .. " | " .. tostring(q2w4e6r8))
+            break
+        end
+        
+        m9n7b5v3 = m9n7b5v3 + 1
+        task.wait(0.5)
+    end
+    
+    return k8j4h6g2
+end
+
+function t5y7u9i1(p8o0l3k6)
+    if not _G.x7f3k9m2 then return end
+    if not p8o0l3k6 then return end
+    if _G.b8n4v6d2[p8o0l3k6.UserId] then return end
+    
+    _G.b8n4v6d2[p8o0l3k6.UserId] = true
+    _G.j2h5g8f1[p8o0l3k6.UserId] = p8o0l3k6
+    
+    local action = _G.q4w8r2t6 or "Notify"
+    
+    if action == "Notify" then
+        local currentTime = os.time()
+        if not _G.lastNotifyTime[p8o0l3k6.UserId] or (currentTime - _G.lastNotifyTime[p8o0l3k6.UserId]) >= 300 then
+            _48:Notify('A Mod has joined or is in the game <3\nMod: ' .. p8o0l3k6.DisplayName .. ' ( @' .. p8o0l3k6.Name .. ' )')
+            _G.lastNotifyTime[p8o0l3k6.UserId] = currentTime
+        end
+    elseif action == "Kick" then
+        -- FIXED: Kicks the local player (YOU) instead of the mod
+        task.spawn(function()
+            pcall(function()
+                _56:Kick("A Mod was detected in your game we saved u <3 | discord.gg/eMpUQzFrNG")
+            end)
+        end)
+    elseif action == "Unload" then
+        _48:Unload()
+    end
+end
+
+function u6i8o0p2()
+    if not _G.x7f3k9m2 then return end
+    
+    task.spawn(function()
+        local s3d5f7g9 = _51:GetPlayers()
+        for _, h1j2k3l4 in ipairs(s3d5f7g9) do
+            if h1j2k3l4 ~= _56 and _G.x7f3k9m2 then
+                task.wait(1)
+                if w3e5r7t9(h1j2k3l4) then
+                    t5y7u9i1(h1j2k3l4)
+                    break
+                end
+            end
+        end
+    end)
+end
+
+_G.l5p9j1h7:OnChanged(function(v3k7m9n2)
+    _G.x7f3k9m2 = v3k7m9n2
+    if v3k7m9n2 then
+        u6i8o0p2()
+    else
+        _G.b8n4v6d2 = {}
+        _G.j2h5g8f1 = {}
+        _G.lastNotifyTime = {}
+    end
+end)
+
+_51.PlayerAdded:Connect(function(a1b2c3d4)
+    if not _G.x7f3k9m2 then return end
+    
+    task.spawn(function()
+        task.wait(5)
+        if a1b2c3d4 and a1b2c3d4.Parent and _G.x7f3k9m2 then
+            if w3e5r7t9(a1b2c3d4) then
+                t5y7u9i1(a1b2c3d4)
+            end
+        end
+    end)
+end)
+
+task.spawn(function()
+    while task.wait(15) do
+        if _G.x7f3k9m2 then
+            u6i8o0p2()
+        end
+    end
+end)
+
+_51.PlayerRemoving:Connect(function(e4f5g6h7)
+    _G.b8n4v6d2[e4f5g6h7.UserId] = nil
+    _G.j2h5g8f1[e4f5g6h7.UserId] = nil
+    _G.lastNotifyTime[e4f5g6h7.UserId] = nil
 end)
 
 -- Circle Defense
@@ -5024,9 +5232,15 @@ end
 
 function buildESPText(player, nameText)
     local parts = {}
+    
     if espToggleOn("ESPShowNames") then
-        table.insert(parts, nameText)
+        local displayName = nameText
+        if _G.j2h5g8f1 and _G.j2h5g8f1[player.UserId] then
+            displayName = displayName .. " [MOD]"
+        end
+        table.insert(parts, displayName)
     end
+    
     local character = player.Character
     local head = character and character:FindFirstChild("Head")
     if espToggleOn("ESPShowDistance") and head then
@@ -5039,9 +5253,8 @@ function buildESPText(player, nameText)
             table.insert(parts, math.floor(hum.Health) .. " HP")
         end
     end
-    if #parts == 0 then
-        return ""
-    end
+    
+    if #parts == 0 then return "" end
     return table.concat(parts, " ")
 end
 
@@ -5246,6 +5459,32 @@ function cleanupSkeleton(player)
     end
 end
 
+function cleanupAllSkeletons()
+    for player, lines in pairs(skeletonLines) do
+        for _, line in ipairs(lines) do
+            line:Remove()
+        end
+    end
+    skeletonLines = {}
+    
+    for player, conn in pairs(skeletonConnections) do
+        if conn then
+            conn:Disconnect()
+        end
+    end
+    skeletonConnections = {}
+    
+    if skeletonRenderConnection then
+        skeletonRenderConnection:Disconnect()
+        skeletonRenderConnection = nil
+    end
+    
+    if skeletonPlayerRemovingConnection then
+        skeletonPlayerRemovingConnection:Disconnect()
+        skeletonPlayerRemovingConnection = nil
+    end
+end
+
 Toggles.ESPShowSkeleton:OnChanged(function(value)
     if not value then
         for player, lines in pairs(skeletonLines) do
@@ -5294,7 +5533,7 @@ skeletonRenderConnection = _52.RenderStepped:Connect(function()
     end
 end)
 
-_51.PlayerRemoving:Connect(function(player)
+skeletonPlayerRemovingConnection = _51.PlayerRemoving:Connect(function(player)
     cleanupSkeleton(player)
 end)
 
