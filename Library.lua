@@ -178,18 +178,25 @@ function Library:MakeDraggable(Instance, Cutoff)
                 return;
             end;
 
-            local Camera = workspace.CurrentCamera
+            -- Get screen bounds
+            local ViewportSize = Instance.Parent and Instance.Parent.AbsoluteSize or Camera.ViewportSize
+            if type(ViewportSize) == 'UDim2' then
+                ViewportSize = Vector2.new(ViewportSize.X.Offset, ViewportSize.Y.Offset)
+            end
 
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                local ViewportX = Camera.ViewportSize.X
-                local ViewportY = Camera.ViewportSize.Y
-
+                -- Calculate new position
                 local NewX = Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X)
                 local NewY = Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
 
-                local Padding = 5
-                NewX = math.clamp(NewX, Padding, ViewportX - Instance.Size.X.Offset - Padding)
-                NewY = math.clamp(NewY, Padding, ViewportY - Instance.Size.Y.Offset - Padding)
+                -- Clamp to screen bounds
+                local MinX = 0
+                local MinY = 0
+                local MaxX = ViewportSize.X - Instance.Size.X.Offset
+                local MaxY = ViewportSize.Y - Instance.Size.Y.Offset
+
+                NewX = math.clamp(NewX, MinX, MaxX)
+                NewY = math.clamp(NewY, MinY, MaxY)
 
                 Instance.Position = UDim2.new(
                     0, NewX,
