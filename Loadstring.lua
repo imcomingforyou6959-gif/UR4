@@ -1368,6 +1368,7 @@ AS_blacklistedTools = {
     "Combat",
     "TipJar",
     "Wallet",
+    "[Flintlock]",
 }
 
 function AS_isBlacklisted(toolName)
