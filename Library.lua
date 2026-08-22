@@ -9,9 +9,6 @@ local RenderStepped = RunService.RenderStepped;
 local LocalPlayer = Players.LocalPlayer;
 local Mouse = LocalPlayer:GetMouse();
 
-local TweenService = game:GetService('TweenService');
-local ToggleTweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out);
-
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
 local ScreenGui = Instance.new('ScreenGui');
@@ -178,36 +175,19 @@ function Library:MakeDraggable(Instance, Cutoff)
                 return;
             end;
 
-            -- Get screen bounds
-            local ViewportSize = Instance.Parent and Instance.Parent.AbsoluteSize or Camera.ViewportSize
-            if type(ViewportSize) == 'UDim2' then
-                ViewportSize = Vector2.new(ViewportSize.X.Offset, ViewportSize.Y.Offset)
-            end
-
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                -- Calculate new position
-                local NewX = Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X)
-                local NewY = Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
-
-                -- Clamp to screen bounds
-                local MinX = 0
-                local MinY = 0
-                local MaxX = ViewportSize.X - Instance.Size.X.Offset
-                local MaxY = ViewportSize.Y - Instance.Size.Y.Offset
-
-                NewX = math.clamp(NewX, MinX, MaxX)
-                NewY = math.clamp(NewY, MinY, MaxY)
-
                 Instance.Position = UDim2.new(
-                    0, NewX,
-                    0, NewY
+                    0,
+                    Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
+                    0,
+                    Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
                 );
 
                 RenderStepped:Wait();
             end;
         end;
     end)
-end
+end;
 
 function Library:AddToolTip(InfoStr, HoverInstance)
     local X, Y = Library:GetTextBounds(InfoStr, Library.Font, 14);
@@ -1900,6 +1880,11 @@ do
             Parent = ToggleOuter;
         });
 
+        Library:OnHighlight(ToggleRegion, ToggleOuter,
+            { BorderColor3 = 'AccentColor' },
+            { BorderColor3 = 'Black' }
+        );
+
         function Toggle:UpdateColors()
             Toggle:Display();
         end;
@@ -1909,21 +1894,9 @@ do
         end
 
         function Toggle:Display()
-            -- 0.6 is the speed (Slower). Increase to 1.0 for very slow.
-            local Speed = 0.4
-            local T_Info = TweenInfo.new(Speed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-            
-            -- Colors based on toggle state
-            local TargetMain = Toggle.Value and Library.AccentColor or Library.MainColor
-            local TargetBorder = Toggle.Value and Library.AccentColorDark or Library.OutlineColor
+            ToggleInner.BackgroundColor3 = Toggle.Value and Library.AccentColor or Library.MainColor;
+            ToggleInner.BorderColor3 = Toggle.Value and Library.AccentColorDark or Library.OutlineColor;
 
-            -- Start the slow animation
-            TweenService:Create(ToggleInner, T_Info, {
-                BackgroundColor3 = TargetMain,
-                BorderColor3 = TargetBorder
-            }):Play()
-
-            -- Keep the theme registry updated
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and 'AccentColor' or 'MainColor';
             Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
         end;
@@ -2975,7 +2948,7 @@ function Library:CreateWindow(...)
     if type(Config.MenuFadeTime) ~= 'number' then Config.MenuFadeTime = 0.2 end
 
     if typeof(Config.Position) ~= 'UDim2' then Config.Position = UDim2.fromOffset(175, 50) end
-    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(550, 570) end
+    if typeof(Config.Size) ~= 'UDim2' then Config.Size = UDim2.fromOffset(550, 600) end
 
     if Config.Center then
         Config.AnchorPoint = Vector2.new(0.5, 0.5)
