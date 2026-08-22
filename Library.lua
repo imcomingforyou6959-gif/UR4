@@ -176,6 +176,11 @@ function Library:MakeDraggable(Instance, Cutoff)
             end;
 
             local Camera = workspace.CurrentCamera
+            -- Get the frame size, with a fallback
+            local FrameSize = Instance.AbsoluteSize
+            if FrameSize.Y <= 0 then
+                FrameSize = Vector2.new(Instance.Size.X.Offset, Instance.Size.Y.Offset)
+            end
 
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
                 -- Calculate the position
@@ -184,7 +189,6 @@ function Library:MakeDraggable(Instance, Cutoff)
 
                 -- Get screen bounds
                 local ViewportSize = Camera.ViewportSize
-                local FrameSize = Instance.AbsoluteSize
 
                 -- Clamp to screen bounds with padding
                 local Padding = 5
