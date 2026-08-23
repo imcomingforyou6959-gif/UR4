@@ -335,6 +335,7 @@ local _52 = game:GetService("RunService")
 local _53 = game:GetService("Workspace")
 local _54 = game:GetService("UserInputService")
 local _55 = game:GetService("ReplicatedStorage")
+RunService = game:GetService('RunService')
 
 local _56 = _51.LocalPlayer
 if not _56 then
@@ -880,6 +881,268 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
+WeatherSection = WorldTab:AddRightGroupbox('Weather')
+
+_G.weather_part = nil
+_G.weather_particle = nil
+
+_G.weather_types = {
+    ["light rain"] = {
+        ["LockedToPart"] = true,
+        ["Rate"] = 500,
+        ["Squash"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 3),
+            NumberSequenceKeypoint.new(1, 3)
+        },
+        ["LightInfluence"] = 0.30000001192092896,
+        ["Transparency"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.435, 0),
+            NumberSequenceKeypoint.new(1, 1)
+        },
+        ["Texture"] = "rbxasset://textures/particles/sparkles_main.dds",
+        ["Speed"] = NumberRange.new(30, 50),
+        ["Lifetime"] = NumberRange.new(9, 9),
+        ["LightEmission"] = 0.5,
+        ["Brightness"] = 2,
+        ["EmissionDirection"] = Enum.NormalId.Bottom,
+        ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
+        ["Size"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0.20000000298023224),
+            NumberSequenceKeypoint.new(1, 0.20000000298023224)
+        }
+    },
+    ["rain"] = {
+        ["Speed"] = NumberRange.new(60, 60),
+        ["LockedToPart"] = true,
+        ["Rate"] = 600,
+        ["Texture"] = "rbxassetid://1822883048",
+        ["EmissionDirection"] = Enum.NormalId.Bottom,
+        ["Transparency"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 1),
+            NumberSequenceKeypoint.new(0.25, 0.7842668294906616),
+            NumberSequenceKeypoint.new(0.75, 0.7842668294906616),
+            NumberSequenceKeypoint.new(1, 1)
+        },
+        ["Lifetime"] = NumberRange.new(0.800000011920929, 0.800000011920929),
+        ["LightEmission"] = 0.05000000074505806,
+        ["LightInfluence"] = 0.8999999761581421,
+        ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
+        ["Size"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 10),
+            NumberSequenceKeypoint.new(1, 10)
+        }
+    },
+    ["snow"] = {
+        ["Transparency"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0.7374999523162842),
+            NumberSequenceKeypoint.new(0.973, 0.768750011920929),
+            NumberSequenceKeypoint.new(1, 1)
+        },
+        ["Texture"] = "http://www.roblox.com/asset/?id=99851851",
+        ["SpreadAngle"] = Vector2.new(50, 50),
+        ["Speed"] = NumberRange.new(30, 30),
+        ["LightEmission"] = 0.5,
+        ["Rate"] = 1000,
+        ["EmissionDirection"] = Enum.NormalId.Bottom,
+        ["Size"] = NumberSequence.new{
+            NumberSequenceKeypoint.new(0, 0.33096909523010254),
+            NumberSequenceKeypoint.new(0.551, 0.40189146995544434),
+            NumberSequenceKeypoint.new(1, 0.33096909523010254)
+        }
+    }
+}
+
+_G.weather_offset = Vector3.new(0, 20, 0)
+
+_G.updateWeather = function()
+    if not Toggles.WeatherToggle.Value then
+        if _G.weather_part then
+            _G.weather_part:Destroy()
+            _G.weather_part = nil
+            _G.weather_particle = nil
+        end
+        return
+    end
+
+    if not _G.weather_part then
+        _G.weather_part = Instance.new("Part")
+        _G.weather_part.Size = Vector3.new(40, 40, 85)
+        _G.weather_part.CanCollide = false
+        _G.weather_part.Massless = true
+        _G.weather_part.CastShadow = false
+        _G.weather_part.Transparency = 1
+        _G.weather_part.Anchored = true
+        _G.weather_part.Name = "\0"
+        _G.weather_part.Parent = workspace
+    end
+
+    if not _G.weather_particle then
+        data = _G.weather_types[Options.WeatherType.Value or "rain"]
+        _G.weather_particle = Instance.new("ParticleEmitter")
+        for key, value in pairs(data) do
+            _G.weather_particle[key] = value
+        end
+        _G.weather_particle.Color = ColorSequence.new(Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
+        _G.weather_particle.Parent = _G.weather_part
+    end
+end
+
+WeatherSection:AddToggle('WeatherToggle', {
+    Text = 'Weather',
+    Default = false,
+})
+
+Toggles.WeatherToggle:OnChanged(function()
+    if Toggles.WeatherToggle.Value then
+        _G.updateWeather()
+    else
+        if _G.weather_part then
+            _G.weather_part:Destroy()
+            _G.weather_part = nil
+            _G.weather_particle = nil
+        end
+    end
+end)
+
+WeatherSection:AddDropdown('WeatherType', {
+    Values = {"light rain", "rain", "snow"},
+    Default = 'rain',
+    Text = 'Weather Type',
+})
+
+Options.WeatherType:OnChanged(function()
+    if _G.weather_particle then
+        _G.weather_particle:Destroy()
+        _G.weather_particle = nil
+        if Toggles.WeatherToggle.Value then
+            _G.updateWeather()
+        end
+    end
+end)
+
+WeatherSection:AddLabel('Weather Color'):AddColorPicker('WeatherColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Weather Color',
+})
+
+Options.WeatherColor:OnChanged(function()
+    if _G.weather_particle then
+        _G.weather_particle.Color = ColorSequence.new(Options.WeatherColor.Value)
+    end
+end)
+
+WeatherSection:AddSlider('WeatherRate', {
+    Text = 'Weather Rate',
+    Default = 100,
+    Min = 1,
+    Max = 100,
+    Rounding = 0,
+    Suffix = '%',
+})
+
+Options.WeatherRate:OnChanged(function()
+    rate = 1000 * (Options.WeatherRate.Value / 100)
+    if _G.weather_particle then
+        _G.weather_particle.Rate = rate
+    end
+    for weather, data in pairs(_G.weather_types) do
+        _G.weather_types[weather].Rate = rate
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    if Toggles.WeatherToggle.Value and _G.weather_part then
+        cam = workspace.CurrentCamera
+        if cam then
+            _G.weather_part.CFrame = CFrame.new(cam.CFrame.Position + _G.weather_offset)
+        end
+    end
+end)
+
+BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
+
+_G.background_sounds = {
+    ["windy winter"] = "rbxassetid://6046340391",
+    ["light rain"] = "rbxassetid://18862087062",
+    ["thunderstorm"] = "rbxassetid://4305545740",
+    ["night"] = "rbxassetid://179507208",
+    ["day"] = "rbxassetid://6189453706"
+}
+
+_G.background_sound = nil
+
+_G.updateBackgroundNoise = function()
+    if not Toggles.BackgroundNoise.Value then
+        if _G.background_sound then
+            _G.background_sound:Stop()
+            _G.background_sound:Destroy()
+            _G.background_sound = nil
+        end
+        return
+    end
+
+    if not _G.background_sound then
+        soundId = _G.background_sounds[Options.BackgroundSound.Value or "night"]
+        _G.background_sound = Instance.new("Sound")
+        _G.background_sound.SoundId = soundId
+        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65 or 0.38
+        _G.background_sound.Looped = true
+        _G.background_sound.Name = "\0"
+        _G.background_sound.Parent = game.CoreGui
+        _G.background_sound:Play()
+    end
+end
+
+BackgroundNoiseSection:AddToggle('BackgroundNoise', {
+    Text = 'Background Noise',
+    Default = false,
+})
+
+Toggles.BackgroundNoise:OnChanged(function()
+    if Toggles.BackgroundNoise.Value then
+        _G.updateBackgroundNoise()
+    else
+        if _G.background_sound then
+            _G.background_sound:Stop()
+            _G.background_sound:Destroy()
+            _G.background_sound = nil
+        end
+    end
+end)
+
+BackgroundNoiseSection:AddDropdown('BackgroundSound', {
+    Values = {"windy winter", "light rain", "thunderstorm", "night", "day"},
+    Default = 'night',
+    Text = 'Sound',
+})
+
+Options.BackgroundSound:OnChanged(function()
+    if _G.background_sound then
+        new_sound = _G.background_sounds[Options.BackgroundSound.Value]
+        if new_sound then
+            _G.background_sound.SoundId = new_sound
+            _G.background_sound:Stop()
+            _G.background_sound:Play()
+        end
+    end
+end)
+
+BackgroundNoiseSection:AddSlider('BackgroundVolume', {
+    Text = 'Volume',
+    Default = 25,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = '%',
+})
+
+Options.BackgroundVolume:OnChanged(function()
+    if _G.background_sound then
+        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65
+    end
+end)
+
 MovementSection = WorldTab:AddRightGroupbox('Extras <3')
 
 -- Camera Distance
@@ -1349,6 +1612,8 @@ AS_busy = false
 AS_cache = nil
 AS_randomEquipConnection = nil
 AS_shared_lock = false
+AS_buyStimEnabled = false
+AS_equippedTool = nil
 AS_blacklistedTools = {
     "[Double-Barrel SG]",
     "[Knife]",
@@ -1444,6 +1709,42 @@ function AS_getHealth()
     return hum.Health, hum.MaxHealth
 end
 
+function AS_unequipCurrentTool()
+    local char = _56.Character
+    if not char then return nil end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if hum then
+        hum:UnequipTools()
+    end
+    
+    task.wait(0.05)
+    
+    for _, child in ipairs(char:GetChildren()) do
+        if child:IsA("Tool") and child.Name ~= "[Stim]" and not AS_isBlacklisted(child.Name) then
+            AS_equippedTool = child
+            pcall(function()
+                child.Parent = _56.Backpack
+            end)
+            return child
+        end
+    end
+    
+    return nil
+end
+
+function AS_reequipTool()
+    if AS_equippedTool and AS_equippedTool.Parent == _56.Backpack then
+        local char = _56.Character
+        if char then
+            pcall(function()
+                AS_equippedTool.Parent = char
+            end)
+        end
+        AS_equippedTool = nil
+    end
+end
+
 function AS_useStim()
     local char = _56.Character
     if not char then return false end
@@ -1455,13 +1756,13 @@ function AS_useStim()
         tool.Parent = char
     end
     
-    task.wait(0.05)
+    task.wait(0.01)
     
     pcall(function()
         tool:Activate()
     end)
     
-    task.wait(0.05)
+    task.wait(0.01)
     
     pcall(function()
         tool:Deactivate()
@@ -1475,6 +1776,7 @@ function AS_startRandomEquip()
     
     AS_randomEquipConnection = _52.Heartbeat:Connect(function()
         if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
+        if AS_busy then return end
         
         local char = _56.Character
         if not char then return end
@@ -1524,6 +1826,8 @@ function AS_buyStim()
     AS_busy = true
     AS_shared_lock = true
     
+    AS_unequipCurrentTool()
+    
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
@@ -1539,13 +1843,13 @@ function AS_buyStim()
             _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             _120.CFrame = _119
-            task.wait(0.3)
+            task.wait(0.1)
             if _148 then
                 _148.PlatformStand = false
             end
         end
         _119 = nil
-        task.wait(0.2)
+        task.wait(0.1)
     end
     
     local ch = _56.Character
@@ -1564,6 +1868,7 @@ function AS_buyStim()
     
     local stimItem = AS_getStimItem()
     if not stimItem then
+        AS_reequipTool()
         AS_busy = false
         AS_shared_lock = false
         return
@@ -1571,6 +1876,7 @@ function AS_buyStim()
     
     local clickDetector = stimItem:FindFirstChild("ClickDetector")
     if not clickDetector then
+        AS_reequipTool()
         AS_busy = false
         AS_shared_lock = false
         return
@@ -1579,7 +1885,7 @@ function AS_buyStim()
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
     
-    for attempt = 1, 3 do
+    for attempt = 1, 2 do
         if stomping or grabbing or _AA_busy then break end
         if not _56.Character then break end
         
@@ -1589,12 +1895,12 @@ function AS_buyStim()
         rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
         
         fireclickdetector(clickDetector)
-        task.wait(0.01)
+        task.wait(0.005)
         fireclickdetector(clickDetector)
-        task.wait(0.01)
+        task.wait(0.005)
         fireclickdetector(clickDetector)
         
-        task.wait(0.1)
+        task.wait(0.05)
         
         if AS_hasStim() then
             break
@@ -1633,6 +1939,9 @@ function AS_buyStim()
             end
         end)
     end
+    
+    task.wait(0.1)
+    AS_reequipTool()
 end
 
 function AS_autoStim()
@@ -1647,7 +1956,13 @@ function AS_autoStim()
     local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
     
     if not AS_hasStim() then
-        AS_buyStim()
+        if AS_buyStimEnabled then
+            AS_buyStim()
+        elseif hp < maxHp then
+            AS_buyStim()
+            task.wait(0.1)
+            AS_useStim()
+        end
     elseif hp <= threshold and hp < maxHp then
         AS_useStim()
     end
@@ -1655,6 +1970,11 @@ end
 
 _78:AddToggle('AutoStim', {
     Text = 'Auto Stim',
+    Default = false,
+})
+
+_78:AddToggle('BuyStim', {
+    Text = 'Buy Stim',
     Default = false,
 })
 
@@ -1667,6 +1987,10 @@ _78:AddSlider('AutoStimThreshold', {
     Suffix = ' HP',
 })
 
+Toggles.BuyStim:OnChanged(function(value)
+    AS_buyStimEnabled = value
+end)
+
 Toggles.AutoStim:OnChanged(function(value)
     if value then
         AS_startRandomEquip()
@@ -1678,7 +2002,8 @@ end)
 
 _56.CharacterAdded:Connect(function()
     AS_cache = nil
-    task.wait(1)
+    AS_equippedTool = nil
+    task.wait(0.5)
     
     if Toggles.AutoStim and Toggles.AutoStim.Value then
         task.spawn(AS_autoStim)
@@ -1686,7 +2011,7 @@ _56.CharacterAdded:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.15) do
+    while task.wait(0.05) do
         if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
         if _AA_busy then continue end
         if AS_busy then continue end
@@ -1704,7 +2029,15 @@ task.spawn(function()
         local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
         
         if not AS_hasStim() then
-            task.spawn(AS_buyStim)
+            if AS_buyStimEnabled then
+                task.spawn(AS_buyStim)
+            elseif hp < maxHp then
+                task.spawn(function()
+                    AS_buyStim()
+                    task.wait(0.1)
+                    AS_useStim()
+                end)
+            end
         elseif hp <= threshold and hp < maxHp then
             task.spawn(AS_useStim)
         end
@@ -2026,7 +2359,7 @@ _78:AddToggle("AntiJumpCooldown", {
     end
 })
 
--- ===== METAMETHOD HOOKS =====
+-- hooks
 mt = getrawmetatable(game)
 oldNewIndex = mt.__newindex
 
@@ -2050,7 +2383,7 @@ oldNewIndex2 = hookmetamethod(game, "__newindex", function(self, Index, Value)
     return oldNewIndex2(self, Index, Value)
 end)
 
--- ===== REFRESH FUNCTIONS =====
+-- refresh 
 Toggles.AntiSlowdown:OnChanged(function(value)
     if value then
         task.spawn(function()
@@ -2082,33 +2415,115 @@ end)
 _G = _G or {}
 _G.x7f3k9m2 = false
 _G.q4w8r2t6 = "Notify"
-_G.z9m3x5c7 = 73315316
+_G.z9m3x5c7 = {73315316, 878771546}
 _G.b8n4v6d2 = {}
 _G.j2h5g8f1 = {}
 _G.lastNotifyTime = {}
+_G.serverHopDelay = 5
+_G.serverHopOnMod = false
 
-_G.l5p9j1h7 = _78:AddToggle('ModDetectorEnabled', {
+_78:AddToggle('ModDetectorEnabled', {
     Text = 'Mod Detector',
     Default = false,
 })
 
-_G.l5p9j1h7:OnChanged(function(v3k7m9n2)
+Toggles.ModDetectorEnabled:OnChanged(function(v3k7m9n2)
     _G.x7f3k9m2 = v3k7m9n2
     if not v3k7m9n2 then
         _G.b8n4v6d2 = {}
         _G.j2h5g8f1 = {}
         _G.lastNotifyTime = {}
+        _G.serverHopOnMod = false
+    else
+        u6i8o0p2()
     end
 end)
 
-local ModDetectorAction = _78:AddDropdown('ModDetectorAction', {
-    Values = { 'Kick', 'Notify', 'Unload' },
+_78:AddDropdown('ModDetectorAction', {
+    Values = { 'Kick', 'Notify', 'Unload', 'Server Hop' },
     Default = 'Notify',
     Text = 'Mod Detection',
 })
 
-ModDetectorAction:OnChanged(function(newAction)
-    _G.q4w8r2t6 = newAction
+Options.ModDetectorAction:OnChanged(function()
+    _G.q4w8r2t6 = Options.ModDetectorAction.Value
+    
+    if _G.q4w8r2t6 == "Kick" then
+        for userId, player in pairs(_G.j2h5g8f1) do
+            if player and player.Parent then
+                task.spawn(function()
+                    pcall(function()
+                        _56:Kick("A Mod was detected in your game we saved u <3 | discord.gg/eMpUQzFrNG")
+                    end)
+                end)
+            end
+        end
+    elseif _G.q4w8r2t6 == "Unload" then
+        _48:Unload()
+    elseif _G.q4w8r2t6 == "Server Hop" then
+        if not _G.serverHopOnMod then
+            local hasDetectedMod = false
+            for userId, player in pairs(_G.j2h5g8f1) do
+                if player and player.Parent then
+                    hasDetectedMod = true
+                    break
+                end
+            end
+            
+            if hasDetectedMod then
+                _G.serverHopOnMod = true
+                _48:Notify('A Mod is in this server, hopping in ' .. _G.serverHopDelay .. ' seconds...')
+                
+                task.spawn(function()
+                    task.wait(_G.serverHopDelay)
+                    
+                    local HttpService = game:GetService("HttpService")
+                    local TeleportService = game:GetService("TeleportService")
+                    local Players = game:GetService("Players")
+                    local LocalPlayer = Players.LocalPlayer
+                    
+                    local servers = {}
+                    local success, result = pcall(function()
+                        return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+                    end)
+                    
+                    if success and result and result.data then
+                        for _, server in ipairs(result.data) do
+                            if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
+                                table.insert(servers, server.id)
+                            end
+                        end
+                    end
+                    
+                    if #servers > 0 then
+                        local randomServer = servers[math.random(1, #servers)]
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
+                        end)
+                    else
+                        _48:Notify('No servers found to hop to')
+                    end
+                    
+                    _G.serverHopOnMod = false
+                end)
+            else
+                _48:Notify('No mods detected in this server')
+            end
+        end
+    end
+end)
+
+_78:AddSlider('ServerHopDelay', {
+    Text = 'Server Hop Delay',
+    Default = 5,
+    Min = 1,
+    Max = 30,
+    Rounding = 0,
+    Suffix = 's',
+})
+
+Options.ServerHopDelay:OnChanged(function()
+    _G.serverHopDelay = Options.ServerHopDelay.Value
 end)
 
 function w3e5r7t9(a1s2d3f4)
@@ -2116,25 +2531,28 @@ function w3e5r7t9(a1s2d3f4)
     if a1s2d3f4 == _56 then return false end
     if _G.b8n4v6d2[a1s2d3f4.UserId] then return false end
     
-    local k8j4h6g2 = false
-    local m9n7b5v3 = 0
-    
-    while m9n7b5v3 < 3 do
-        local c4x6z8a1, q2w4e6r8 = pcall(function()
-            return a1s2d3f4:IsInGroup(_G.z9m3x5c7)
-        end)
+    for _, m9n7b5v3 in ipairs(_G.z9m3x5c7) do
+        local c4x6z8a1, q2w4e6r8 = nil, nil
+        local p7o9i1k2 = 0
         
-        if c4x6z8a1 then
-            k8j4h6g2 = q2w4e6r8 == true
-            print("[ModDetector] " .. a1s2d3f4.Name .. " | " .. a1s2d3f4.DisplayName .. " | " .. tostring(q2w4e6r8))
-            break
+        while p7o9i1k2 < 3 do
+            c4x6z8a1, q2w4e6r8 = pcall(function()
+                return a1s2d3f4:IsInGroup(m9n7b5v3)
+            end)
+            
+            if c4x6z8a1 then
+                if q2w4e6r8 == true then
+                    return true
+                end
+                break
+            end
+            
+            p7o9i1k2 = p7o9i1k2 + 1
+            task.wait(0.5)
         end
-        
-        m9n7b5v3 = m9n7b5v3 + 1
-        task.wait(0.5)
     end
     
-    return k8j4h6g2
+    return false
 end
 
 function t5y7u9i1(p8o0l3k6)
@@ -2154,7 +2572,6 @@ function t5y7u9i1(p8o0l3k6)
             _G.lastNotifyTime[p8o0l3k6.UserId] = currentTime
         end
     elseif action == "Kick" then
-        -- FIXED: Kicks the local player (YOU) instead of the mod
         task.spawn(function()
             pcall(function()
                 _56:Kick("A Mod was detected in your game we saved u <3 | discord.gg/eMpUQzFrNG")
@@ -2162,6 +2579,44 @@ function t5y7u9i1(p8o0l3k6)
         end)
     elseif action == "Unload" then
         _48:Unload()
+    elseif action == "Server Hop" then
+        if not _G.serverHopOnMod then
+            _G.serverHopOnMod = true
+            _48:Notify('A Mod has joined, server hopping in ' .. _G.serverHopDelay .. ' seconds...')
+            
+            task.spawn(function()
+                task.wait(_G.serverHopDelay)
+                
+                 HttpService = game:GetService("HttpService")
+                 TeleportService = game:GetService("TeleportService")
+                 Players = game:GetService("Players")
+                 LocalPlayer = Players.LocalPlayer
+                
+                local servers = {}
+                local success, result = pcall(function()
+                    return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
+                end)
+                
+                if success and result and result.data then
+                    for _, server in ipairs(result.data) do
+                        if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
+                            table.insert(servers, server.id)
+                        end
+                    end
+                end
+                
+                if #servers > 0 then
+                    local randomServer = servers[math.random(1, #servers)]
+                    pcall(function()
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
+                    end)
+                else
+                    _48:Notify('No servers found to hop to')
+                end
+                
+                _G.serverHopOnMod = false
+            end)
+        end
     end
 end
 
@@ -2181,17 +2636,6 @@ function u6i8o0p2()
         end
     end)
 end
-
-_G.l5p9j1h7:OnChanged(function(v3k7m9n2)
-    _G.x7f3k9m2 = v3k7m9n2
-    if v3k7m9n2 then
-        u6i8o0p2()
-    else
-        _G.b8n4v6d2 = {}
-        _G.j2h5g8f1 = {}
-        _G.lastNotifyTime = {}
-    end
-end)
 
 _51.PlayerAdded:Connect(function(a1b2c3d4)
     if not _G.x7f3k9m2 then return end
@@ -2215,10 +2659,92 @@ task.spawn(function()
 end)
 
 _51.PlayerRemoving:Connect(function(e4f5g6h7)
+    local wasDetected = _G.b8n4v6d2[e4f5g6h7.UserId]
+    
+    if wasDetected then
+        _48:Notify('A detected Mod has left the game <3\nMod: ' .. e4f5g6h7.DisplayName .. ' ( @' .. e4f5g6h7.Name .. ' )')
+    end
+    
     _G.b8n4v6d2[e4f5g6h7.UserId] = nil
     _G.j2h5g8f1[e4f5g6h7.UserId] = nil
     _G.lastNotifyTime[e4f5g6h7.UserId] = nil
 end)
+
+-- SHARED FUNCTIONS
+Grabbed = function(Plr)
+    if Plr and Plr.Character then
+        local char = Plr.Character
+        if char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char:FindFirstChild("GRABBING_CONSTRAINT") then
+            return true
+        end
+    end
+    return false
+end
+
+function isDead(Player)
+    local Character = Player.Character
+    if not Character then return false end
+    
+    local BodyEffects = Character:FindFirstChild("BodyEffects")
+    if BodyEffects and BodyEffects:FindFirstChild("Dead") and BodyEffects.Dead.Value == true then
+        return true
+    end
+    
+    return false
+end
+--                          --
+
+local StompEnabled = false
+local StompToggle = _78:AddToggle('AutoStomp', {
+    Text = 'Auto Stomp',
+    Default = false,
+})
+
+GrabEnabled = false
+isGrabbing = false
+grabReturnPos = nil
+grabbedTarget = nil
+lastGrabAttempt = 0
+
+local GRAB_CONFIG = {
+    HEIGHT_ABOVE_TARGET = 2.5,
+    GRAB_DURATION = 1,
+    KEY_PRESS_INTERVAL = 0.7,
+    POSITION_UPDATE_INTERVAL = 0.03,
+    CHECK_INTERVAL = 0.1,
+    RETURN_DELAY = 0.15,
+    MAX_DISTANCE = 50,
+    TELEPORT_SPEED = 1,
+    GRAB_COOLDOWN = 0.8,
+}
+
+GRAB_REMOTES = {
+    {
+        Path = {"ReplicatedStorage", "MainRemotes", "MainRemoteEvent"},
+        Method = "FireServer",
+        Args = {"Grabbing", false}
+    },
+    {
+        Path = {"ReplicatedStorage", "GameRemotes", "MainGameEvent"},
+        Method = "FireServer",
+        Args = {"Grabbing", false}
+    },
+    {
+        Path = {"ReplicatedStorage", "MainGameEvent"},
+        Method = "FireServer",
+        Args = {"Grabbing", false}
+    },
+    {
+        Path = {"ReplicatedStorage", "MainEvent"},
+        Method = "FireServer",
+        Args = {"Grabbing", false}
+    },
+}
+
+GrabToggle = _78:AddToggle('AutoGrab', {
+    Text = 'Auto Grab',
+    Default = false,
+})
 
 -- Circle Defense
 local _69ha = _60.Main:AddRightTabbox()
@@ -3442,38 +3968,21 @@ local function _197()
     end
 end
 
--- SHARED FUNCTIONS
-Grabbed = function(Plr)
-    if Plr and Plr.Character then
-        local char = Plr.Character
-        if char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char:FindFirstChild("Head") and char:FindFirstChild("GRABBING_CONSTRAINT") then
-            return true
-        end
-    end
-    return false
-end
-
-function isDead(Player)
-    local Character = Player.Character
-    if not Character then return false end
-    
-    local BodyEffects = Character:FindFirstChild("BodyEffects")
-    if BodyEffects and BodyEffects:FindFirstChild("Dead") and BodyEffects.Dead.Value == true then
-        return true
-    end
-    
-    return false
-end
-
 -- AUTO STOMP
-local StompEnabled = false
-local StompToggle = _78:AddToggle('AutoStomp', {
-    Text = 'Auto Stomp',
-    Default = false,
-})
 
 StompToggle:OnChanged(function(value)
     StompEnabled = value
+    if not value and stompConnection then
+        stompConnection:Disconnect()
+        stompConnection = nil
+        stomping = false
+        if sethiddenproperty then
+            local char = _56.Character
+            local hum = char and char:FindFirstChildOfClass('Humanoid')
+            local root = hum and hum.RootPart
+            if root then pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end) end
+        end
+    end
 end)
 
 local stompRemote = nil
@@ -3519,18 +4028,8 @@ function fireStomp()
     end)
 end
 
-function fireStomp()
-    local remote = getStompRemote()
-    if not remote then return end
-    pcall(function()
-        remote:FireServer("Stomp")
-    end)
-end
-
 local stomping = false
 local stompConnection = nil
-local stompVelocityHistory = {}
-local stompMaxHistory = 5
 
 function getBestStompPosition(targetChar)
     local parts = {"UpperTorso", "Torso", "HumanoidRootPart", "LowerTorso", "Head"}
@@ -3541,31 +4040,6 @@ function getBestStompPosition(targetChar)
         end
     end
     return nil
-end
-
-function getStompPredictedPosition(part)
-    if not part then return nil end
-    
-    local velocity = part.Velocity
-    if part.AssemblyLinearVelocity then
-        velocity = part.AssemblyLinearVelocity
-    end
-    
-    local speed = velocity.Magnitude
-    
-    if speed > 50 then
-        local predictionTime = 0.25
-        local predictedPos = part.Position + (velocity * predictionTime)
-        return CFrame.new(predictedPos)
-    elseif speed > 20 then
-        local predictionTime = 0.2
-        local predictedPos = part.Position + (velocity * predictionTime)
-        return CFrame.new(predictedPos)
-    else
-        local predictionTime = 0.1
-        local predictedPos = part.Position + (velocity * predictionTime)
-        return CFrame.new(predictedPos)
-    end
 end
 
 function findSafeReturnPosition(originalPos)
@@ -3625,12 +4099,14 @@ function autoStompTarget()
     if not targetPart then return end
     
     stomping = true
-    stompVelocityHistory = {}
     local lastpos = localHRP.CFrame
     
-    local predictedCFrame = getStompPredictedPosition(targetPart)
-    local stompCFrame = predictedCFrame or targetPart.CFrame
-    localHRP.CFrame = stompCFrame * CFrame.new(0, 0, 0)
+    pcall(function() 
+        localHRP:SetNetworkOwner(_56) 
+        targetPart:SetNetworkOwner(_56)
+    end)
+    
+    localHRP.CFrame = targetPart.CFrame
     
     for i = 1, 10 do
         fireStomp()
@@ -3646,42 +4122,20 @@ function autoStompTarget()
         
         local currentTargetPart = getBestStompPosition(targetChar)
         if currentTargetPart then
-            local velocity = currentTargetPart.Velocity
-            if currentTargetPart.AssemblyLinearVelocity then
-                velocity = currentTargetPart.AssemblyLinearVelocity
-            end
-            
-            table.insert(stompVelocityHistory, velocity)
-            if #stompVelocityHistory > stompMaxHistory then
-                table.remove(stompVelocityHistory, 1)
-            end
-            
-            local avgVelocity = Vector3.new(0, 0, 0)
-            for _, v in ipairs(stompVelocityHistory) do
-                avgVelocity = avgVelocity + v
-            end
-            avgVelocity = avgVelocity / #stompVelocityHistory
-            
-            local speed = avgVelocity.Magnitude
-            local predictionTime = 0.15
-            
-            if speed > 80 then
-                predictionTime = 0.35
-            elseif speed > 50 then
-                predictionTime = 0.3
-            elseif speed > 30 then
-                predictionTime = 0.25
-            elseif speed > 15 then
-                predictionTime = 0.2
-            end
-            
-            local predictedPos = currentTargetPart.Position + (avgVelocity * predictionTime)
-            local stompCFrame = CFrame.new(predictedPos)
-            
-            localHRP.CFrame = stompCFrame * CFrame.new(0, 2.5, 0)
+            localHRP.CFrame = currentTargetPart.CFrame
             fireStomp()
         end
     end)
+    
+    if sethiddenproperty then
+        task.wait()
+        pcall(function() 
+            local hum = localChar:FindFirstChildOfClass('Humanoid')
+            if hum and hum.RootPart then
+                sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", targetPart)
+            end
+        end)
+    end
     
     task.delay(0.5, function()
         stomping = false
@@ -3689,7 +4143,13 @@ function autoStompTarget()
             stompConnection:Disconnect()
             stompConnection = nil
         end
-        stompVelocityHistory = {}
+        
+        if sethiddenproperty then
+            local hum = localChar:FindFirstChildOfClass('Humanoid')
+            if hum and hum.RootPart then
+                pcall(function() sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", nil) end)
+            end
+        end
         
         local safeReturn = findSafeReturnPosition(lastpos.Position)
         pcall(function()
@@ -3698,51 +4158,6 @@ function autoStompTarget()
     end)
 end
 
-GrabEnabled = false
-isGrabbing = false
-grabReturnPos = nil
-grabbedTarget = nil
-lastGrabAttempt = 0
-
-local GRAB_CONFIG = {
-    HEIGHT_ABOVE_TARGET = 2.5,
-    GRAB_DURATION = 1,
-    KEY_PRESS_INTERVAL = 0.7,
-    POSITION_UPDATE_INTERVAL = 0.03,
-    CHECK_INTERVAL = 0.1,
-    RETURN_DELAY = 0.15,
-    MAX_DISTANCE = 50,
-    TELEPORT_SPEED = 1,
-    GRAB_COOLDOWN = 0.8,
-}
-
-GRAB_REMOTES = {
-    {
-        Path = {"ReplicatedStorage", "MainRemotes", "MainRemoteEvent"},
-        Method = "FireServer",
-        Args = {"Grabbing", false}
-    },
-    {
-        Path = {"ReplicatedStorage", "GameRemotes", "MainGameEvent"},
-        Method = "FireServer",
-        Args = {"Grabbing", false}
-    },
-    {
-        Path = {"ReplicatedStorage", "MainGameEvent"},
-        Method = "FireServer",
-        Args = {"Grabbing", false}
-    },
-    {
-        Path = {"ReplicatedStorage", "MainEvent"},
-        Method = "FireServer",
-        Args = {"Grabbing", false}
-    },
-}
-
-GrabToggle = _78:AddToggle('AutoGrab', {
-    Text = 'Auto Grab',
-    Default = false,
-})
 
 GrabToggle:OnChanged(function(value)
     GrabEnabled = value
@@ -3765,7 +4180,6 @@ GrabToggle:OnChanged(function(value)
 end)
 
 function fireGrabRemote()
-    -- Try all configured remotes
     for _, remoteConfig in ipairs(GRAB_REMOTES) do
         local success = pcall(function()
             local current = game
@@ -3787,7 +4201,6 @@ function fireGrabRemote()
         end
     end
     
-    -- Fallback to keyboard press if no remote works
     pcall(function()
         keypress(0x47)
         task.wait(0.01)
@@ -4006,7 +4419,7 @@ AFKToggle:OnChanged(function(value)
         afkThread = task.spawn(function()
             while AlwaysAFKEnabled do
                 fireAFK()
-                task.wait(2.1)
+                task.wait(1)
             end
         end)
     else
@@ -6223,6 +6636,8 @@ if _56.Character then
         end
     end
 end
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Cilent.lua'))()
+
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua'))()
 return {
     targetaim = _104,
