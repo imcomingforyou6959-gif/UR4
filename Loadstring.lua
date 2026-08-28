@@ -668,7 +668,7 @@ end)
 EmoteTabBox = WorldTab:AddRightTabbox()
 EmoteTab = EmoteTabBox:AddTab('Emotes')
 
-_G.Emotes = {Enabled = false, CurrentAnimation = nil, DefaultAnim = "rbxassetid://5917459365", Anims = {kickinglegs = 120370790028350, spongebobdance = 18443245017, teleport = 104767795538635, crossed = 128386160365167, imagination = 18443237526, yungblud = 15609995579, laugh = 3337966527, floss = 5917459365, sleep = 4686925579, hype = 3695333486, sad = 4841407203, heyyamove = 119734573196374, invisibleme = 126995783634131, strangerthings = 70692992882447, tornado = 135373056067761, jabbaswitchway = 77791964179635, invisibleme2 = 112119483472206, ldance = 114846964045392, griddy = 106715239721951, worm = 112153137737330, rollin = 89068990860975, kawaiisit = 71952737697877, zerotwodance = 95385842020103}}
+_G.Emotes = {Enabled = false, CurrentAnimation = nil, DefaultAnim = "rbxassetid://5917459365", Anims = {kickinglegs = 112540347880956, spongebobdance = 18443245017, teleport = 104767795538635, crossed = 128386160365167, imagination = 18443237526, yungblud = 15609995579, laugh = 3337966527, OrangeJustice = 129748377368660, floss = 5917459365, sleep = 4686925579, Sleeply = 105016815489641, Scenario = 111901279618983, ElectricAngel = 77166149654675, Salsa = 100319995972885, hype = 3695333486, sad = 4841407203, NLECHOPPA = 133293268056643, heyyamove = 119734573196374, invisibleme = 126995783634131, happywave = 77519822285697, strangerthings = 70692992882447, iwantmoney = 128258195574116, tornado = 135373056067761, jabbaswitchway = 77791964179635, DoThatThang = 98064631733787, invisibleme2 = 112119483472206, ldance = 114846964045392, griddy = 106715239721951, worm = 112153137737330, Druski = 98405298116702, hipsway = 80963950541052, Caramelldansen = 97847706148165, rollin = 89068990860975, kawaiisit = 71952737697877, zerotwodance = 95385842020103}}
 
 _G.PlayEmote = function(name, speed)
     speed = tonumber(speed) or 1
@@ -724,7 +724,7 @@ EmoteTab:AddToggle('EmotesEnabled', {
 })
 
 EmoteTab:AddDropdown('EmoteSelect', {
-    Values = {"kickinglegs","heyyamove","spongebobdance","crossed","invisibleme","imagination","yungblud","strangerthings","laugh","floss","sleep","hype","sad", "tornado", "jabbaswitchway", "ldance", "griddy", "worm", "rollin", "kawaiisit", "zerotwodance"},
+    Values = {"kickinglegs","heyyamove","spongebobdance","crossed","invisibleme","imagination","yungblud","strangerthings","laugh","floss","sleep","hype","sad", "tornado", "jabbaswitchway", "ldance", "griddy", "worm", "rollin", "kawaiisit", "zerotwodance","Sleeply","happywave","NLECHOPPA","Caramelldansen","Druski","hipsway","OrangeJustice","iwantmoney","DoThatThang","Salsa","ElectricAngel","Scenario"},
     Default = "floss",
     Text = 'Selected Emote',
 })
@@ -1390,15 +1390,19 @@ local _65 = _62:AddDropdown('Mode', {
     Default = 'Sticky',
     Text = 'Target Mode',
 })
-
 _62:AddToggle('ManipulatedText', {
     Text = 'Show Watermark',
     Default = false,
 })
-
 _62:AddToggle('TargetInfo', {
-    Text = 'Target Info Panel',
+    Text = 'Target Info',
     Default = false,
+})
+
+_62:AddDropdown('WatermarkPosition', {
+    Text = 'Watermark Position',
+    Values = {'Cursor', 'Below', 'Above'},
+    Default = 'Cursor',
 })
 
 local _66 = _60.Main:AddLeftTabbox()
@@ -1956,12 +1960,8 @@ function AS_autoStim()
     local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
     
     if not AS_hasStim() then
-        if AS_buyStimEnabled then
+        if AS_buyStimEnabled or hp < maxHp then
             AS_buyStim()
-        elseif hp < maxHp then
-            AS_buyStim()
-            task.wait(0.1)
-            AS_useStim()
         end
     elseif hp <= threshold and hp < maxHp then
         AS_useStim()
@@ -2029,14 +2029,8 @@ task.spawn(function()
         local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
         
         if not AS_hasStim() then
-            if AS_buyStimEnabled then
+            if AS_buyStimEnabled or hp < maxHp then
                 task.spawn(AS_buyStim)
-            elseif hp < maxHp then
-                task.spawn(function()
-                    AS_buyStim()
-                    task.wait(0.1)
-                    AS_useStim()
-                end)
             end
         elseif hp <= threshold and hp < maxHp then
             task.spawn(AS_useStim)
@@ -3183,9 +3177,32 @@ _138()
 local function _141()
     if not _130 then return end
     local _142 = _54:GetMouseLocation()
+    
     if Toggles.ManipulatedText.Value and _134.Visible then
-        _134.Position = UDim2.new(0, _142.X + 10, 0, _142.Y + 10)
+        local _pos = Options.WatermarkPosition and Options.WatermarkPosition.Value or 'Cursor'
+        
+        if _pos == 'Cursor' then
+            _134.AnchorPoint = Vector2.new(0, 0)
+            _134.TextXAlignment = Enum.TextXAlignment.Left
+            _134.Position = UDim2.new(0, _142.X + 10, 0, _142.Y + 10)
+        elseif _pos == 'Below' then
+            _134.AnchorPoint = Vector2.new(0.5, 1)
+            _134.Position = UDim2.new(0.5, 0, 1, -300)
+            _134.TextXAlignment = Enum.TextXAlignment.Center
+        elseif _pos == 'Above' then
+            local _char = _56.Character
+            local _head = _char and _char:FindFirstChild('Head')
+            if _head then
+                local _screenPos, _onScreen = workspace.CurrentCamera:WorldToViewportPoint(_head.Position)
+                if _onScreen then
+                    _134.AnchorPoint = Vector2.new(0.5, 0.5)
+                    _134.Position = UDim2.new(0, _screenPos.X, 0, _screenPos.Y - 70)
+                    _134.TextXAlignment = Enum.TextXAlignment.Center
+                end
+            end
+        end
     end
+    
     if Toggles.TargetInfo.Value and _135.Visible then
         _135.Position = UDim2.new(0, _142.X + 10, 0, _142.Y + 30)
     end
@@ -3969,7 +3986,6 @@ local function _197()
 end
 
 -- AUTO STOMP
-
 StompToggle:OnChanged(function(value)
     StompEnabled = value
     if not value and stompConnection then
@@ -3993,15 +4009,7 @@ local function getStompRemote()
     
     local replicatedStorage = game:GetService("ReplicatedStorage")
     
-    local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
-    if mainRemotes then
-        local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
-        if mainRemoteEvent then
-            stompRemote = mainRemoteEvent
-            return stompRemote
-        end
-    end
-    
+    -- GameRemotes.MainGameEvent
     local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
     if gameRemotes then
         local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
@@ -4011,6 +4019,27 @@ local function getStompRemote()
         end
     end
     
+    -- MainRemotes.MainRemoteEvent
+    local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+    if mainRemotes then
+        local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
+        if mainRemoteEvent then
+            stompRemote = mainRemoteEvent
+            return stompRemote
+        end
+    end
+    
+    -- Remotes.MainRemoteEvent
+    local remotes = replicatedStorage:FindFirstChild("Remotes")
+    if remotes then
+        local mainRemoteEvent = remotes:FindFirstChild("MainRemoteEvent")
+        if mainRemoteEvent then
+            stompRemote = mainRemoteEvent
+            return stompRemote
+        end
+    end
+    
+    -- MainEvent
     local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
     if mainEvent then
         stompRemote = mainEvent
@@ -5289,6 +5318,7 @@ Toggles.ManipulatedText:OnChanged(function(value)
         _134.Visible = false
     elseif _104.active then
         _134.Visible = true
+        _141()
     end
 end)
 
