@@ -2288,7 +2288,6 @@ end)
 _78:AddButton('Rapid Fire', function()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
 end)
-
 AS_busy = false
 AS_cache = nil
 AS_randomEquipConnection = nil
@@ -2401,7 +2400,7 @@ function AS_unequipCurrentTool()
         hum:UnequipTools()
     end
     
-    task.wait(0.05)
+    task.wait(0.03)
     
     for _, child in ipairs(char:GetChildren()) do
         if child:IsA("Tool") and child.Name ~= "[Stim]" and not AS_isBlacklisted(child.Name) then
@@ -2526,13 +2525,13 @@ function AS_buyStim()
             _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             _120.CFrame = _119
-            task.wait(0.1)
+            task.wait(0.05)
             if _148 then
                 _148.PlatformStand = false
             end
         end
         _119 = nil
-        task.wait(0.1)
+        task.wait(0.05)
     end
     
     local ch = _56.Character
@@ -2568,7 +2567,7 @@ function AS_buyStim()
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
     
-    for attempt = 1, 2 do
+    for attempt = 1, 3 do
         if stomping or grabbing or _AA_busy then break end
         if not _56.Character then break end
         
@@ -2577,13 +2576,12 @@ function AS_buyStim()
         
         rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
         
-        fireclickdetector(clickDetector)
-        task.wait(0.005)
-        fireclickdetector(clickDetector)
-        task.wait(0.005)
-        fireclickdetector(clickDetector)
+        for i = 1, 10 do
+            fireclickdetector(clickDetector)
+            task.wait(0.005)
+        end
         
-        task.wait(0.05)
+        task.wait(0.03)
         
         if AS_hasStim() then
             break
@@ -2593,6 +2591,8 @@ function AS_buyStim()
     pcall(function()
         rt.CFrame = oc
     end)
+    
+    task.wait(0.05)
     
     AS_busy = false
     AS_shared_lock = false
@@ -2623,7 +2623,7 @@ function AS_buyStim()
         end)
     end
     
-    task.wait(0.1)
+    task.wait(0.05)
     AS_reequipTool()
 end
 
@@ -2641,6 +2641,10 @@ function AS_autoStim()
     if not AS_hasStim() then
         if AS_buyStimEnabled or hp < maxHp then
             AS_buyStim()
+            task.wait(0.05)
+            if AS_hasStim() and hp < maxHp then
+                AS_useStim()
+            end
         end
     elseif hp <= threshold and hp < maxHp then
         AS_useStim()
@@ -2682,7 +2686,7 @@ end)
 _56.CharacterAdded:Connect(function()
     AS_cache = nil
     AS_equippedTool = nil
-    task.wait(0.5)
+    task.wait(0.3)
     
     if Toggles.AutoStim and Toggles.AutoStim.Value then
         task.spawn(AS_autoStim)
@@ -2690,7 +2694,7 @@ _56.CharacterAdded:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.05) do
+    while task.wait(0.03) do
         if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
         if _AA_busy then continue end
         if AS_busy then continue end
@@ -2709,7 +2713,13 @@ task.spawn(function()
         
         if not AS_hasStim() then
             if AS_buyStimEnabled or hp < maxHp then
-                task.spawn(AS_buyStim)
+                task.spawn(function()
+                    AS_buyStim()
+                    task.wait(0.05)
+                    if AS_hasStim() and hp < maxHp then
+                        AS_useStim()
+                    end
+                end)
             end
         elseif hp <= threshold and hp < maxHp then
             task.spawn(AS_useStim)
@@ -2829,12 +2839,12 @@ end
 
 function AM_buyMask()
     if AM_busy then return end
+    if AM_shared_lock then return end
     if AM_hasMaskOn() then return end
     if _AA_busy then return end
+    if AS_busy then return end
     if stomping then return end
     if grabbing then return end
-    if AM_shared_lock then return end
-    if AS_busy then return end
     
     local char = _56.Character
     if not char then return end
@@ -2948,12 +2958,12 @@ end
 
 function AM_autoMask()
     if not Toggles.AutoMask or not Toggles.AutoMask.Value then return end
-    if _AA_busy then return end
     if AM_busy then return end
     if AM_shared_lock then return end
+    if _AA_busy then return end
+    if AS_busy then return end
     if stomping then return end
     if grabbing then return end
-    if AS_busy then return end
     
     if not AM_hasMaskOn() then
         if AM_getMaskTool() then
@@ -2987,12 +2997,12 @@ end)
 task.spawn(function()
     while task.wait(0.05) do
         if not Toggles.AutoMask or not Toggles.AutoMask.Value then continue end
-        if _AA_busy then continue end
         if AM_busy then continue end
         if AM_shared_lock then continue end
+        if _AA_busy then continue end
+        if AS_busy then continue end
         if stomping then continue end
         if grabbing then continue end
-        if AS_busy then continue end
         
         local char = _56.Character
         if not char then continue end
@@ -3047,6 +3057,42 @@ _78:AddToggle('ESPShowDistance', {
 _78:AddToggle('ESPShowHealth', {
     Text = 'Health',
     Default = false,
+})
+
+_G.box_esp_connection = nil
+_G.box_esp_boxes = {}
+_G.box_esp_color = Color3.fromRGB(255, 255, 255)
+_G.box_esp_thickness = 2
+_G.box_esp_filled = false
+_G.box_esp_fill_color = Color3.fromRGB(255, 255, 255)
+_G.box_esp_fill_transparency = 0.5
+_G.box_esp_bar_types = {}
+
+BoxESPToggle = _78:AddToggle('BoxESPEnabled', {
+    Text = 'Box ESP',
+    Default = false,
+})
+
+BoxESPColor = BoxESPToggle:AddColorPicker('BoxESPColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Box Color',
+})
+
+BoxESPFilledToggle = _78:AddToggle('BoxESPFilled', {
+    Text = 'Filled Box',
+    Default = false,
+})
+
+BoxESPFillColor = BoxESPFilledToggle:AddColorPicker('BoxESPFillColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Fill Color',
+})
+
+_78:AddDropdown('BoxESPBarType', {
+    Values = {"Health", "Armor"},
+    Default = {"Health"},
+    Multi = true,
+    Text = 'Bar Type',
 })
 
 local _SkeletonToggle = _78:AddToggle('ESPShowSkeleton', {
@@ -7152,6 +7198,333 @@ skeletonPlayerRemovingConnection = _51.PlayerRemoving:Connect(function(player)
     cleanupSkeleton(player)
 end)
 
+-- < Box Core > --
+
+Options.BoxESPColor:OnChanged(function()
+    _G.box_esp_color = Options.BoxESPColor.Value
+end)
+
+Options.BoxESPFillColor:OnChanged(function()
+    _G.box_esp_fill_color = Options.BoxESPFillColor.Value
+end)
+
+Options.BoxESPBarType:OnChanged(function()
+    _G.box_esp_bar_types = {}
+    for barType, enabled in pairs(Options.BoxESPBarType.Value) do
+        if enabled then
+            _G.box_esp_bar_types[barType] = true
+        end
+    end
+end)
+
+Toggles.BoxESPFilled:OnChanged(function(value)
+    _G.box_esp_filled = value
+end)
+
+function getArmorValue(character)
+    local bodyEffects = character:FindFirstChild("BodyEffects")
+    if bodyEffects then
+        local armor = bodyEffects:FindFirstChild("Armor")
+        if armor then
+            return armor.Value or 0
+        end
+    end
+    return 0
+end
+
+function createBoxESP(player)
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "\0"
+    screenGui.Parent = game.CoreGui
+    screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
+
+    local boxContainer = Instance.new("Frame")
+    boxContainer.Name = "\0"
+    boxContainer.BackgroundTransparency = 1
+    boxContainer.Size = UDim2.new(1, 0, 1, 0)
+    boxContainer.Parent = screenGui
+
+    local topLine = Instance.new("Frame")
+    topLine.Name = "Top"
+    topLine.BackgroundColor3 = _G.box_esp_color
+    topLine.BorderSizePixel = 0
+    topLine.Parent = boxContainer
+
+    local bottomLine = Instance.new("Frame")
+    bottomLine.Name = "Bottom"
+    bottomLine.BackgroundColor3 = _G.box_esp_color
+    bottomLine.BorderSizePixel = 0
+    bottomLine.Parent = boxContainer
+
+    local leftLine = Instance.new("Frame")
+    leftLine.Name = "Left"
+    leftLine.BackgroundColor3 = _G.box_esp_color
+    leftLine.BorderSizePixel = 0
+    leftLine.Parent = boxContainer
+
+    local rightLine = Instance.new("Frame")
+    rightLine.Name = "Right"
+    rightLine.BackgroundColor3 = _G.box_esp_color
+    rightLine.BorderSizePixel = 0
+    rightLine.Parent = boxContainer
+
+    local fillBox = Instance.new("Frame")
+    fillBox.Name = "Fill"
+    fillBox.BackgroundColor3 = _G.box_esp_fill_color
+    fillBox.BorderSizePixel = 0
+    fillBox.BackgroundTransparency = _G.box_esp_fill_transparency
+    fillBox.Visible = _G.box_esp_filled
+    fillBox.Parent = boxContainer
+
+    -- Health Bar
+    local healthBarBackground = Instance.new("Frame")
+    healthBarBackground.Name = "HealthBG"
+    healthBarBackground.BackgroundColor3 = Color3.fromRGB(21, 21, 21)
+    healthBarBackground.BackgroundTransparency = 0.45
+    healthBarBackground.BorderSizePixel = 0
+    healthBarBackground.Visible = false
+    healthBarBackground.Parent = screenGui
+
+    local healthBar = Instance.new("Frame")
+    healthBar.Name = "HealthBar"
+    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Visible = false
+    healthBar.Parent = screenGui
+
+    local healthBarGradient = Instance.new("UIGradient")
+    healthBarGradient.Rotation = 90
+    healthBarGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+    })
+    healthBarGradient.Parent = healthBar
+
+    -- Armor Bar
+    local armorBarBackground = Instance.new("Frame")
+    armorBarBackground.Name = "ArmorBG"
+    armorBarBackground.BackgroundColor3 = Color3.fromRGB(21, 21, 21)
+    armorBarBackground.BackgroundTransparency = 0.45
+    armorBarBackground.BorderSizePixel = 0
+    armorBarBackground.Visible = false
+    armorBarBackground.Parent = screenGui
+
+    local armorBar = Instance.new("Frame")
+    armorBar.Name = "ArmorBar"
+    armorBar.BackgroundColor3 = Color3.fromRGB(0, 0, 255)
+    armorBar.BorderSizePixel = 0
+    armorBar.Visible = false
+    armorBar.Parent = screenGui
+
+    local armorBarGradient = Instance.new("UIGradient")
+    armorBarGradient.Rotation = 90
+    armorBarGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 255)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(135, 206, 235)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+    })
+    armorBarGradient.Parent = armorBar
+
+    return screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox, 
+           healthBarBackground, healthBar, armorBarBackground, armorBar
+end
+
+function updateBoxESP(player, boxData)
+    local screenGui = boxData.screenGui
+    local boxContainer = boxData.boxContainer
+    local topLine = boxData.topLine
+    local bottomLine = boxData.bottomLine
+    local leftLine = boxData.leftLine
+    local rightLine = boxData.rightLine
+    local fillBox = boxData.fillBox
+    local healthBarBackground = boxData.healthBarBackground
+    local healthBar = boxData.healthBar
+    local armorBarBackground = boxData.armorBarBackground
+    local armorBar = boxData.armorBar
+
+    local character = player.Character
+    if not character then
+        screenGui.Enabled = false
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character:FindFirstChild("Humanoid")
+    if not rootPart or not humanoid or humanoid.Health <= 0 then
+        screenGui.Enabled = false
+        return
+    end
+
+    local camera = workspace.CurrentCamera
+    if not camera then
+        screenGui.Enabled = false
+        return
+    end
+
+    local rootScreenPos, rootOnScreen = camera:WorldToViewportPoint(rootPart.Position)
+
+    if not rootOnScreen then
+        screenGui.Enabled = false
+        return
+    end
+
+    local headPart = character:FindFirstChild("Head")
+    local headTopPos = headPart and (headPart.Position + Vector3.new(0, 1.2, 0)) or (rootPart.Position + Vector3.new(0, 3, 0))
+    local feetPos = rootPart.Position - Vector3.new(0, 3.2, 0)
+
+    local headTopScreenPos = camera:WorldToViewportPoint(headTopPos)
+    local feetScreenPos = camera:WorldToViewportPoint(feetPos)
+
+    local height = math.abs(headTopScreenPos.Y - feetScreenPos.Y)
+    local width = height * 0.55
+
+    local centerPos = Vector2.new(rootScreenPos.X, (headTopScreenPos.Y + feetScreenPos.Y) / 2)
+    local topLeft = centerPos - Vector2.new(width / 2, height / 2)
+
+    local boxColor = _G.box_esp_color
+    topLine.BackgroundColor3 = boxColor
+    bottomLine.BackgroundColor3 = boxColor
+    leftLine.BackgroundColor3 = boxColor
+    rightLine.BackgroundColor3 = boxColor
+    fillBox.BackgroundColor3 = _G.box_esp_fill_color
+    fillBox.BackgroundTransparency = _G.box_esp_fill_transparency
+    fillBox.Visible = _G.box_esp_filled
+
+    screenGui.Enabled = true
+    boxContainer.Visible = true
+
+    local thickness = _G.box_esp_thickness
+    local offset = math.floor(thickness / 2)
+
+    topLine.Size = UDim2.new(0, width, 0, thickness)
+    topLine.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y - offset)
+
+    bottomLine.Size = UDim2.new(0, width, 0, thickness)
+    bottomLine.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y + height - thickness + offset)
+
+    leftLine.Size = UDim2.new(0, thickness, 0, height)
+    leftLine.Position = UDim2.new(0, topLeft.X - offset, 0, topLeft.Y)
+
+    rightLine.Size = UDim2.new(0, thickness, 0, height)
+    rightLine.Position = UDim2.new(0, topLeft.X + width - thickness + offset, 0, topLeft.Y)
+
+    fillBox.Size = UDim2.new(0, width - thickness * 2, 0, height - thickness * 2)
+    fillBox.Position = UDim2.new(0, topLeft.X + thickness, 0, topLeft.Y + thickness)
+
+    -- Handle bars
+    local barX = topLeft.X - 5
+    local barY = topLeft.Y
+
+    if _G.box_esp_bar_types["Health"] then
+        local health_per = math.floor((humanoid.Health / humanoid.MaxHealth) * 100)
+        local barHeight = height * (health_per / 100)
+        
+        healthBar.Size = UDim2.new(0, 2, 0, barHeight)
+        healthBar.Position = UDim2.new(0, barX, 0, barY + height - barHeight)
+        healthBar.Visible = true
+        
+        healthBarBackground.Size = UDim2.new(0, 2, 0, height)
+        healthBarBackground.Position = UDim2.new(0, barX, 0, barY)
+        healthBarBackground.Visible = true
+    else
+        healthBar.Visible = false
+        healthBarBackground.Visible = false
+    end
+
+    if _G.box_esp_bar_types["Armor"] then
+        local armorVal = getArmorValue(character)
+        local armor_per = math.floor((armorVal / 200) * 100)
+        local armor_bar_x = barX - 5.4
+        local armor_bar_height = height * (armor_per / 100)
+        
+        armorBar.Size = UDim2.new(0, 2, 0, armor_bar_height)
+        armorBar.Position = UDim2.new(0, armor_bar_x, 0, barY + height - armor_bar_height)
+        armorBar.Visible = true
+        
+        armorBarBackground.Size = UDim2.new(0, 2, 0, height)
+        armorBarBackground.Position = UDim2.new(0, armor_bar_x, 0, barY)
+        armorBarBackground.Visible = true
+    else
+        armorBar.Visible = false
+        armorBarBackground.Visible = false
+    end
+end
+
+Toggles.BoxESPEnabled:OnChanged(function(value)
+    if _G.box_esp_connection then
+        _G.box_esp_connection:Disconnect()
+        _G.box_esp_connection = nil
+    end
+
+    for _, boxData in pairs(_G.box_esp_boxes) do
+        if boxData.screenGui then
+            boxData.screenGui:Destroy()
+        end
+    end
+    _G.box_esp_boxes = {}
+
+    if value then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox,
+                      healthBarBackground, healthBar, armorBarBackground, armorBar = createBoxESP(player)
+                _G.box_esp_boxes[player] = {
+                    screenGui = screenGui,
+                    boxContainer = boxContainer,
+                    topLine = topLine,
+                    bottomLine = bottomLine,
+                    leftLine = leftLine,
+                    rightLine = rightLine,
+                    fillBox = fillBox,
+                    healthBarBackground = healthBarBackground,
+                    healthBar = healthBar,
+                    armorBarBackground = armorBarBackground,
+                    armorBar = armorBar
+                }
+            end
+        end
+
+        _G.box_esp_connection = game:GetService("RunService").RenderStepped:Connect(function()
+            for player, boxData in pairs(_G.box_esp_boxes) do
+                if player and player.Parent then
+                    updateBoxESP(player, boxData)
+                end
+            end
+        end)
+    end
+end)
+
+Players.PlayerAdded:Connect(function(player)
+    if Toggles.BoxESPEnabled.Value then
+        local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox,
+              healthBarBackground, healthBar, armorBarBackground, armorBar = createBoxESP(player)
+        _G.box_esp_boxes[player] = {
+            screenGui = screenGui,
+            boxContainer = boxContainer,
+            topLine = topLine,
+            bottomLine = bottomLine,
+            leftLine = leftLine,
+            rightLine = rightLine,
+            fillBox = fillBox,
+            healthBarBackground = healthBarBackground,
+            healthBar = healthBar,
+            armorBarBackground = armorBarBackground,
+            armorBar = armorBar
+        }
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if _G.box_esp_boxes[player] then
+        if _G.box_esp_boxes[player].screenGui then
+            _G.box_esp_boxes[player].screenGui:Destroy()
+        end
+        _G.box_esp_boxes[player] = nil
+    end
+end)
+
 function refreshFriendsList()
     if not isRunning then return end
     local currentTime = tick()
@@ -7536,33 +7909,36 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while true do
-        if Toggles.AutoEquipDB and Toggles.AutoEquipDB.Value then
-            local char = _56.Character
-            local bp = _56.Backpack
-            local holding = char and char:FindFirstChildWhichIsA("Tool")
-            if not (holding and holding.Name:lower():find("double")) then
-                local db = nil
-                for _, t in ipairs(bp:GetChildren()) do
-                    if t:IsA("Tool") and t.Name:lower():find("double") then
-                        db = t
-                        break
-                    end
-                end
-                if not db and char then
-                    for _, t in ipairs(char:GetChildren()) do
-                        if t:IsA("Tool") and t.Name:lower():find("double") then
-                            db = t
-                            break
-                        end
-                    end
-                end
-                if db and char then
-                    db.Parent = char
+    while task.wait(0.01) do
+        if not Toggles.AutoEquipDB or not Toggles.AutoEquipDB.Value then continue end
+        local char = _56.Character
+        if not char then continue end
+        local bp = _56.Backpack
+        if not bp then continue end
+        local humanoid = char:FindFirstChild("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        local holding = char:FindFirstChildWhichIsA("Tool")
+        if holding and holding.Parent == char and holding.Name:lower():find("double") then continue end
+        local db = nil
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and t.Name:lower():find("double") then
+                db = t
+                break
+            end
+        end
+        if not db then
+            for _, t in ipairs(char:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("double") then
+                    db = t
+                    break
                 end
             end
         end
-        task.wait(0.01)
+        if db and db.Parent ~= char then
+            pcall(function()
+                db.Parent = char
+            end)
+        end
     end
 end)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
@@ -7756,19 +8132,27 @@ function _AA_buy()
         if not pt or not cd then break end
         
         local oc = rt.CFrame
-        rt.CFrame = pt.CFrame * CFrame.new(0, -3, 0)
-        for i = 1, 5 do
+        rt.CFrame = pt.CFrame * CFrame.new(0, 2, 0)
+        
+        for i = 1, 15 do
             fireclickdetector(cd)
-            task.wait(0.05)
+            task.wait(0.01)
         end
+        
         local okk = false
         local w0 = tick()
         repeat
             if _AA_getArmorValue() > sv then okk = true break end
-            task.wait(0.1)
-        until tick() - w0 > 1
+            task.wait(0.05)
+        until tick() - w0 > 0.5
+        
         rt.CFrame = oc
-        task.wait(okk and 0.2 or 0.5)
+        
+        if okk then
+            task.wait(0.05)
+        else
+            task.wait(0.1)
+        end
     end
     
     _AA_busy = false
@@ -7814,10 +8198,11 @@ _AA_connections.charAdded = _56.CharacterAdded:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.2) do
+    while task.wait(0.1) do
         if not Toggles.AutoArmor.Value then continue end
         if not Toggles.AutoArmorVoidIgnore.Value and _118 then continue end
         if not _AA_isAlive() then continue end
+        if _AA_busy then continue end
         
         local v = _AA_getArmorValue()
         local threshold = Options.AutoArmorThreshold and Options.AutoArmorThreshold.Value or 200
