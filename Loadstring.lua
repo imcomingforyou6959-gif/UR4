@@ -103,6 +103,9 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+Lighting = game:GetService('Lighting')
+MaterialService = game:GetService('MaterialService')
+RunService = game:GetService('RunService')
 
 if not LocalPlayer then
     return
@@ -1143,6 +1146,470 @@ Options.BackgroundVolume:OnChanged(function()
     end
 end)
 
+OriginalLighting = {
+    Technology = Lighting.Technology,
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+}
+
+-- Lighting Mode Section
+LightingModeSection = WorldTab:AddLeftGroupbox('Lighting Mode')
+
+LightingModeSection:AddToggle('LightingMode', {
+    Text = 'Lighting Mode',
+    Default = false,
+})
+
+LightingModeSection:AddDropdown('LightingModeValue', {
+    Text = 'Mode',
+    Values = {'Compatibility', 'ShadowMap', 'Unified', 'Future', 'Legacy', 'Voxel'},
+    Default = 'Compatibility',
+})
+
+Toggles.LightingMode:OnChanged(function(value)
+    if value then
+        Lighting.Technology = Enum.Technology[Options.LightingModeValue.Value]
+    else
+        Lighting.Technology = OriginalLighting.Technology
+    end
+end)
+
+Options.LightingModeValue:OnChanged(function(value)
+    if Toggles.LightingMode and Toggles.LightingMode.Value then
+        Lighting.Technology = Enum.Technology[value]
+    end
+end)
+
+-- World Time Section
+WorldTimeSection = WorldTab:AddLeftGroupbox('World Time')
+
+WorldTimeSection:AddToggle('WorldTime', {
+    Text = 'World Time',
+    Default = false,
+})
+
+WorldTimeSection:AddSlider('WorldTimeValue', {
+    Text = 'Hour',
+    Default = 4.5,
+    Min = 0,
+    Max = 24,
+    Rounding = 1,
+})
+
+Toggles.WorldTime:OnChanged(function(value)
+    if value then
+        Lighting.ClockTime = Options.WorldTimeValue.Value
+    else
+        Lighting.ClockTime = OriginalLighting.ClockTime
+    end
+end)
+
+Options.WorldTimeValue:OnChanged(function(value)
+    if Toggles.WorldTime and Toggles.WorldTime.Value then
+        Lighting.ClockTime = value
+    end
+end)
+
+-- Atmosphere Section
+AtmosphereSection = WorldTab:AddLeftGroupbox('Atmosphere')
+
+AtmosphereSection:AddToggle('Atmosphere', {
+    Text = 'Atmosphere',
+    Default = false,
+})
+
+AtmosphereObject = nil
+
+AtmosphereSection:AddLabel('Atmosphere Color'):AddColorPicker('AtmosphereColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Atmosphere Color',
+})
+
+AtmosphereSection:AddLabel('Decay Color'):AddColorPicker('DecayColor', {
+    Default = Color3.fromRGB(120, 120, 120),
+    Title = 'Decay Color',
+})
+
+AtmosphereSection:AddSlider('Haze', {
+    Text = 'Haze',
+    Default = 1,
+    Min = 0,
+    Max = 10,
+    Rounding = 3,
+})
+
+AtmosphereSection:AddSlider('Glare', {
+    Text = 'Glare',
+    Default = 10,
+    Min = 0,
+    Max = 10,
+    Rounding = 3,
+})
+
+AtmosphereSection:AddSlider('Offset', {
+    Text = 'Offset',
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 3,
+})
+
+AtmosphereSection:AddSlider('Density', {
+    Text = 'Density',
+    Default = 0.35,
+    Min = 0,
+    Max = 1,
+    Rounding = 3,
+})
+
+function UpdateAtmosphere()
+    if not AtmosphereObject then return end
+    AtmosphereObject.Color = Options.AtmosphereColor.Value
+    AtmosphereObject.Decay = Options.DecayColor.Value
+    AtmosphereObject.Haze = Options.Haze.Value
+    AtmosphereObject.Glare = Options.Glare.Value
+    AtmosphereObject.Offset = Options.Offset.Value
+    AtmosphereObject.Density = Options.Density.Value
+end
+
+Toggles.Atmosphere:OnChanged(function(value)
+    if value then
+        if not AtmosphereObject then
+            AtmosphereObject = Instance.new('Atmosphere')
+            AtmosphereObject.Parent = Lighting
+        end
+        UpdateAtmosphere()
+    else
+        if AtmosphereObject then
+            AtmosphereObject:Destroy()
+            AtmosphereObject = nil
+        end
+    end
+end)
+
+Options.AtmosphereColor:OnChanged(UpdateAtmosphere)
+Options.DecayColor:OnChanged(UpdateAtmosphere)
+Options.Haze:OnChanged(UpdateAtmosphere)
+Options.Glare:OnChanged(UpdateAtmosphere)
+Options.Offset:OnChanged(UpdateAtmosphere)
+Options.Density:OnChanged(UpdateAtmosphere)
+
+-- Color Correction Section
+ColorCorrectionSection = WorldTab:AddRightGroupbox('Color Correction')
+
+ColorCorrection = Lighting:FindFirstChildOfClass('ColorCorrectionEffect')
+if not ColorCorrection then
+    ColorCorrection = Instance.new('ColorCorrectionEffect')
+    ColorCorrection.Parent = Lighting
+end
+
+ColorCorrectionSection:AddToggle('Saturation', {
+    Text = 'Saturation',
+    Default = false,
+})
+
+ColorCorrectionSection:AddSlider('SaturationValue', {
+    Text = 'Saturation Value',
+    Default = ColorCorrection.Saturation,
+    Min = -1,
+    Max = 1,
+    Rounding = 2,
+})
+
+Toggles.Saturation:OnChanged(function(value)
+    if value then
+        ColorCorrection.Saturation = Options.SaturationValue.Value
+    else
+        ColorCorrection.Saturation = 0.1
+    end
+end)
+
+Options.SaturationValue:OnChanged(function(value)
+    if Toggles.Saturation and Toggles.Saturation.Value then
+        ColorCorrection.Saturation = value
+    end
+end)
+
+ColorCorrectionSection:AddToggle('Contrast', {
+    Text = 'Contrast',
+    Default = false,
+})
+
+ColorCorrectionSection:AddSlider('ContrastValue', {
+    Text = 'Contrast Value',
+    Default = ColorCorrection.Contrast,
+    Min = -1,
+    Max = 1,
+    Rounding = 2,
+})
+
+Toggles.Contrast:OnChanged(function(value)
+    if value then
+        ColorCorrection.Contrast = Options.ContrastValue.Value
+    else
+        ColorCorrection.Contrast = 0.05
+    end
+end)
+
+Options.ContrastValue:OnChanged(function(value)
+    if Toggles.Contrast and Toggles.Contrast.Value then
+        ColorCorrection.Contrast = value
+    end
+end)
+
+AspectRatioSection = WorldTab:AddRightGroupbox('Rendering & Camera')
+
+getgenv().Resolution = {
+    ["AspectRatio"] = 1
+}
+
+getgenv().AspectRatioStarted = nil
+getgenv().AspectRatioEnabled = false
+
+AspectRatioSection:AddToggle('AspectRatio', {
+    Text = 'Aspect Ratio',
+    Default = false,
+})
+
+AspectRatioSection:AddSlider('AspectRatioValueSlider', {
+    Text = 'Ratio',
+    Default = 1,
+    Min = 0.1,
+    Max = 1.2,
+    Rounding = 2,
+})
+
+Toggles.AspectRatio:OnChanged(function(value)
+    getgenv().AspectRatioEnabled = value
+    if value then
+        getgenv().Resolution["AspectRatio"] = Options.AspectRatioValueSlider.Value
+        if getgenv().AspectRatioStarted == nil then
+            game:GetService("RunService").RenderStepped:Connect(
+                function()
+                    pcall(function()
+                        if not getgenv().AspectRatioEnabled then return end
+                        local cam = workspace.CurrentCamera
+                        if cam then
+                            cam.CFrame = cam.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, getgenv().Resolution["AspectRatio"], 0, 0, 0, 1)
+                        end
+                    end)
+                end
+            )
+            getgenv().AspectRatioStarted = "Aori0001"
+        end
+    else
+        getgenv().Resolution["AspectRatio"] = 1
+    end
+end)
+
+Options.AspectRatioValueSlider:OnChanged(function(value)
+    getgenv().Resolution["AspectRatio"] = value
+end)
+
+AspectRatioSection:AddToggle('DisableRendering', {
+    Text = 'Disable Rendering',
+    Default = false,
+    Callback = function(value)
+        pcall(function()
+            RunService:Set3dRenderingEnabled(not value)
+        end)
+    end,
+})
+
+-- textures
+TexturesSection = WorldTab:AddRightGroupbox('Textures')
+
+TexturesSection:AddToggle('Textures', {
+    Text = 'Textures',
+    Default = false,
+})
+
+TexturesSection:AddDropdown('TexturesPack', {
+    Text = 'Pack',
+    Values = {'Minecraft', 'Carti', 'Sand Minecraft', 'Ice'},
+    Default = 'Minecraft',
+})
+
+TextureVariants = {}
+TextureRestores = {}
+TextureFaces = {"Front", "Back", "Bottom", "Top", "Right", "Left"}
+
+TexturePackData = {
+    Minecraft = {
+        {"Wood", "3258599312"}, {"WoodPlanks", "8676581022"},
+        {"Brick", "8558400252"}, {"Cobblestone", "5003953441"},
+        {"Concrete", "7341687607"}, {"DiamondPlate", "6849247561"},
+        {"Fabric", "118776397"}, {"Granite", "4722586771"},
+        {"Grass", "4722588177"}, {"Ice", "3823766459"},
+        {"Marble", "62967586"}, {"Metal", "62967586"},
+        {"Sand", "152572215"}, {"Slate", "7397414089"},
+    },
+    Carti = {
+        {"Wood", "14784281899"}, {"WoodPlanks", "14784281899"},
+        {"Brick", "12647798329"}, {"Cobblestone", "12647798329"},
+        {"Concrete", "12647798329"}, {"DiamondPlate", "128808789797567"},
+        {"Fabric", "128808789797567"}, {"Granite", "4722586771"},
+        {"Grass", "17303981964"}, {"Ice", "17303981964"},
+        {"Marble", "17303981964"}, {"Metal", "114917525242362"},
+        {"Sand", "114917525242362"}, {"Slate", "114917525242362"},
+    },
+    ['Sand Minecraft'] = {
+        {"Wood", "152572215"}, {"WoodPlanks", "152572215"},
+        {"Brick", "152572215"}, {"Cobblestone", "152572215"},
+        {"Concrete", "152572215"}, {"DiamondPlate", "152572215"},
+        {"Fabric", "152572215"}, {"Granite", "152572215"},
+        {"Grass", "152572215"}, {"Ice", "152572215"},
+        {"Marble", "152572215"}, {"Metal", "152572215"},
+        {"Sand", "152572215"}, {"Slate", "152572215"},
+    },
+    Ice = {
+        {"Wood", "5933003775"}, {"WoodPlanks", "5933003775"},
+        {"Brick", "17295828838"}, {"Cobblestone", "11760888310"},
+        {"Concrete", "109017797659108"}, {"DiamondPlate", "11760888310"},
+        {"Fabric", "140018484507153"}, {"Granite", "16833201065"},
+        {"Grass", "140018484507153"}, {"Ice", "1090177976591089"},
+        {"Marble", "62967586"}, {"Metal", "11760888310"},
+        {"Sand", "16833201065"}, {"Slate", "7397414089"},
+    },
+}
+
+function ApplyTextureToPart(part)
+    pcall(function()
+        for _, materialData in ipairs(TexturePackData[Options.TexturesPack.Value]) do
+            if part.Material.Name == materialData[1] then
+                if not TextureRestores[part] then
+                    TextureRestores[part] = {
+                        Material = part.Material,
+                        Color = part.Color,
+                        Transparency = part.Transparency,
+                    }
+                end
+                
+                for _, face in ipairs(TextureFaces) do
+                    local texture = Instance.new("Texture")
+                    texture.ZIndex = 2147483647
+                    texture.Texture = "rbxassetid://" .. materialData[2]
+                    texture.Face = Enum.NormalId[face]
+                    texture.Color3 = part.Color
+                    texture.Transparency = part.Transparency
+                    texture.Parent = part
+                end
+                
+                part.Material = Enum.Material.SmoothPlastic
+                break
+            end
+        end
+    end)
+end
+
+function ApplyTextures()
+    pcall(function()
+        for _, variant in ipairs(TextureVariants) do
+            variant:Destroy()
+        end
+        TextureVariants = {}
+        
+        for part, _ in pairs(TextureRestores) do
+            for _, child in ipairs(part:GetChildren()) do
+                if child:IsA("Texture") and child.ZIndex == 2147483647 then
+                    child:Destroy()
+                end
+            end
+            part.Material = TextureRestores[part].Material
+            part.Color = TextureRestores[part].Color
+            part.Transparency = TextureRestores[part].Transparency
+        end
+        TextureRestores = {}
+        
+        local targetFolder = workspace:FindFirstChild('MAP')
+        if not targetFolder then
+            targetFolder = workspace
+        end
+        
+        for _, part in ipairs(targetFolder:GetDescendants()) do
+            if part:IsA("BasePart") then
+                ApplyTextureToPart(part)
+            end
+        end
+    end)
+end
+
+function CleanupTextures()
+    pcall(function()
+        for _, variant in ipairs(TextureVariants) do
+            variant:Destroy()
+        end
+        TextureVariants = {}
+        
+        for part, original in pairs(TextureRestores) do
+            for _, child in ipairs(part:GetChildren()) do
+                if child:IsA("Texture") and child.ZIndex == 2147483647 then
+                    child:Destroy()
+                end
+            end
+            part.Material = original.Material
+            part.Color = original.Color
+            part.Transparency = original.Transparency
+        end
+        TextureRestores = {}
+    end)
+end
+
+Toggles.Textures:OnChanged(function(value)
+    if value then
+        ApplyTextures()
+    else
+        CleanupTextures()
+    end
+end)
+
+Options.TexturesPack:OnChanged(function()
+    if Toggles.Textures and Toggles.Textures.Value then
+        ApplyTextures()
+    end
+end)
+
+-- ambient
+AmbientSection = WorldTab:AddRightGroupbox('Ambient')
+
+AmbientSection:AddToggle('Ambient', {
+    Text = 'Ambient',
+    Default = false,
+})
+
+AmbientSection:AddLabel('Ambient Color'):AddColorPicker('AmbientColor', {
+    Default = Lighting.Ambient,
+    Title = 'Ambient Color',
+})
+
+AmbientSection:AddLabel('Outdoor Ambient'):AddColorPicker('OutdoorAmbientColor', {
+    Default = Lighting.OutdoorAmbient,
+    Title = 'Outdoor Ambient Color',
+})
+
+Toggles.Ambient:OnChanged(function(value)
+    if value then
+        Lighting.Ambient = Options.AmbientColor.Value
+        Lighting.OutdoorAmbient = Options.OutdoorAmbientColor.Value
+    else
+        Lighting.Ambient = OriginalLighting.Ambient
+        Lighting.OutdoorAmbient = OriginalLighting.OutdoorAmbient
+    end
+end)
+
+Options.AmbientColor:OnChanged(function(value)
+    if Toggles.Ambient and Toggles.Ambient.Value then
+        Lighting.Ambient = value
+    end
+end)
+
+Options.OutdoorAmbientColor:OnChanged(function(value)
+    if Toggles.Ambient and Toggles.Ambient.Value then
+        Lighting.OutdoorAmbient = value
+    end
+end)
+
 MovementSection = WorldTab:AddRightGroupbox('Extras <3')
 
 -- Camera Distance
@@ -1446,6 +1913,11 @@ local _74 = _67:AddToggle('AutoShoot', {
     Default = false,
 })
 
+_67:AddToggle('FaceTarget', {
+    Text = 'Face Target',
+    Default = false,
+})
+
 _67:AddToggle('WhitelistEnabled', {
     Text = 'Enable Whitelist',
     Default = false,
@@ -1540,6 +2012,88 @@ local _NoclipToggle = _78:AddToggle('Noclip', {
     Default = false,
 })
 
+normalone = _78:AddToggle('Spinbot', {
+    Text = 'Spinbot',
+    Default = false,
+})
+
+_78:AddSlider('SpinbotSpeed', {
+    Text = 'Speed',
+    Default = 50,
+    Min = 1,
+    Max = 100,
+    Rounding = 0,
+    Suffix = '%',
+})
+
+SpinbotSpeed = 50
+SpinbotConnection = nil
+
+function DoSpinbot()
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.AutoRotate = false
+        end
+        
+        hrp.CFrame = hrp.CFrame * CFrame.fromEulerAnglesXYZ(0, SpinbotSpeed * 0.016, 0)
+    end)
+end
+
+Toggles.Spinbot:OnChanged(function(value)
+    if SpinbotConnection then
+        SpinbotConnection:Disconnect()
+        SpinbotConnection = nil
+    end
+    
+    if value then
+        SpinbotConnection = RunService.Heartbeat:Connect(function()
+            DoSpinbot()
+        end)
+    else
+        pcall(function()
+            local char = LocalPlayer.Character
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.AutoRotate = true
+            end
+        end)
+    end
+    
+    task.wait()
+    
+    pcall(function()
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.AutoRotate = value and false or true
+        end
+    end)
+end)
+
+Options.SpinbotSpeed:OnChanged(function(value)
+    SpinbotSpeed = value * (1/3)
+end)
+
+normalone:AddKeyPicker('SpinbotKeybind', {
+    Default = 'B',
+    SyncToggleState = false,
+    Mode = 'Toggle',
+    Text = 'Spinbot Toggle',
+    NoUI = false,
+})
+
+Options.SpinbotKeybind:OnClick(function()
+    local newState = not Toggles.Spinbot.Value
+    Toggles.Spinbot:SetValue(newState)
+end)
+
 local _WSToggle = _78:AddToggle('WalkSpeedEnabled', {
     Text = 'Walk Speed',
     Default = false,
@@ -1583,6 +2137,129 @@ _78:AddSlider('JumpPower', {
     Rounding = 0,
     Suffix = '',
 })
+_78:AddDivider()
+-- Tool Material (compact)
+_78:AddToggle('ToolMat', {
+    Text = 'Tool Material',
+    Default = false,
+})
+
+_78:AddDropdown('ToolMatType', {
+    Text = 'Material',
+    Values = {'Neon', 'ForceField'},
+    Default = 'Neon',
+})
+
+_78:AddLabel('Color'):AddColorPicker('ToolMatColor', {
+    Default = Color3.fromRGB(142, 242, 255),
+    Title = 'Color',
+    Transparency = 0.8,
+})
+
+TMC = nil
+TMM = Enum.Material.Neon
+
+function TMApply(tool, restore)
+    pcall(function()
+        if not tool then return end
+        local h = tool:FindFirstChild("Default")
+        if not h then return end
+        
+        if not restore then
+            h.Material = TMM
+            h.Color = Options.ToolMatColor.Value
+            h.Transparency = Options.ToolMatColor.Transparency
+            
+            if not tool:GetAttribute("TMTex") then
+                tool:SetAttribute("TMTex", h.TextureID)
+            end
+            h.TextureID = ""
+        else
+            local tex = tool:GetAttribute("TMTex")
+            if tex then
+                h.TextureID = tex
+                h.Transparency = 0
+            end
+            h.Material = Enum.Material.Plastic
+            tool:SetAttribute("TMTex", nil)
+        end
+    end)
+end
+
+function TMRestoreAll()
+    pcall(function()
+        local c = _56.Character
+        if not c then return end
+        
+        for _, v in ipairs(c:GetChildren()) do
+            if v:IsA("Tool") then TMApply(v, true) end
+        end
+        
+        local bp = _56.Backpack
+        if bp then
+            for _, v in ipairs(bp:GetChildren()) do
+                if v:IsA("Tool") then TMApply(v, true) end
+            end
+        end
+    end)
+end
+
+function TMCurrent()
+    pcall(function()
+        local c = _56.Character
+        if not c then return end
+        local t = c:FindFirstChildOfClass("Tool")
+        if t then TMApply(t, false) end
+    end)
+end
+
+Toggles.ToolMat:OnChanged(function(value)
+    if TMC then TMC:Disconnect() TMC = nil end
+    TMRestoreAll()
+    
+    if value then
+        TMCurrent()
+        
+        TMC = _56.CharacterAdded:Connect(function()
+            TMRestoreAll()
+        end)
+        
+        if _56.Character then
+            TMC = _56.Character.ChildAdded:Connect(function(child)
+                if child:IsA("Tool") and Toggles.ToolMat.Value then
+                    TMApply(child, false)
+                end
+            end)
+        end
+    end
+end)
+
+Options.ToolMatType:OnChanged(function(value)
+    TMM = value == "Neon" and Enum.Material.Neon or Enum.Material.ForceField
+    if Toggles.ToolMat and Toggles.ToolMat.Value then
+        TMCurrent()
+    end
+end)
+
+Options.ToolMatColor:OnChanged(function()
+    if Toggles.ToolMat and Toggles.ToolMat.Value then
+        TMCurrent()
+    end
+end)
+
+_56.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    if Toggles.ToolMat and Toggles.ToolMat.Value then
+        TMCurrent()
+    end
+    
+    char.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") and Toggles.ToolMat and Toggles.ToolMat.Value then
+            task.wait(0.1)
+            TMApply(child, false)
+        end
+    end)
+end)
 
 _78:AddDivider()
 _78:AddLabel('Utility')
@@ -1638,6 +2315,8 @@ AS_blacklistedTools = {
     "TipJar",
     "Wallet",
     "[Flintlock]",
+    "Mask",
+    "mask",
 }
 
 function AS_isBlacklisted(toolName)
@@ -2038,6 +2717,299 @@ task.spawn(function()
     end
 end)
 
+-- Auto Mask
+AM_busy = false
+AM_shared_lock = false
+AM_equippedTool = nil
+
+function AM_getMaskItem()
+    local shop = workspace.Ignored:FindFirstChild("Shop")
+    if not shop then return nil end
+    
+    local maskItem = shop:FindFirstChild("[Surgeon Mask] - $27")
+    if maskItem and maskItem:FindFirstChild("ClickDetector") then
+        return maskItem
+    end
+    
+    for _, item in ipairs(shop:GetChildren()) do
+        if item.Name:find("Surgeon Mask") and item:FindFirstChild("ClickDetector") then
+            return item
+        end
+    end
+    
+    for _, item in ipairs(shop:GetChildren()) do
+        if item.Name:lower():find("mask") and item:FindFirstChild("ClickDetector") then
+            return item
+        end
+    end
+    
+    return nil
+end
+
+function AM_getMaskTool()
+    local char = _56.Character
+    if not char then return nil end
+    
+    for _, v in ipairs(char:GetChildren()) do
+        if v:IsA("Tool") and v.Name:lower():find("mask") then
+            return v
+        end
+    end
+    
+    local bp = _56.Backpack
+    if bp then
+        for _, v in ipairs(bp:GetChildren()) do
+            if v:IsA("Tool") and v.Name:lower():find("mask") then
+                return v
+            end
+        end
+    end
+    
+    local playersFolder = workspace:FindFirstChild("Players")
+    if playersFolder then
+        local localFolder = playersFolder:FindFirstChild(_56.Name)
+        if localFolder then
+            for _, v in ipairs(localFolder:GetChildren()) do
+                if v:IsA("Tool") and v.Name:lower():find("mask") then
+                    return v
+                end
+            end
+        end
+    end
+    
+    return nil
+end
+
+function AM_hasMaskOn()
+    local playersFolder = workspace:FindFirstChild("Players")
+    if playersFolder then
+        local localFolder = playersFolder:FindFirstChild(_56.Name)
+        if localFolder then
+            local maskCheck = localFolder:FindFirstChild("In-gameMask")
+            if maskCheck then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function AM_useMask()
+    local char = _56.Character
+    if not char then return false end
+    
+    local tool = AM_getMaskTool()
+    if not tool then return false end
+    
+    if tool.Parent ~= char then
+        tool.Parent = char
+    end
+    
+    task.wait(0.01)
+    
+    pcall(function()
+        tool:Activate()
+    end)
+    
+    task.wait(0.01)
+    
+    pcall(function()
+        tool:Deactivate()
+    end)
+    
+    task.wait(0.2)
+    pcall(function()
+        if tool.Parent == char then
+            tool.Parent = _56.Backpack
+        end
+    end)
+    
+    return true
+end
+
+function AM_buyMask()
+    if AM_busy then return end
+    if AM_hasMaskOn() then return end
+    if _AA_busy then return end
+    if stomping then return end
+    if grabbing then return end
+    if AM_shared_lock then return end
+    if AS_busy then return end
+    
+    local char = _56.Character
+    if not char then return end
+    
+    local hum = char:FindFirstChild("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+    
+    AM_busy = true
+    AM_shared_lock = true
+    
+    local wasVoidActive = _118
+    if wasVoidActive then
+        _118 = false
+        if _121 then
+            _121:Disconnect()
+            _121 = nil
+        end
+        if _120 and _119 then
+            local _148 = _56.Character and _56.Character:FindFirstChildOfClass("Humanoid")
+            if _148 then
+                _148.PlatformStand = true
+            end
+            _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            _120.CFrame = _119
+            task.wait(0.1)
+            if _148 then
+                _148.PlatformStand = false
+            end
+        end
+        _119 = nil
+        task.wait(0.1)
+    end
+    
+    local ch = _56.Character
+    if not ch then
+        AM_busy = false
+        AM_shared_lock = false
+        return
+    end
+    
+    local rt = ch:FindFirstChild("HumanoidRootPart")
+    if not rt then
+        AM_busy = false
+        AM_shared_lock = false
+        return
+    end
+    
+    local maskItem = AM_getMaskItem()
+    if not maskItem then
+        AM_busy = false
+        AM_shared_lock = false
+        return
+    end
+    
+    local clickDetector = maskItem:FindFirstChild("ClickDetector")
+    if not clickDetector then
+        AM_busy = false
+        AM_shared_lock = false
+        return
+    end
+    
+    local primaryPart = maskItem:FindFirstChildWhichIsA("BasePart") or maskItem
+    local oc = rt.CFrame
+    
+    rt.CFrame = primaryPart.CFrame * CFrame.new(0, 2.5, 0)
+    
+    fireclickdetector(clickDetector)
+    task.wait(0.005)
+    fireclickdetector(clickDetector)
+    task.wait(0.005)
+    fireclickdetector(clickDetector)
+    task.wait(0.05)
+    
+    pcall(function()
+        rt.CFrame = oc
+    end)
+    
+    AM_busy = false
+    AM_shared_lock = false
+    
+    if wasVoidActive then
+        if _120 then
+            _119 = _120.CFrame
+        end
+        _118 = true
+        _143()
+        _146()
+        if _121 then
+            _121:Disconnect()
+        end
+        _121 = _52.Heartbeat:Connect(function()
+            if _118 and _120 then
+                local _t = tick()
+                _120.CFrame = CFrame.new(
+                    math.floor((_t * 4423) % 999999991) * math.sign(math.sin(_t * 7919)),
+                    math.floor((_t * 6287) % 999999973) * math.sign(math.cos(_t * 6421)),
+                    math.floor((_t * 3499) % 999999937) * math.sign(math.sin(_t * 8737))
+                ) * CFrame.Angles(
+                    (_t * 17) % (math.pi * 2),
+                    (_t * 31) % (math.pi * 2),
+                    (_t * 53) % (math.pi * 2)
+                )
+            end
+        end)
+    end
+    
+    task.wait(0.1)
+    AM_useMask()
+end
+
+function AM_autoMask()
+    if not Toggles.AutoMask or not Toggles.AutoMask.Value then return end
+    if _AA_busy then return end
+    if AM_busy then return end
+    if AM_shared_lock then return end
+    if stomping then return end
+    if grabbing then return end
+    if AS_busy then return end
+    
+    if not AM_hasMaskOn() then
+        if AM_getMaskTool() then
+            AM_useMask()
+        else
+            AM_buyMask()
+        end
+    end
+end
+
+_78:AddToggle('AutoMask', {
+    Text = 'Auto Mask',
+    Default = false,
+})
+
+Toggles.AutoMask:OnChanged(function(value)
+    if value then
+        task.spawn(AM_autoMask)
+    end
+end)
+
+_56.CharacterAdded:Connect(function()
+    AM_equippedTool = nil
+    task.wait(0.5)
+    
+    if Toggles.AutoMask and Toggles.AutoMask.Value then
+        task.spawn(AM_autoMask)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.05) do
+        if not Toggles.AutoMask or not Toggles.AutoMask.Value then continue end
+        if _AA_busy then continue end
+        if AM_busy then continue end
+        if AM_shared_lock then continue end
+        if stomping then continue end
+        if grabbing then continue end
+        if AS_busy then continue end
+        
+        local char = _56.Character
+        if not char then continue end
+        
+        local hum = char:FindFirstChild("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        
+        if not AM_hasMaskOn() then
+            if AM_getMaskTool() then
+                task.spawn(AM_useMask)
+            else
+                task.spawn(AM_buyMask)
+            end
+        end
+    end
+end)
+
 _78:AddLabel('Auto Armor')
 local _AutoArmorToggle = _78:AddToggle('AutoArmor', {
     Text = 'Auto Armor',
@@ -2086,6 +3058,145 @@ local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
     Title = 'Skeleton Color',
     Transparency = 0
 })
+
+ImageESP_Objects = {}
+ImageESP_Enabled = false
+ImageESP_FilePath = "woodie/image/kitagawa.webp"
+ImageESP_Config = {
+    Size = 3.7,
+    HeightScale = 0.9,
+    Offset = Vector3.new(0, 1, 0),
+    MaxDistance = 500,
+    AspectRatio = Vector2.new(1.5, 1),
+}
+
+function ImageESP_LoadAsset(path)
+    local success, result = pcall(function() return getcustomasset(path) end)
+    return success and result or nil
+end
+
+function ImageESP_Create(plr, img)
+    pcall(function()
+        local torso = plr.Character and (plr.Character:FindFirstChild("LowerTorso") or plr.Character:FindFirstChild("HumanoidRootPart"))
+        if not torso then return end
+        
+        local hipHeight = plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.HipHeight or 2
+        local size = ImageESP_Config.Size * hipHeight * ImageESP_Config.HeightScale
+        local width = size * ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y
+        
+        local part = Instance.new("Part")
+        part.Name = "ESP_" .. plr.UserId
+        part.Size = Vector3.new(width, size, size)
+        part.Transparency = 1
+        part.CanCollide = false
+        part.Anchored = true
+        part.Parent = plr.Character
+        
+        for _, face in pairs({Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right, Enum.NormalId.Top, Enum.NormalId.Bottom}) do
+            local surface = Instance.new("SurfaceGui")
+            surface.Face = face
+            surface.CanvasSize = Vector2.new(100 * (ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y), 100)
+            surface.AlwaysOnTop = true
+            surface.ZIndexBehavior = Enum.ZIndexBehavior.Global
+            surface.Parent = part
+            
+            local imgLabel = Instance.new("ImageLabel")
+            imgLabel.Size = UDim2.new(1, 0, 1, 0)
+            imgLabel.BackgroundTransparency = 1
+            imgLabel.Image = img
+            imgLabel.ScaleType = Enum.ScaleType.Fit
+            imgLabel.Parent = surface
+        end
+        
+        ImageESP_Objects[plr.UserId] = {part = part, torso = torso, player = plr}
+    end)
+end
+
+function ImageESP_UpdatePositions()
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+        
+        for _, data in pairs(ImageESP_Objects) do
+            if data.part and data.part.Parent and data.torso and data.torso.Parent then
+                data.part.CFrame = CFrame.new(data.torso.Position + ImageESP_Config.Offset, cam.CFrame.Position)
+            end
+        end
+    end)
+end
+
+function ImageESP_Refresh()
+    pcall(function()
+        for _, data in pairs(ImageESP_Objects) do
+            if data.part then data.part:Destroy() end
+        end
+        table.clear(ImageESP_Objects)
+        
+        if not ImageESP_Enabled then return end
+        
+        local img = ImageESP_LoadAsset(ImageESP_FilePath)
+        if not img then return end
+        
+        for _, plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                ImageESP_Create(plr, img)
+            end
+        end
+    end)
+end
+
+_78:AddToggle('MarinESP', {
+    Text = 'Marin ESP',
+    Default = false,
+    Callback = function(value)
+        ImageESP_Enabled = value
+        ImageESP_Refresh()
+    end,
+})
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.51)
+    if ImageESP_Enabled then ImageESP_Refresh() end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+    plr.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if ImageESP_Enabled then
+            local img = ImageESP_LoadAsset(ImageESP_FilePath)
+            if img then ImageESP_Create(plr, img) end
+        end
+    end)
+    plr.CharacterRemoving:Connect(function()
+        local data = ImageESP_Objects[plr.UserId]
+        if data and data.part then
+            data.part:Destroy()
+            ImageESP_Objects[plr.UserId] = nil
+        end
+    end)
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+    local data = ImageESP_Objects[plr.UserId]
+    if data and data.part then
+        data.part:Destroy()
+        ImageESP_Objects[plr.UserId] = nil
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if ImageESP_Enabled then ImageESP_UpdatePositions() end
+        task.wait()
+    end
+end)
+
+_48:OnUnload(function()
+    for _, data in pairs(ImageESP_Objects) do
+        if data.part then data.part:Destroy() end
+    end
+    table.clear(ImageESP_Objects)
+end)
 
 _78:AddDivider()
 local _TPDropdown = _78:AddDropdown('TPPlayer', {
@@ -4187,7 +5298,7 @@ function autoStompTarget()
     end)
 end
 
-
+-- Auto grab
 GrabToggle:OnChanged(function(value)
     GrabEnabled = value
     if not value and isGrabbing then
@@ -4304,6 +5415,11 @@ function autoGrabTarget()
     
     if not targetPart then return end
     
+    pcall(function() 
+        localHRP:SetNetworkOwner(_56) 
+        targetPart:SetNetworkOwner(_56)
+    end)
+    
     lastGrabAttempt = tick()
     
     grabReturnPos = localHRP.CFrame
@@ -4339,6 +5455,10 @@ function autoGrabTarget()
                 or targetChar:FindFirstChild("LowerTorso")
             
             if targetPart then
+                pcall(function() 
+                    targetPart:SetNetworkOwner(_56)
+                end)
+                
                 grabPos = targetPart.Position + Vector3.new(0, GRAB_CONFIG.HEIGHT_ABOVE_TARGET, 0)
                 localHRP.CFrame = CFrame.new(grabPos)
             end
@@ -4401,6 +5521,57 @@ task.spawn(function()
             task.wait(0.5)
         end
     end
+end)
+
+FaceTargetConnection = nil
+
+function DoFaceTarget()
+    pcall(function()
+        local char = _56.Character
+        if not char then return end
+        
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        
+        if not humanoid or not hrp then return end
+        
+        if _104 and _104.targetplayer then
+            humanoid.AutoRotate = false
+            
+            local targetChar = _104.targetplayer.Character
+            if targetChar then
+                local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+                if targetHRP then
+                    local old = hrp.Position
+                    local target = targetHRP.Position
+                    hrp.CFrame = CFrame.new(old, Vector3.new(target.X, old.Y, target.Z))
+                end
+            end
+        else
+            humanoid.AutoRotate = true
+        end
+    end)
+end
+
+Toggles.FaceTarget:OnChanged(function(value)
+    pcall(function()
+        if FaceTargetConnection then
+            FaceTargetConnection:Disconnect()
+            FaceTargetConnection = nil
+        end
+        
+        local char = _56.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.AutoRotate = true
+        end
+        
+        if value then
+            FaceTargetConnection = RunService.Heartbeat:Connect(function()
+                DoFaceTarget()
+            end)
+        end
+    end)
 end)
 
 -- always afk
