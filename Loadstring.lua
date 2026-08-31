@@ -7909,33 +7909,36 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-    while true do
-        if Toggles.AutoEquipDB and Toggles.AutoEquipDB.Value then
-            local char = _56.Character
-            local bp = _56.Backpack
-            local holding = char and char:FindFirstChildWhichIsA("Tool")
-            if not (holding and holding.Name:lower():find("double")) then
-                local db = nil
-                for _, t in ipairs(bp:GetChildren()) do
-                    if t:IsA("Tool") and t.Name:lower():find("double") then
-                        db = t
-                        break
-                    end
-                end
-                if not db and char then
-                    for _, t in ipairs(char:GetChildren()) do
-                        if t:IsA("Tool") and t.Name:lower():find("double") then
-                            db = t
-                            break
-                        end
-                    end
-                end
-                if db and char then
-                    db.Parent = char
+    while task.wait(0.01) do
+        if not Toggles.AutoEquipDB or not Toggles.AutoEquipDB.Value then continue end
+        local char = _56.Character
+        if not char then continue end
+        local bp = _56.Backpack
+        if not bp then continue end
+        local humanoid = char:FindFirstChild("Humanoid")
+        if not humanoid or humanoid.Health <= 0 then continue end
+        local holding = char:FindFirstChildWhichIsA("Tool")
+        if holding and holding.Parent == char and holding.Name:lower():find("double") then continue end
+        local db = nil
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and t.Name:lower():find("double") then
+                db = t
+                break
+            end
+        end
+        if not db then
+            for _, t in ipairs(char:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find("double") then
+                    db = t
+                    break
                 end
             end
         end
-        task.wait(0.01)
+        if db and db.Parent ~= char then
+            pcall(function()
+                db.Parent = char
+            end)
+        end
     end
 end)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
