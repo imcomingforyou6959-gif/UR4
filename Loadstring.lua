@@ -6250,6 +6250,16 @@ local function _205()
     end
 end
 
+function hasKO(player)
+    if not player then return false end
+    local char = player.Character
+    if not char then return false end
+    local bodyEffects = char:FindFirstChild("BodyEffects")
+    if not bodyEffects then return false end
+    local ko = bodyEffects:FindFirstChild("K.O")
+    return ko and ko.Value == true
+end
+
 local function _206()
     if not _104.autoshoot or not _104.active then return end
     local _145 = _56.Character and _56.Character:FindFirstChildOfClass("Tool")
@@ -6261,14 +6271,16 @@ local function _206()
         local _174 = _173()
         if #_174 == 0 then return end
         for _, _154 in ipairs(_174) do
-            if _182(_154) then
+            if _182(_154) and not hasKO(_154) then
                 _145:Activate()
                 task.wait(0.05)
                 break
             end
         end
     else
-        if not _104.targetplayer or not _182(_104.targetplayer) then return end
+        if not _104.targetplayer or not _182(_104.targetplayer) or hasKO(_104.targetplayer) then
+            return
+        end
         _145:Activate()
         task.wait(0.05)
     end
@@ -7200,6 +7212,8 @@ end)
 
 -- < Box Core > --
 
+local box_gradient_data = base64_decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAABkCAYAAABHLFpgAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABTSURBVChTdU/LDsAwCGJu1/3/59rUC5HAhaA8bNHdfwF4LrwbagN3wgakwMVc4ttCTLhxmKjOIma5S5VfiC0TE180R8aRIAJvuJfGGHcsoHoZ6gCUSgTCpTUDpwAAAABJRU5ErkJggg==")
+
 Options.BoxESPColor:OnChanged(function()
     _G.box_esp_color = Options.BoxESPColor.Value
 end)
@@ -7277,6 +7291,17 @@ function createBoxESP(player)
     fillBox.Visible = _G.box_esp_filled
     fillBox.Parent = boxContainer
 
+    local gradientImage = Instance.new("ImageLabel")
+    gradientImage.Name = "Gradient"
+    gradientImage.BackgroundTransparency = 1
+    gradientImage.Image = box_gradient_data
+    gradientImage.ImageTransparency = 0
+    gradientImage.ImageColor3 = _G.box_esp_fill_color
+    gradientImage.ScaleType = Enum.ScaleType.Stretch
+    gradientImage.ZIndex = 5
+    gradientImage.Visible = _G.box_esp_filled
+    gradientImage.Parent = boxContainer
+
     -- Health Bar
     local healthBarBackground = Instance.new("Frame")
     healthBarBackground.Name = "HealthBG"
@@ -7327,7 +7352,7 @@ function createBoxESP(player)
     })
     armorBarGradient.Parent = armorBar
 
-    return screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox, 
+    return screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox, gradientImage,
            healthBarBackground, healthBar, armorBarBackground, armorBar
 end
 
@@ -7339,6 +7364,7 @@ function updateBoxESP(player, boxData)
     local leftLine = boxData.leftLine
     local rightLine = boxData.rightLine
     local fillBox = boxData.fillBox
+    local gradientImage = boxData.gradientImage
     local healthBarBackground = boxData.healthBarBackground
     local healthBar = boxData.healthBar
     local armorBarBackground = boxData.armorBarBackground
@@ -7350,9 +7376,8 @@ function updateBoxESP(player, boxData)
         return
     end
 
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
     local humanoid = character:FindFirstChild("Humanoid")
-    if not rootPart or not humanoid or humanoid.Health <= 0 then
+    if not humanoid or humanoid.Health <= 0 then
         screenGui.Enabled = false
         return
     end
@@ -7363,25 +7388,41 @@ function updateBoxESP(player, boxData)
         return
     end
 
-    local rootScreenPos, rootOnScreen = camera:WorldToViewportPoint(rootPart.Position)
-
-    if not rootOnScreen then
+    local headPart = character:FindFirstChild("Head")
+    local torsoPart = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    
+    if not headPart or not torsoPart or not rootPart then
         screenGui.Enabled = false
         return
     end
 
-    local headPart = character:FindFirstChild("Head")
-    local headTopPos = headPart and (headPart.Position + Vector3.new(0, 1.2, 0)) or (rootPart.Position + Vector3.new(0, 3, 0))
-    local feetPos = rootPart.Position - Vector3.new(0, 3.2, 0)
+    local headTopWorld = headPart.Position + Vector3.new(0, headPart.Size.Y / 2 + 0.5, 0)
+    local feetWorld = rootPart.Position - Vector3.new(0, 3.5, 0)
 
-    local headTopScreenPos = camera:WorldToViewportPoint(headTopPos)
-    local feetScreenPos = camera:WorldToViewportPoint(feetPos)
+    local headTopScreen, headTopOnScreen = camera:WorldToViewportPoint(headTopWorld)
+    local feetScreen, feetOnScreen = camera:WorldToViewportPoint(feetWorld)
+    local rootScreen, rootOnScreen = camera:WorldToViewportPoint(rootPart.Position)
 
-    local height = math.abs(headTopScreenPos.Y - feetScreenPos.Y)
+    if not headTopOnScreen or not feetOnScreen or not rootOnScreen then
+        screenGui.Enabled = false
+        return
+    end
+
+    screenGui.Enabled = true
+    boxContainer.Visible = true
+
+    local height = math.abs(feetScreen.Y - headTopScreen.Y)
     local width = height * 0.55
 
-    local centerPos = Vector2.new(rootScreenPos.X, (headTopScreenPos.Y + feetScreenPos.Y) / 2)
-    local topLeft = centerPos - Vector2.new(width / 2, height / 2)
+    local centerX = rootScreen.X
+    local centerY = (headTopScreen.Y + feetScreen.Y) / 2
+
+    local boxX = centerX - (width / 2)
+    local boxY = headTopScreen.Y
+
+    local thickness = _G.box_esp_thickness
+    local fillInset = 1
 
     local boxColor = _G.box_esp_color
     topLine.BackgroundColor3 = boxColor
@@ -7391,31 +7432,30 @@ function updateBoxESP(player, boxData)
     fillBox.BackgroundColor3 = _G.box_esp_fill_color
     fillBox.BackgroundTransparency = _G.box_esp_fill_transparency
     fillBox.Visible = _G.box_esp_filled
-
-    screenGui.Enabled = true
-    boxContainer.Visible = true
-
-    local thickness = _G.box_esp_thickness
-    local offset = math.floor(thickness / 2)
+    gradientImage.ImageColor3 = _G.box_esp_fill_color
+    gradientImage.ImageTransparency = 0
+    gradientImage.Visible = _G.box_esp_filled
 
     topLine.Size = UDim2.new(0, width, 0, thickness)
-    topLine.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y - offset)
+    topLine.Position = UDim2.new(0, boxX, 0, boxY)
 
     bottomLine.Size = UDim2.new(0, width, 0, thickness)
-    bottomLine.Position = UDim2.new(0, topLeft.X, 0, topLeft.Y + height - thickness + offset)
+    bottomLine.Position = UDim2.new(0, boxX, 0, boxY + height - thickness)
 
     leftLine.Size = UDim2.new(0, thickness, 0, height)
-    leftLine.Position = UDim2.new(0, topLeft.X - offset, 0, topLeft.Y)
+    leftLine.Position = UDim2.new(0, boxX, 0, boxY)
 
     rightLine.Size = UDim2.new(0, thickness, 0, height)
-    rightLine.Position = UDim2.new(0, topLeft.X + width - thickness + offset, 0, topLeft.Y)
+    rightLine.Position = UDim2.new(0, boxX + width - thickness, 0, boxY)
 
-    fillBox.Size = UDim2.new(0, width - thickness * 2, 0, height - thickness * 2)
-    fillBox.Position = UDim2.new(0, topLeft.X + thickness, 0, topLeft.Y + thickness)
+    fillBox.Size = UDim2.new(0, width - fillInset * 2, 0, height - fillInset * 2)
+    fillBox.Position = UDim2.new(0, boxX + fillInset, 0, boxY + fillInset)
 
-    -- Handle bars
-    local barX = topLeft.X - 5
-    local barY = topLeft.Y
+    gradientImage.Size = UDim2.new(0, width - fillInset * 2, 0, height - fillInset * 2)
+    gradientImage.Position = UDim2.new(0, boxX + fillInset, 0, boxY + fillInset)
+
+    local barX = boxX - 5
+    local barY = boxY
 
     if _G.box_esp_bar_types["Health"] then
         local health_per = math.floor((humanoid.Health / humanoid.MaxHealth) * 100)
@@ -7468,7 +7508,7 @@ Toggles.BoxESPEnabled:OnChanged(function(value)
     if value then
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
-                local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox,
+                local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox, gradientImage,
                       healthBarBackground, healthBar, armorBarBackground, armorBar = createBoxESP(player)
                 _G.box_esp_boxes[player] = {
                     screenGui = screenGui,
@@ -7478,6 +7518,7 @@ Toggles.BoxESPEnabled:OnChanged(function(value)
                     leftLine = leftLine,
                     rightLine = rightLine,
                     fillBox = fillBox,
+                    gradientImage = gradientImage,
                     healthBarBackground = healthBarBackground,
                     healthBar = healthBar,
                     armorBarBackground = armorBarBackground,
@@ -7498,7 +7539,7 @@ end)
 
 Players.PlayerAdded:Connect(function(player)
     if Toggles.BoxESPEnabled.Value then
-        local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox,
+        local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine, fillBox, gradientImage,
               healthBarBackground, healthBar, armorBarBackground, armorBar = createBoxESP(player)
         _G.box_esp_boxes[player] = {
             screenGui = screenGui,
@@ -7508,6 +7549,7 @@ Players.PlayerAdded:Connect(function(player)
             leftLine = leftLine,
             rightLine = rightLine,
             fillBox = fillBox,
+            gradientImage = gradientImage,
             healthBarBackground = healthBarBackground,
             healthBar = healthBar,
             armorBarBackground = armorBarBackground,
@@ -7971,7 +8013,7 @@ end
 
 function _AA_validArmorName(n)
     n = string.lower(n):gsub("%s+", ""):gsub("%-", "")
-    if not string.find(n, "armor") or string.find(n, "fire") or string.find(n, "medium") or string.find(n, "mdedium") then
+    if not string.find(n, "armor") or string.find(n, "fire") or string.find(n, "medium") or string.find(n, "mdedium") or string.find(n, "high") then
         return false
     end
     return true
@@ -7979,15 +8021,21 @@ end
 
 function _AA_findBest()
     local shop = workspace.Ignored:FindFirstChild("Shop")
-    if not shop then return nil end
-    
-    local ba, bs = nil, -math.huge
-    
-    for _, item in ipairs(shop:GetChildren()) do
-        if item:FindFirstChild("ClickDetector") and _AA_validArmorName(item.Name) then
-            local pr = item:FindFirstChild("Price")
-            if pr and pr:IsA("ValueBase") then
-                local sc = pr.Value
+    if shop then
+        local ba, bs = nil, -math.huge
+        
+        for _, item in ipairs(shop:GetChildren()) do
+            if item:FindFirstChild("ClickDetector") and _AA_validArmorName(item.Name) then
+                local pr = item:FindFirstChild("Price")
+                local sc = 0
+                if pr and pr:IsA("ValueBase") then
+                    sc = pr.Value
+                elseif item:FindFirstChild("IntValue") then
+                    sc = item.IntValue.Value
+                elseif item:FindFirstChild("NumberValue") then
+                    sc = item.NumberValue.Value
+                end
+                
                 if string.find(string.lower(item.Name), "full") then
                     sc = sc + 100000
                 end
@@ -7997,22 +8045,37 @@ function _AA_findBest()
                 end
             end
         end
+        
+        if ba then return ba end
+    end
+    
+    local ba, bs = nil, -math.huge
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if _AA_validArmorName(v.Name) and v:FindFirstChild("ClickDetector") then
+            local pr = v:FindFirstChild("Price")
+            local sc = 0
+            if pr and pr:IsA("ValueBase") then
+                sc = pr.Value
+            elseif v:FindFirstChild("IntValue") then
+                sc = v.IntValue.Value
+            elseif v:FindFirstChild("NumberValue") then
+                sc = v.NumberValue.Value
+            end
+            
+            if string.find(string.lower(v.Name), "full") then
+                sc = sc + 100000
+            end
+            if sc > bs then
+                bs = sc
+                ba = v
+            end
+        end
     end
     
     if not ba then
         for _, v in ipairs(workspace:GetDescendants()) do
-            if _AA_validArmorName(v.Name) and v:FindFirstChild("ClickDetector") then
-                local pr = v:FindFirstChild("Price")
-                if pr and pr:IsA("ValueBase") then
-                    local sc = pr.Value
-                    if string.find(string.lower(v.Name), "full") then
-                        sc = sc + 100000
-                    end
-                    if sc > bs then
-                        bs = sc
-                        ba = v
-                    end
-                end
+            if v:FindFirstChild("ClickDetector") and string.find(string.lower(v.Name), "armor") then
+                return v
             end
         end
     end
@@ -8112,6 +8175,9 @@ function _AA_buy()
         return
     end
     
+    local hum = ch:FindFirstChild("Humanoid")
+    local originalPos = rt.CFrame
+
     local t0 = tick()
     local threshold = Options.AutoArmorThreshold and Options.AutoArmorThreshold.Value or 200
     
@@ -8132,28 +8198,42 @@ function _AA_buy()
         if not pt or not cd then break end
         
         local oc = rt.CFrame
-        rt.CFrame = pt.CFrame * CFrame.new(0, 2, 0)
         
-        for i = 1, 15 do
+        if hum then
+            hum.Jump = true
+            task.wait(0.015)
+        end
+        
+        rt.CFrame = pt.CFrame * CFrame.new(0, 3, 0)
+        rt.AssemblyLinearVelocity = Vector3.new(0, 30, 0)
+        
+        for i = 1, 20 do
             fireclickdetector(cd)
+            task.wait(0.002)
+        end
+        
+        local gotArmor = false
+        for i = 1, 10 do
+            if _AA_getArmorValue() > sv then
+                gotArmor = true
+                break
+            end
             task.wait(0.01)
         end
         
-        local okk = false
-        local w0 = tick()
-        repeat
-            if _AA_getArmorValue() > sv then okk = true break end
-            task.wait(0.05)
-        until tick() - w0 > 0.5
+        rt.CFrame = oc * CFrame.new(0, 4, 0)
+        rt.AssemblyLinearVelocity = Vector3.new(0, -10, 0)
+        
+        if gotArmor then
+            break
+        end
         
         rt.CFrame = oc
-        
-        if okk then
-            task.wait(0.05)
-        else
-            task.wait(0.1)
-        end
+        task.wait(0.02)
     end
+    
+    rt.CFrame = originalPos
+    rt.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     
     _AA_busy = false
     
