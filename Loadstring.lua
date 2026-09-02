@@ -2138,7 +2138,41 @@ _78:AddSlider('JumpPower', {
     Suffix = '',
 })
 _78:AddDivider()
--- Tool Material (compact)
+_78:AddLabel('#Love ur neighbors')
+
+_78:AddToggle('SpreadEnabled', {
+    Text = 'Spread Modifier',
+    Default = false,
+})
+
+_78:AddSlider('SpreadAmount', {
+    Text = 'Spread Amount',
+    Default = 10,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = '%',
+})
+
+local _oldRandom
+_oldRandom = hookfunction(math.random, function(...)
+    if checkcaller() then return _oldRandom(...) end
+    
+    if Toggles.SpreadEnabled and Toggles.SpreadEnabled.Value then
+        local args = {...}
+        if (#args == 0) or 
+           (args[1] == -0.05 and args[2] == 0.05) or 
+           (args[1] == -0.1) or 
+           (args[1] == -0.05) then
+            local spread = Options.SpreadAmount and Options.SpreadAmount.Value or 10
+            return _oldRandom(...) * (spread / 100)
+        end
+    end
+    
+    return _oldRandom(...)
+end)
+
+_78:AddDivider()
 _78:AddToggle('ToolMat', {
     Text = 'Tool Material',
     Default = false,
@@ -2492,121 +2526,65 @@ function AS_stopRandomEquip()
 end
 
 function AS_buyStim()
-    if AS_busy then return end
-    if AS_hasStim() then return end
-    if _AA_busy then return end
-    if stomping then return end
-    if grabbing then return end
-    if AS_shared_lock then return end
-    
+    if AS_busy or AS_hasStim() or _AA_busy or stomping or grabbing or AS_shared_lock then return end
     local char = _56.Character
     if not char then return end
-    
     local hum = char:FindFirstChild("Humanoid")
     if not hum or hum.Health <= 0 then return end
-    
     AS_busy = true
     AS_shared_lock = true
-    
     AS_unequipCurrentTool()
-    
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
-        if _121 then
-            _121:Disconnect()
-            _121 = nil
-        end
+        if _121 then _121:Disconnect() _121 = nil end
         if _120 and _119 then
             local _148 = _56.Character and _56.Character:FindFirstChildOfClass("Humanoid")
-            if _148 then
-                _148.PlatformStand = true
-            end
-            _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            if _148 then _148.PlatformStand = true end
+            _120.AssemblyLinearVelocity = Vector3.new(0,0,0)
+            _120.AssemblyAngularVelocity = Vector3.new(0,0,0)
             _120.CFrame = _119
             task.wait(0.05)
-            if _148 then
-                _148.PlatformStand = false
-            end
+            if _148 then _148.PlatformStand = false end
         end
         _119 = nil
         task.wait(0.05)
     end
-    
     local ch = _56.Character
-    if not ch then
-        AS_busy = false
-        AS_shared_lock = false
-        return
-    end
-    
+    if not ch then AS_busy = false AS_shared_lock = false return end
     local rt = ch:FindFirstChild("HumanoidRootPart")
-    if not rt then
-        AS_busy = false
-        AS_shared_lock = false
-        return
-    end
-    
+    if not rt then AS_busy = false AS_shared_lock = false return end
     local stimItem = AS_getStimItem()
-    if not stimItem then
-        AS_reequipTool()
-        AS_busy = false
-        AS_shared_lock = false
-        return
-    end
-    
+    if not stimItem then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
     local clickDetector = stimItem:FindFirstChild("ClickDetector")
-    if not clickDetector then
-        AS_reequipTool()
-        AS_busy = false
-        AS_shared_lock = false
-        return
-    end
-    
+    if not clickDetector then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
-    
-    for attempt = 1, 3 do
-        if stomping or grabbing or _AA_busy then break end
-        if not _56.Character then break end
-        
-        rt = _56.Character:FindFirstChild("HumanoidRootPart")
-        if not rt then break end
-        
-        rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
-        
-        for i = 1, 10 do
-            fireclickdetector(clickDetector)
-            task.wait(0.005)
-        end
-        
-        task.wait(0.03)
-        
-        if AS_hasStim() then
-            break
+    rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
+    for i = 1, 10 do fireclickdetector(clickDetector) task.wait(0.005) end
+    task.wait(0.03)
+    if not AS_hasStim() then
+        for attempt = 1, 2 do
+            if stomping or grabbing or _AA_busy then break end
+            if not _56.Character then break end
+            rt = _56.Character:FindFirstChild("HumanoidRootPart")
+            if not rt then break end
+            rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
+            for i = 1, 10 do fireclickdetector(clickDetector) task.wait(0.005) end
+            task.wait(0.03)
+            if AS_hasStim() then break end
         end
     end
-    
-    pcall(function()
-        rt.CFrame = oc
-    end)
-    
+    pcall(function() rt.CFrame = oc end)
     task.wait(0.05)
-    
     AS_busy = false
     AS_shared_lock = false
-    
     if wasVoidActive then
-        if _120 then
-            _119 = _120.CFrame
-        end
+        if _120 then _119 = _120.CFrame end
         _118 = true
         _143()
         _146()
-        if _121 then
-            _121:Disconnect()
-        end
+        if _121 then _121:Disconnect() end
         _121 = _52.Heartbeat:Connect(function()
             if _118 and _120 then
                 local _t = tick()
@@ -2622,106 +2600,62 @@ function AS_buyStim()
             end
         end)
     end
-    
     task.wait(0.05)
     AS_reequipTool()
 end
 
 function AS_autoStim()
-    if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
-    if _AA_busy then return end
-    if AS_busy then return end
-    if AS_shared_lock then return end
-    if stomping then return end
-    if grabbing then return end
-    
+    if not Toggles.AutoStim or not Toggles.AutoStim.Value or _AA_busy or AS_busy or AS_shared_lock or stomping or grabbing then return end
     local hp, maxHp = AS_getHealth()
+    if hp >= maxHp then return end
     local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
-    
     if not AS_hasStim() then
         if AS_buyStimEnabled or hp < maxHp then
             AS_buyStim()
             task.wait(0.05)
-            if AS_hasStim() and hp < maxHp then
-                AS_useStim()
-            end
+            if AS_hasStim() and hp < maxHp then AS_useStim() end
         end
-    elseif hp <= threshold and hp < maxHp then
+    elseif hp <= threshold then
         AS_useStim()
     end
 end
 
-_78:AddToggle('AutoStim', {
-    Text = 'Auto Stim',
-    Default = false,
-})
+_78:AddToggle('AutoStim', {Text='Auto Stim',Default=false})
+_78:AddToggle('BuyStim', {Text='Buy Stim',Default=false})
+_78:AddSlider('AutoStimThreshold', {Text='Health Threshold',Default=50,Min=10,Max=100,Rounding=0,Suffix=' HP'})
 
-_78:AddToggle('BuyStim', {
-    Text = 'Buy Stim',
-    Default = false,
-})
-
-_78:AddSlider('AutoStimThreshold', {
-    Text = 'Health Threshold',
-    Default = 50,
-    Min = 10,
-    Max = 100,
-    Rounding = 0,
-    Suffix = ' HP',
-})
-
-Toggles.BuyStim:OnChanged(function(value)
-    AS_buyStimEnabled = value
-end)
-
-Toggles.AutoStim:OnChanged(function(value)
-    if value then
-        AS_startRandomEquip()
-        task.spawn(AS_autoStim)
-    else
-        AS_stopRandomEquip()
-    end
+Toggles.BuyStim:OnChanged(function(v) AS_buyStimEnabled = v end)
+Toggles.AutoStim:OnChanged(function(v)
+    if v then AS_startRandomEquip() task.spawn(AS_autoStim) else AS_stopRandomEquip() end
 end)
 
 _56.CharacterAdded:Connect(function()
     AS_cache = nil
     AS_equippedTool = nil
     task.wait(0.3)
-    
-    if Toggles.AutoStim and Toggles.AutoStim.Value then
-        task.spawn(AS_autoStim)
-    end
+    if Toggles.AutoStim and Toggles.AutoStim.Value then task.spawn(AS_autoStim) end
 end)
 
-task.spawn(function()
+local autoStimLoop
+autoStimLoop = task.spawn(function()
     while task.wait(0.03) do
-        if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
-        if _AA_busy then continue end
-        if AS_busy then continue end
-        if AS_shared_lock then continue end
-        if stomping then continue end
-        if grabbing then continue end
-        
+        if not Toggles.AutoStim or not Toggles.AutoStim.Value or _AA_busy or AS_busy or AS_shared_lock or stomping or grabbing then continue end
         local char = _56.Character
         if not char then continue end
-        
         local hum = char:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        
         local hp, maxHp = AS_getHealth()
+        if hp >= maxHp then continue end
         local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
-        
         if not AS_hasStim() then
             if AS_buyStimEnabled or hp < maxHp then
                 task.spawn(function()
                     AS_buyStim()
                     task.wait(0.05)
-                    if AS_hasStim() and hp < maxHp then
-                        AS_useStim()
-                    end
+                    if AS_hasStim() and hp < maxHp then AS_useStim() end
                 end)
             end
-        elseif hp <= threshold and hp < maxHp then
+        elseif hp <= threshold then
             task.spawn(AS_useStim)
         end
     end
@@ -7914,16 +7848,78 @@ _48:OnUnload(function()
     if _121 then _121:Disconnect() _121 = nil end
     if _133 then _133:Destroy() end
     _138()
-    
     if _ForceRestHeartbeat then _ForceRestHeartbeat:Disconnect() end
     if _NoclipConnection then _NoclipConnection:Disconnect() end
     if _WSConnection then _WSConnection:Disconnect() end
     if _JPConnection then _JPConnection:Disconnect() end
     if skeletonConnection then skeletonConnection:Disconnect() end
     if _AA_connections and _AA_connections.charAdded then _AA_connections.charAdded:Disconnect() end
-
-    for player in pairs(skeletonLines) do cleanupSkeleton(player) end
-    skeletonLines, skeletonCache = {}, {}
+    if SpinbotConnection then SpinbotConnection:Disconnect() SpinbotConnection = nil end
+    if FaceTargetConnection then FaceTargetConnection:Disconnect() FaceTargetConnection = nil end
+    if afkThread then task.cancel(afkThread) afkThread = nil end
+    if _G.box_esp_connection then _G.box_esp_connection:Disconnect() _G.box_esp_connection = nil end
+    for _, boxData in pairs(_G.box_esp_boxes) do if boxData and boxData.screenGui then pcall(function() boxData.screenGui:Destroy() end) end end
+    table.clear(_G.box_esp_boxes)
+    for _, label in pairs(ESP.labels) do if label then pcall(function() label:Destroy() end) end end
+    table.clear(ESP.labels)
+    for player, lines in pairs(skeletonLines) do if lines then for _, line in ipairs(lines) do pcall(function() line:Remove() end) end end end
+    table.clear(skeletonLines)
+    for player, conn in pairs(skeletonConnections) do if conn then pcall(function() conn:Disconnect() end) end end
+    table.clear(skeletonConnections)
+    if skeletonRenderConnection then skeletonRenderConnection:Disconnect() skeletonRenderConnection = nil end
+    if skeletonPlayerRemovingConnection then skeletonPlayerRemovingConnection:Disconnect() skeletonPlayerRemovingConnection = nil end
+    for _, data in pairs(ImageESP_Objects) do if data and data.part then pcall(function() data.part:Destroy() end) end end
+    table.clear(ImageESP_Objects)
+    if _G.weather_part then pcall(function() _G.weather_part:Destroy() end) _G.weather_part = nil end
+    if _G.weather_particle then pcall(function() _G.weather_particle:Destroy() end) _G.weather_particle = nil end
+    if _G.background_sound then pcall(function() _G.background_sound:Stop() _G.background_sound:Destroy() end) _G.background_sound = nil end
+    if _131 then pcall(function() _131:Destroy() end) _131 = nil end
+    if _132 then pcall(function() _132:Destroy() end) _132 = nil end
+    if _G.TrailEnabled then local char = LocalPlayer.Character if char then local hrp = char:FindFirstChild('HumanoidRootPart') if hrp then for _, child in ipairs(hrp:GetChildren()) do if child:IsA('Trail') and child.Name == 'PlayerTrail' then pcall(function() child:Destroy() end) end end end end end
+    if _G.aurp then for i = 1, #_G.aurp do if _G.aurp[i] then pcall(function() _G.aurp[i]:Destroy() end) end end table.clear(_G.aurp) end
+    local char = LocalPlayer.Character if char then local ff = char:FindFirstChild("FakeFF") if ff then pcall(function() ff:Destroy() end) end end
+    if _G.Emotes and _G.Emotes.CurrentAnimation then pcall(function() _G.Emotes.CurrentAnimation:Stop() end) _G.Emotes.CurrentAnimation = nil end
+    if _G.AntiStompConnection then _G.AntiStompConnection:Disconnect() _G.AntiStompConnection = nil end
+    if _G.AntiStompCharAdded then _G.AntiStompCharAdded:Disconnect() _G.AntiStompCharAdded = nil end
+    if _G.anti_sit_connection then _G.anti_sit_connection:Disconnect() _G.anti_sit_connection = nil end
+    if _G.anti_sit_char_connection then _G.anti_sit_char_connection:Disconnect() _G.anti_sit_char_connection = nil end
+    for player, conn in pairs(_G.antiFlingConnections) do if conn then pcall(function() conn:Disconnect() end) end end
+    table.clear(_G.antiFlingConnections)
+    if stompConnection then stompConnection:Disconnect() stompConnection = nil end
+    if isGrabbing then isGrabbing = false grabbedTarget = nil grabReturnPos = nil end
+    if DefenseCircleConnection then DefenseCircleConnection:Disconnect() DefenseCircleConnection = nil end
+    if DefenseCircleVisualConnection then DefenseCircleVisualConnection:Disconnect() DefenseCircleVisualConnection = nil end
+    cleanupCircleVisuals()
+    if flightBody then if flightBody.bg then flightBody.bg:Destroy() end if flightBody.bv then flightBody.bv:Destroy() end flightBody = nil end
+    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+    if infiniteJumpConn then infiniteJumpConn:Disconnect() infiniteJumpConn = nil end
+    if walkspeedConn then walkspeedConn:Disconnect() walkspeedConn = nil end
+    if jumpConnection then jumpConnection:Disconnect() jumpConnection = nil end
+    if fullbrightConn then fullbrightConn:Disconnect() fullbrightConn = nil end
+    if lightingConn then lightingConn:Disconnect() lightingConn = nil end
+    if rotatingSkyConn then rotatingSkyConn:Disconnect() rotatingSkyConn = nil end
+    resetTextureColors()
+    resetMats()
+    if origSky then applySky(nil) origSky = nil end
+    if fovCircle then pcall(function() fovCircle:Remove() end) fovCircle = nil end
+    if camlockFOVCircle then pcall(function() camlockFOVCircle:Remove() end) camlockFOVCircle = nil end
+    if btpLine then pcall(function() btpLine:Remove() end) btpLine = nil end
+    for _, drop in pairs(rainDrops) do if drop and drop.line then pcall(function() drop.line:Remove() end) end end
+    table.clear(rainDrops)
+    for m in pairs(activeWeaponHighlights) do if m then pcall(function() local g = activeWeaponHighlights[m] if g then g:Destroy() end end) end end
+    table.clear(activeWeaponHighlights)
+    _G.x7f3k9m2 = false
+    table.clear(_G.b8n4v6d2)
+    table.clear(_G.j2h5g8f1)
+    table.clear(_G.lastNotifyTime)
+    _G.serverHopOnMod = false
+    if _oldRandom then pcall(function() hookfunction(math.random, _oldRandom) end) _oldRandom = nil end
+    pcall(function() cam.CameraType = Enum.CameraType.Custom cam.FieldOfView = 70 end)
+    pcall(function() Lighting.Brightness = origL.Brightness Lighting.ClockTime = origL.ClockTime Lighting.GlobalShadows = origL.GlobalShadows Lighting.FogStart = origL.FogStart Lighting.FogEnd = origL.FogEnd Lighting.FogColor = origL.FogColor end)
+    pcall(function() RunService:UnbindFromRenderStep("KlaxCamlock") end)
+    uninstallSilentAimHooksHard()
+    skeletonCache = {}
+    if collectgarbage then collectgarbage() end
 end)
 
 _AR_Running = true
@@ -8304,7 +8300,8 @@ if _56.Character then
 end
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Cilent.lua'))()
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RangeHelper.lua'))()
+-- for das hood
+if game.PlaceId == 89723161599525 then pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RangeHelper.lua'))() end) end
 
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua'))()
 return {
