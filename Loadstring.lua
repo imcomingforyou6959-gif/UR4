@@ -2350,6 +2350,8 @@ AS_blacklistedTools = {
     "[Flintlock]",
     "Mask",
     "mask",
+    "[Hamburger]",
+    "[Pizza]",
 }
 
 function AS_isBlacklisted(toolName)
@@ -2666,7 +2668,16 @@ AM_busy = false
 AM_shared_lock = false
 AM_equippedTool = nil
 
+disabledstupid = {
+    [94800144025323] = true,
+}
+
+function AM_isDisabled()
+    return disabledstupid[game.PlaceId] == true
+end
+
 function AM_getMaskItem()
+    if AM_isDisabled() then return nil end
     local shop = workspace.Ignored:FindFirstChild("Shop")
     if not shop then return nil end
     
@@ -2691,6 +2702,7 @@ function AM_getMaskItem()
 end
 
 function AM_getMaskTool()
+    if AM_isDisabled() then return nil end
     local char = _56.Character
     if not char then return nil end
     
@@ -2725,6 +2737,7 @@ function AM_getMaskTool()
 end
 
 function AM_hasMaskOn()
+    if AM_isDisabled() then return false end
     local playersFolder = workspace:FindFirstChild("Players")
     if playersFolder then
         local localFolder = playersFolder:FindFirstChild(_56.Name)
@@ -2739,6 +2752,7 @@ function AM_hasMaskOn()
 end
 
 function AM_useMask()
+    if AM_isDisabled() then return false end
     local char = _56.Character
     if not char then return false end
     
@@ -2772,6 +2786,7 @@ function AM_useMask()
 end
 
 function AM_buyMask()
+    if AM_isDisabled() then return end
     if AM_busy then return end
     if AM_shared_lock then return end
     if AM_hasMaskOn() then return end
@@ -2891,6 +2906,7 @@ function AM_buyMask()
 end
 
 function AM_autoMask()
+    if AM_isDisabled() then return end
     if not Toggles.AutoMask or not Toggles.AutoMask.Value then return end
     if AM_busy then return end
     if AM_shared_lock then return end
@@ -2914,6 +2930,10 @@ _78:AddToggle('AutoMask', {
 })
 
 Toggles.AutoMask:OnChanged(function(value)
+    if AM_isDisabled() then
+        print("⚠️")
+        return
+    end
     if value then
         task.spawn(AM_autoMask)
     end
@@ -2923,6 +2943,7 @@ _56.CharacterAdded:Connect(function()
     AM_equippedTool = nil
     task.wait(0.5)
     
+    if AM_isDisabled() then return end
     if Toggles.AutoMask and Toggles.AutoMask.Value then
         task.spawn(AM_autoMask)
     end
@@ -2930,6 +2951,7 @@ end)
 
 task.spawn(function()
     while task.wait(0.05) do
+        if AM_isDisabled() then continue end
         if not Toggles.AutoMask or not Toggles.AutoMask.Value then continue end
         if AM_busy then continue end
         if AM_shared_lock then continue end
