@@ -619,9 +619,13 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     if getgenv().AuraFFEnabled then getgenv().createFF() end
 end)
 
-AuraSection:AddToggle('ApplyAura', {
+AuraToggle = AuraSection:AddToggle('ApplyAura', {
     Text = 'Apply Aura',
     Default = false,
+})
+AuraToggle:AddColorPicker('AuraColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Aura Color',
 })
 
 Toggles.ApplyAura:OnChanged(function()
@@ -632,11 +636,6 @@ Toggles.ApplyAura:OnChanged(function()
         _G.clraur()
     end
 end)
-
-AuraSection:AddLabel('Aura Color'):AddColorPicker('AuraColor', {
-    Default = Color3.fromRGB(255, 255, 255),
-    Title = 'Aura Color',
-})
 
 Options.AuraColor:OnChanged(function()
     _G.aurcolwtff = Options.AuraColor.Value
@@ -2173,21 +2172,20 @@ _oldRandom = hookfunction(math.random, function(...)
 end)
 
 _78:AddDivider()
-_78:AddToggle('ToolMat', {
+Toolmat = _78:AddToggle('ToolMat', {
     Text = 'Tool Material',
     Default = false,
+})
+Toolmat:AddColorPicker('ToolMatColor', {
+    Default = Color3.fromRGB(142, 242, 255),
+    Title = 'Color',
+    Transparency = 0.8,
 })
 
 _78:AddDropdown('ToolMatType', {
     Text = 'Material',
     Values = {'Neon', 'ForceField'},
     Default = 'Neon',
-})
-
-_78:AddLabel('Color'):AddColorPicker('ToolMatColor', {
-    Default = Color3.fromRGB(142, 242, 255),
-    Title = 'Color',
-    Transparency = 0.8,
 })
 
 TMC = nil
@@ -3878,6 +3876,11 @@ local DefenseCircleToggle = _67ha:AddToggle('DefenseCircleToggle', {
     Text = 'Defense Circle',
     Default = false,
 })
+DefenseCircleToggle:AddColorPicker('DefenseCircleColor', {
+    Default = Color3.fromRGB(255, 50, 50),
+    Title = 'Circle Color',
+    Transparency = 0.7
+})
 
 local DefenseCircleKeybind = DefenseCircleToggle:AddKeyPicker('DefenseCircleKeybind', {
     Default = 'V',
@@ -3899,12 +3902,6 @@ local DefenseCircleRadiusSlider = _67ha:AddSlider('DefenseCircleRadius', {
 local DefenseCircleVisualToggle = _67ha:AddToggle('DefenseCircleVisual', {
     Text = 'Show Circle Visual',
     Default = true,
-})
-
-local DefenseCircleColorPicker = _67ha:AddLabel('Circle Color'):AddColorPicker('DefenseCircleColor', {
-    Default = Color3.fromRGB(255, 50, 50),
-    Title = 'Circle Color',
-    Transparency = 0.7
 })
 
 local _95 = _83(_82)
