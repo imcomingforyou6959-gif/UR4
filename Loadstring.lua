@@ -21,7 +21,7 @@
     ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣿⣬⣁⠀⣴⣿⡿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⠛⣜⣜⢫⡞⣥⣛⠀⠐⠀                       AND POTENTIAL CIVIL/LEGAL ACTIONS.
     ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣿⡟⣿⢧⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣿⠿⢡⣶⣲⢦⡶⣴⢢⣦⣀⣈⣀                      
     ⣤⣤⣤⣤⣤⣤⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣾⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⣀⣾⣿⣿⣿⣿⣿⠟⣉⣠⣞⡷⣭⣟⠾⣭⢷⣣⢟⡼⣳                     If you have obtained this file unauthorized or without a valid license,
-    ⢿⣚⣷⣻⢾⡵⣯⢷⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣴⣶⣾⣿⣿⣿⣿⠟⣫⣵⣌⢟⣳⡟⣾⣳⣞⡿⣎⡷⣝⣮⢳⢧                    please delete it immediately and contact rawr.xyl@gmail.com
+    ⢿⣚⣷⣻⢾⡵⣯⢷⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣴⣶⣾⣿⣿⣿⣿⠟⣫⣵⣌⢟⣳⡟⣾⣳⣞⡿⣎⡷⣝⣮⢳⢧                    please delete it immediately and contact rawr.xyl@gmail.com or @6x94 via discord
     ⣯⣻⡼⣏⣯⢿⣽⣻⣞⡷⣄⡀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⢿⣛⣛⣛⡿⢿⣿⣿⣿⢟⣻⣭⣭⣟⣋⠁⠀⠀⠀⠉⠀⠁⠀⠀⡷⣎⢷⡹⡞⡵⣎⠿⣸
     ⢿⣵⣻⢿⡽⣟⣾⣳⣯⣟⣯⡿⣶⣄⣀⠀⠀⠀⠀⠀⠀⠈⠛⠿⢿⣿⣿⣿⣿⢟⣵⣾⣿⣿⣿⣿⣿⣧⡍⠟⣱⣿⣿⣿⣿⣿⣿⣷⣆⢿⣿⣿⣿⣇⢦⣼⠱⢯⣏⢷⣫⠷⣭⡛⡵
     ⣟⢾⡽⢯⡿⣽⢳⢯⡷⢯⡏⠙⠳⢯⢟⡀⠀⣠⣤⣄⣀⡀⠀⠀⠀⠀⠀⠀⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡎⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣿⣿⣿⣿⢘⣠⣝⡳⢎⡷⣩⢗⣣⢛⡵
@@ -47,7 +47,7 @@
 
 
 
-
+-- i know this was the simplist thing to find it wasnt really protected at all :9 read the warning though
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
 
 function _L29()
@@ -106,6 +106,9 @@ local LocalPlayer = Players.LocalPlayer
 Lighting = game:GetService('Lighting')
 MaterialService = game:GetService('MaterialService')
 RunService = game:GetService('RunService')
+GuiService = game:GetService("GuiService")
+TextChatService = game:GetService("TextChatService")
+TweenService = game:GetService("TweenService")
 
 if not LocalPlayer then
     return
@@ -332,6 +335,7 @@ local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
 
 Library:Notify('Thanks for using rawr <3')
 Library:Notify('I LOVE U')
+Library:Notify('Remember this is built for da hood rip offs...')
 
 local _51 = game:GetService("Players")
 local _52 = game:GetService("RunService")
@@ -1790,6 +1794,8 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
+Ragebot = _59:AddTab('Rage')
+
 _60['UI Settings'] = _59:AddTab('UI Settings')
 
 shared.hitman = {
@@ -2320,6 +2326,7 @@ end)
 _78:AddButton('Rapid Fire', function()
     loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
 end)
+
 AS_busy = false
 AS_cache = nil
 AS_randomEquipConnection = nil
@@ -2364,41 +2371,34 @@ end
 function AS_getStimItem()
     local shop = workspace.Ignored:FindFirstChild("Shop")
     if not shop then return nil end
-    
     local children = shop:GetChildren()
-    
     for _, item in ipairs(children) do
         if item.Name == "[Stim]" and item:FindFirstChild("ClickDetector") then
             return item
         end
     end
-    
     for _, item in ipairs(children) do
         if item.Name:find("Stim") and item:FindFirstChild("ClickDetector") then
             return item
         end
     end
-    
     if #children >= 49 then
         local stimItem = children[49]
         if stimItem and stimItem:FindFirstChild("ClickDetector") then
             return stimItem
         end
     end
-    
     return nil
 end
 
 function AS_getStimTool()
     local char = _56.Character
     if not char then return nil end
-    
     for _, v in ipairs(char:GetChildren()) do
         if v:IsA("Tool") and v.Name == "[Stim]" then
             return v
         end
     end
-    
     local bp = _56.Backpack
     if bp then
         for _, v in ipairs(bp:GetChildren()) do
@@ -2407,7 +2407,6 @@ function AS_getStimTool()
             end
         end
     end
-    
     return nil
 end
 
@@ -2418,24 +2417,19 @@ end
 function AS_getHealth()
     local char = _56.Character
     if not char then return 100, 100 end
-    
     local hum = char:FindFirstChild("Humanoid")
     if not hum then return 100, 100 end
-    
     return hum.Health, hum.MaxHealth
 end
 
 function AS_unequipCurrentTool()
     local char = _56.Character
     if not char then return nil end
-    
     local hum = char:FindFirstChild("Humanoid")
     if hum then
         hum:UnequipTools()
     end
-    
     task.wait(0.03)
-    
     for _, child in ipairs(char:GetChildren()) do
         if child:IsA("Tool") and child.Name ~= "[Stim]" and not AS_isBlacklisted(child.Name) then
             AS_equippedTool = child
@@ -2445,7 +2439,6 @@ function AS_unequipCurrentTool()
             return child
         end
     end
-    
     return nil
 end
 
@@ -2464,39 +2457,29 @@ end
 function AS_useStim()
     local char = _56.Character
     if not char then return false end
-    
     local tool = AS_getStimTool()
     if not tool then return false end
-    
     if tool.Parent ~= char then
         tool.Parent = char
     end
-    
     task.wait(0.01)
-    
     pcall(function()
         tool:Activate()
     end)
-    
     task.wait(0.01)
-    
     pcall(function()
         tool:Deactivate()
     end)
-    
     return true
 end
 
 function AS_startRandomEquip()
     if AS_randomEquipConnection then return end
-    
     AS_randomEquipConnection = _52.Heartbeat:Connect(function()
         if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
         if AS_busy then return end
-        
         local char = _56.Character
         if not char then return end
-        
         local hasTool = false
         for _, child in ipairs(char:GetChildren()) do
             if child:IsA("Tool") and child.Name ~= "[Stim]" then
@@ -2505,10 +2488,8 @@ function AS_startRandomEquip()
             end
         end
         if hasTool then return end
-        
         local bp = _56.Backpack
         if not bp then return end
-        
         for _, tool in ipairs(bp:GetChildren()) do
             if tool:IsA("Tool") and tool.Name ~= "[Stim]" and not AS_isBlacklisted(tool.Name) then
                 tool.Parent = char
@@ -2531,9 +2512,11 @@ function AS_buyStim()
     if not char then return end
     local hum = char:FindFirstChild("Humanoid")
     if not hum or hum.Health <= 0 then return end
+    
     AS_busy = true
     AS_shared_lock = true
     AS_unequipCurrentTool()
+    
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
@@ -2544,12 +2527,13 @@ function AS_buyStim()
             _120.AssemblyLinearVelocity = Vector3.new(0,0,0)
             _120.AssemblyAngularVelocity = Vector3.new(0,0,0)
             _120.CFrame = _119
-            task.wait(0.05)
+            task.wait(0.02)
             if _148 then _148.PlatformStand = false end
         end
         _119 = nil
-        task.wait(0.05)
+        task.wait(0.02)
     end
+    
     local ch = _56.Character
     if not ch then AS_busy = false AS_shared_lock = false return end
     local rt = ch:FindFirstChild("HumanoidRootPart")
@@ -2560,25 +2544,38 @@ function AS_buyStim()
     if not clickDetector then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
-    rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
-    for i = 1, 10 do fireclickdetector(clickDetector) task.wait(0.005) end
-    task.wait(0.03)
-    if not AS_hasStim() then
-        for attempt = 1, 2 do
-            if stomping or grabbing or _AA_busy then break end
-            if not _56.Character then break end
-            rt = _56.Character:FindFirstChild("HumanoidRootPart")
-            if not rt then break end
-            rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
-            for i = 1, 10 do fireclickdetector(clickDetector) task.wait(0.005) end
-            task.wait(0.03)
-            if AS_hasStim() then break end
+    
+    -- Stay at stim until we successfully buy it
+    local maxAttempts = 30
+    local attempts = 0
+    
+    while not AS_hasStim() and attempts < maxAttempts do
+        if stomping or grabbing or _AA_busy then break end
+        if not _56.Character then break end
+        
+        rt = _56.Character:FindFirstChild("HumanoidRootPart")
+        if not rt then break end
+        
+        rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
+        
+        for i = 1, 25 do
+            fireclickdetector(clickDetector)
+        end
+        
+        task.wait(0.02)
+        attempts = attempts + 1
+        
+        if AS_hasStim() then
+            break
         end
     end
+    
     pcall(function() rt.CFrame = oc end)
-    task.wait(0.05)
+    task.wait(0.02)
+    
     AS_busy = false
     AS_shared_lock = false
+    
     if wasVoidActive then
         if _120 then _119 = _120.CFrame end
         _118 = true
@@ -2600,62 +2597,102 @@ function AS_buyStim()
             end
         end)
     end
-    task.wait(0.05)
+    
+    task.wait(0.02)
     AS_reequipTool()
 end
 
 function AS_autoStim()
-    if not Toggles.AutoStim or not Toggles.AutoStim.Value or _AA_busy or AS_busy or AS_shared_lock or stomping or grabbing then return end
+    if not Toggles.AutoStim or not Toggles.AutoStim.Value then return end
+    if _AA_busy then return end
+    if AS_busy then return end
+    if AS_shared_lock then return end
+    if stomping then return end
+    if grabbing then return end
+    
     local hp, maxHp = AS_getHealth()
-    if hp >= maxHp then return end
     local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
+    
     if not AS_hasStim() then
         if AS_buyStimEnabled or hp < maxHp then
             AS_buyStim()
-            task.wait(0.05)
-            if AS_hasStim() and hp < maxHp then AS_useStim() end
+            if AS_hasStim() and hp < maxHp then
+                AS_useStim()
+            end
         end
-    elseif hp <= threshold then
+    elseif hp <= threshold and hp < maxHp then
         AS_useStim()
     end
 end
 
-_78:AddToggle('AutoStim', {Text='Auto Stim',Default=false})
-_78:AddToggle('BuyStim', {Text='Buy Stim',Default=false})
-_78:AddSlider('AutoStimThreshold', {Text='Health Threshold',Default=50,Min=10,Max=100,Rounding=0,Suffix=' HP'})
+_78:AddToggle('AutoStim', {
+    Text = 'Auto Stim',
+    Default = false,
+})
 
-Toggles.BuyStim:OnChanged(function(v) AS_buyStimEnabled = v end)
-Toggles.AutoStim:OnChanged(function(v)
-    if v then AS_startRandomEquip() task.spawn(AS_autoStim) else AS_stopRandomEquip() end
+_78:AddToggle('BuyStim', {
+    Text = 'Buy Stim',
+    Default = false,
+})
+
+_78:AddSlider('AutoStimThreshold', {
+    Text = 'Health Threshold',
+    Default = 50,
+    Min = 10,
+    Max = 100,
+    Rounding = 0,
+    Suffix = ' HP',
+})
+
+Toggles.BuyStim:OnChanged(function(value)
+    AS_buyStimEnabled = value
+end)
+
+Toggles.AutoStim:OnChanged(function(value)
+    if value then
+        AS_startRandomEquip()
+        task.spawn(AS_autoStim)
+    else
+        AS_stopRandomEquip()
+    end
 end)
 
 _56.CharacterAdded:Connect(function()
     AS_cache = nil
     AS_equippedTool = nil
     task.wait(0.3)
-    if Toggles.AutoStim and Toggles.AutoStim.Value then task.spawn(AS_autoStim) end
+    if Toggles.AutoStim and Toggles.AutoStim.Value then
+        task.spawn(AS_autoStim)
+    end
 end)
 
-local autoStimLoop
-autoStimLoop = task.spawn(function()
-    while task.wait(0.03) do
-        if not Toggles.AutoStim or not Toggles.AutoStim.Value or _AA_busy or AS_busy or AS_shared_lock or stomping or grabbing then continue end
+task.spawn(function()
+    while task.wait(0.02) do
+        if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
+        if _AA_busy then continue end
+        if AS_busy then continue end
+        if AS_shared_lock then continue end
+        if stomping then continue end
+        if grabbing then continue end
+        
         local char = _56.Character
         if not char then continue end
         local hum = char:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
+        
         local hp, maxHp = AS_getHealth()
-        if hp >= maxHp then continue end
         local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
+        
         if not AS_hasStim() then
             if AS_buyStimEnabled or hp < maxHp then
                 task.spawn(function()
                     AS_buyStim()
-                    task.wait(0.05)
-                    if AS_hasStim() and hp < maxHp then AS_useStim() end
+                    if AS_hasStim() and hp < maxHp then
+                        AS_useStim()
+                    end
                 end)
             end
-        elseif hp <= threshold then
+        elseif hp <= threshold and hp < maxHp then
             task.spawn(AS_useStim)
         end
     end
@@ -2773,7 +2810,7 @@ function AM_useMask()
         tool:Deactivate()
     end)
     
-    task.wait(0.2)
+    task.wait(0.1)
     pcall(function()
         if tool.Parent == char then
             tool.Parent = _56.Backpack
@@ -2795,7 +2832,6 @@ function AM_buyMask()
     
     local char = _56.Character
     if not char then return end
-    
     local hum = char:FindFirstChild("Humanoid")
     if not hum or hum.Health <= 0 then return end
     
@@ -2805,84 +2841,70 @@ function AM_buyMask()
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
-        if _121 then
-            _121:Disconnect()
-            _121 = nil
-        end
+        if _121 then _121:Disconnect() _121 = nil end
         if _120 and _119 then
             local _148 = _56.Character and _56.Character:FindFirstChildOfClass("Humanoid")
-            if _148 then
-                _148.PlatformStand = true
-            end
+            if _148 then _148.PlatformStand = true end
             _120.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             _120.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             _120.CFrame = _119
-            task.wait(0.1)
-            if _148 then
-                _148.PlatformStand = false
-            end
+            task.wait(0.02)
+            if _148 then _148.PlatformStand = false end
         end
         _119 = nil
-        task.wait(0.1)
+        task.wait(0.02)
     end
     
     local ch = _56.Character
-    if not ch then
-        AM_busy = false
-        AM_shared_lock = false
-        return
-    end
-    
+    if not ch then AM_busy = false AM_shared_lock = false return end
     local rt = ch:FindFirstChild("HumanoidRootPart")
-    if not rt then
-        AM_busy = false
-        AM_shared_lock = false
-        return
-    end
-    
+    if not rt then AM_busy = false AM_shared_lock = false return end
     local maskItem = AM_getMaskItem()
-    if not maskItem then
-        AM_busy = false
-        AM_shared_lock = false
-        return
-    end
-    
+    if not maskItem then AM_busy = false AM_shared_lock = false return end
     local clickDetector = maskItem:FindFirstChild("ClickDetector")
-    if not clickDetector then
-        AM_busy = false
-        AM_shared_lock = false
-        return
-    end
-    
+    if not clickDetector then AM_busy = false AM_shared_lock = false return end
     local primaryPart = maskItem:FindFirstChildWhichIsA("BasePart") or maskItem
     local oc = rt.CFrame
     
-    rt.CFrame = primaryPart.CFrame * CFrame.new(0, 2.5, 0)
+    -- Stay at mask until we successfully buy it
+    local maxAttempts = 20
+    local attempts = 0
+    local hasMask = AM_hasMaskOn()
     
-    fireclickdetector(clickDetector)
-    task.wait(0.005)
-    fireclickdetector(clickDetector)
-    task.wait(0.005)
-    fireclickdetector(clickDetector)
-    task.wait(0.05)
+    while not hasMask and attempts < maxAttempts do
+        if stomping or grabbing or _AA_busy then break end
+        if not _56.Character then break end
+        
+        rt = _56.Character:FindFirstChild("HumanoidRootPart")
+        if not rt then break end
+        
+        rt.CFrame = primaryPart.CFrame * CFrame.new(0, 2.5, 0)
+        
+        for i = 1, 15 do
+            fireclickdetector(clickDetector)
+        end
+        
+        task.wait(0.01)
+        attempts = attempts + 1
+        hasMask = AM_hasMaskOn()
+        
+        if hasMask then
+            break
+        end
+    end
     
-    pcall(function()
-        rt.CFrame = oc
-    end)
+    pcall(function() rt.CFrame = oc end)
+    task.wait(0.02)
     
     AM_busy = false
     AM_shared_lock = false
     
     if wasVoidActive then
-        if _120 then
-            _119 = _120.CFrame
-        end
+        if _120 then _119 = _120.CFrame end
         _118 = true
         _143()
         _146()
-        if _121 then
-            _121:Disconnect()
-        end
+        if _121 then _121:Disconnect() end
         _121 = _52.Heartbeat:Connect(function()
             if _118 and _120 then
                 local _t = tick()
@@ -2899,7 +2921,7 @@ function AM_buyMask()
         end)
     end
     
-    task.wait(0.1)
+    task.wait(0.05)
     AM_useMask()
 end
 
@@ -2948,7 +2970,7 @@ _56.CharacterAdded:Connect(function()
 end)
 
 task.spawn(function()
-    while task.wait(0.05) do
+    while task.wait(0.03) do
         if AM_isDisabled() then continue end
         if not Toggles.AutoMask or not Toggles.AutoMask.Value then continue end
         if AM_busy then continue end
@@ -2960,7 +2982,6 @@ task.spawn(function()
         
         local char = _56.Character
         if not char then continue end
-        
         local hum = char:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
         
@@ -3196,6 +3217,187 @@ _48:OnUnload(function()
         if data.part then data.part:Destroy() end
     end
     table.clear(ImageESP_Objects)
+end)
+
+_78:AddDivider()
+body_parts = {
+    "Head", "UpperTorso", "LowerTorso",
+    "LeftUpperArm", "LeftLowerArm", "LeftHand",
+    "RightUpperArm", "RightLowerArm", "RightHand",
+    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
+    "RightUpperLeg", "RightLowerLeg", "RightFoot",
+    "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg",
+    "LeftArm", "RightArm", "LeftLeg", "RightLeg"
+}
+
+LocalMaterialToggle = _78:AddToggle('LocalMaterialToggle', {
+    Text = 'Character Material',
+    Default = false,
+})
+
+LocalMaterialToggle:AddColorPicker('LocalMaterialColor', {
+    Default = Color3.fromRGB(249, 217, 255),
+})
+
+_78:AddSlider('LocalMaterialTransparency', {
+    Text = 'Transparency',
+    Default = 0.2,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+LocalMaterialEnabled = false
+LocalMaterialLoop = nil
+original_data = {}
+
+function store_original(part)
+    if not original_data[part] then
+        original_data[part] = {
+            Material = part.Material,
+            Color = part.Color,
+            Transparency = part.Transparency,
+            TextureID = part:IsA("MeshPart") and part.TextureID or nil,
+            ShirtTemplate = part:IsA("Shirt") and part.ShirtTemplate or nil,
+            PantsTemplate = part:IsA("Pants") and part.PantsTemplate or nil,
+            Graphic = part:IsA("ShirtGraphic") and part.Graphic or nil
+        }
+    end
+end
+
+function ApplyLocalMaterial()
+    if not LocalPlayer:HasAppearanceLoaded() then
+        LocalPlayer.CharacterAppearanceLoaded:Wait()
+    end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local color = Options.LocalMaterialColor.Value
+    local transparency = math.clamp(Options.LocalMaterialTransparency.Value, 0, 0.9999999)
+    
+    for _, partName in ipairs(body_parts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            store_original(part)
+            part.Material = Enum.Material.ForceField
+            part.Color = color
+            if part.Transparency ~= 1 then
+                part.Transparency = transparency
+            end
+        end
+    end
+    
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("Accessory") then
+            local handle = descendant:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                store_original(handle)
+                handle.Material = Enum.Material.ForceField
+                handle.Color = color
+                if handle.Transparency ~= 1 then
+                    handle.Transparency = transparency
+                end
+                if handle:IsA("MeshPart") and handle.TextureID ~= "" then
+                    handle.TextureID = ""
+                end
+            end
+        end
+    end
+    
+    local shirt = character:FindFirstChild("Shirt")
+    if shirt and shirt:IsA("Shirt") and shirt.ShirtTemplate ~= "" then
+        store_original(shirt)
+        shirt.ShirtTemplate = ""
+    end
+    
+    local pants = character:FindFirstChild("Pants")
+    if pants and pants:IsA("Pants") and pants.PantsTemplate ~= "" then
+        store_original(pants)
+        pants.PantsTemplate = ""
+    end
+    
+    local shirtGraphic = character:FindFirstChild("Shirt Graphic")
+    if shirtGraphic and shirtGraphic:IsA("ShirtGraphic") and shirtGraphic.Graphic ~= "" then
+        store_original(shirtGraphic)
+        shirtGraphic.Graphic = ""
+    end
+end
+
+function remove_material(character)
+    if not character then return end
+    
+    for _, partName in ipairs(body_parts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") and original_data[part] then
+            part.Material = original_data[part].Material
+            part.Color = original_data[part].Color
+            part.Transparency = original_data[part].Transparency
+        end
+    end
+    
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("Accessory") then
+            local handle = descendant:FindFirstChild("Handle")
+            if handle and original_data[handle] then
+                handle.Material = original_data[handle].Material
+                handle.Color = original_data[handle].Color
+                handle.Transparency = original_data[handle].Transparency
+                if handle:IsA("MeshPart") and original_data[handle].TextureID then
+                    handle.TextureID = original_data[handle].TextureID
+                end
+            end
+        end
+    end
+    
+    local shirt = character:FindFirstChild("Shirt")
+    if shirt and original_data[shirt] and original_data[shirt].ShirtTemplate then
+        shirt.ShirtTemplate = original_data[shirt].ShirtTemplate
+    end
+    
+    local pants = character:FindFirstChild("Pants")
+    if pants and original_data[pants] and original_data[pants].PantsTemplate then
+        pants.PantsTemplate = original_data[pants].PantsTemplate
+    end
+    
+    local shirtGraphic = character:FindFirstChild("Shirt Graphic")
+    if shirtGraphic and original_data[shirtGraphic] and original_data[shirtGraphic].Graphic then
+        shirtGraphic.Graphic = original_data[shirtGraphic].Graphic
+    end
+    
+    original_data = {}
+end
+
+Toggles.LocalMaterialToggle:OnChanged(function(value)
+    LocalMaterialEnabled = value
+    
+    if value then
+        ApplyLocalMaterial()
+        if LocalMaterialLoop then LocalMaterialLoop:Disconnect() end
+        LocalMaterialLoop = RunService.RenderStepped:Connect(ApplyLocalMaterial)
+    else
+        if LocalMaterialLoop then
+            LocalMaterialLoop:Disconnect()
+            LocalMaterialLoop = nil
+        end
+        if LocalPlayer.Character then
+            remove_material(LocalPlayer.Character)
+        end
+    end
+end)
+
+Options.LocalMaterialColor:OnChanged(function()
+    if LocalMaterialEnabled then ApplyLocalMaterial() end
+end)
+
+Options.LocalMaterialTransparency:OnChanged(function()
+    if LocalMaterialEnabled then ApplyLocalMaterial() end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(character)
+    original_data = {}
+    if LocalMaterialEnabled then
+        task.wait(0.5)
+        ApplyLocalMaterial()
+    end
 end)
 
 _78:AddDivider()
@@ -5520,6 +5722,238 @@ task.spawn(function()
             task.wait(0.5)
         end
     end
+end)
+
+OrbitEnabled = false
+OrbitConnection = nil
+OrbitTarget = nil
+OrbitRadius = 5
+OrbitSpeed = 3
+OrbitHeight = 2
+OrbitAngle = 0
+OrbitRunning = false
+OrbitOriginalPosition = nil
+OrbitIsReturning = false
+_G.OrbitBehavior = 'Orbit'
+
+function ReturnToPos()
+    if not _56.Character then return end
+    if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
+    if OrbitOriginalPosition then
+        pcall(function()
+            _56.Character.HumanoidRootPart.CFrame = OrbitOriginalPosition
+            _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end)
+        OrbitOriginalPosition = nil
+        OrbitIsReturning = false
+    end
+end
+
+function Orbit()
+    if not OrbitEnabled then return end
+    if _118 then return end
+    if _AA_busy then return end
+    if stomping then return end
+    if grabbing then return end
+
+    local target = _104.targetplayer
+    if not target then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    if not target.Character then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    local BodyEffects = target.Character:FindFirstChild("BodyEffects")
+    if not BodyEffects then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    local KOCheck = BodyEffects:FindFirstChild("K.O")
+    if not KOCheck or KOCheck.Value == true then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    if Grabbed(target) then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    if isDead(target) then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then ReturnToPos() end
+        return
+    end
+
+    OrbitTarget = target
+
+    if not _56.Character then return end
+    if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
+    if not target.Character:FindFirstChild("HumanoidRootPart") then return end
+
+    if not OrbitOriginalPosition and not OrbitIsReturning then
+        OrbitOriginalPosition = _56.Character.HumanoidRootPart.CFrame
+    end
+
+    pcall(function()
+        _56.Character.HumanoidRootPart:SetNetworkOwner(_56)
+        target.Character.HumanoidRootPart:SetNetworkOwner(_56)
+    end)
+
+    local behavior = _G.OrbitBehavior or 'Orbit'
+    local targetPos
+    local lookAtPos = target.Character.HumanoidRootPart.Position
+
+    if behavior == 'Orbit' then
+        OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
+        local offset = Vector3.new(
+            math.cos(OrbitAngle) * OrbitRadius,
+            OrbitHeight + math.sin(OrbitAngle * 0.5) * 0.5,
+            math.sin(OrbitAngle) * OrbitRadius
+        )
+        targetPos = target.Character.HumanoidRootPart.Position + offset
+    elseif behavior == 'Above' then
+        targetPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, OrbitHeight + 5, 0)
+    elseif behavior == 'Hide' then
+        targetPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, -7, 0)
+    end
+
+    _56.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos, lookAtPos)
+    _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+end
+
+function StartOrbit()
+    if OrbitConnection then
+        OrbitConnection:Disconnect()
+        OrbitConnection = nil
+    end
+    if not OrbitEnabled then return end
+
+    OrbitAngle = 0
+    OrbitRunning = true
+    OrbitOriginalPosition = nil
+    OrbitIsReturning = false
+
+    OrbitConnection = RunService.Heartbeat:Connect(function()
+        Orbit()
+    end)
+end
+
+function StopOrbit()
+    OrbitRunning = false
+    if OrbitOriginalPosition then
+        ReturnToPos()
+    end
+    if OrbitConnection then
+        OrbitConnection:Disconnect()
+        OrbitConnection = nil
+    end
+    OrbitTarget = nil
+    OrbitAngle = 0
+end
+
+OrbitGroupbox = Ragebot:AddLeftGroupbox('Strafing')
+
+OrbitToggle = OrbitGroupbox:AddToggle('OrbitToggle', {
+    Text = 'Ragebot',
+    Default = false,
+})
+
+OrbitToggle:AddKeyPicker('OrbitKeybind', {
+    Default = 'G',
+    SyncToggleState = false,
+    Mode = 'Toggle',
+    Text = 'Orbit Bind',
+    NoUI = false
+})
+
+OrbitGroupbox:AddSlider('OrbitRadius', {
+    Text = 'Radius',
+    Default = 5,
+    Min = 1,
+    Max = 15,
+    Rounding = 1,
+    Suffix = ' studs',
+})
+
+OrbitGroupbox:AddSlider('OrbitSpeed', {
+    Text = 'Speed',
+    Default = 3,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = 'x',
+})
+
+OrbitGroupbox:AddSlider('OrbitHeight', {
+    Text = 'Height',
+    Default = 2,
+    Min = 0,
+    Max = 10,
+    Rounding = 1,
+    Suffix = ' studs',
+})
+
+BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
+
+BehaviorB:AddDropdown('OBS', {
+    Text = 'Styles',
+    Values = {'Orbit', 'Above', 'Hide'},
+    Default = 'Orbit',
+})
+
+Options.OBS:OnChanged(function(value)
+    _G.OrbitBehavior = value
+end)
+
+Toggles.OrbitToggle:OnChanged(function(value)
+    OrbitEnabled = value
+    if value then
+        StartOrbit()
+    else
+        StopOrbit()
+    end
+end)
+
+Options.OrbitKeybind:OnClick(function()
+    Toggles.OrbitToggle:SetValue(not Toggles.OrbitToggle.Value)
+end)
+
+Options.OrbitRadius:OnChanged(function(value)
+    OrbitRadius = value
+end)
+
+Options.OrbitSpeed:OnChanged(function(value)
+    OrbitSpeed = value
+end)
+
+Options.OrbitHeight:OnChanged(function(value)
+    OrbitHeight = value
+end)
+
+_51.PlayerRemoving:Connect(function(player)
+    if OrbitTarget == player then
+        OrbitTarget = nil
+        if OrbitOriginalPosition then
+            ReturnToPos()
+        end
+    end
+end)
+
+_48:OnUnload(function()
+    StopOrbit()
 end)
 
 FaceTargetConnection = nil
@@ -7943,6 +8377,8 @@ end)
 
 _AR_Running = true
 
+_G.IsReloading = false
+
 task.spawn(function()
     while _AR_Running do
         if not Toggles.AutoReload.Value then
@@ -7954,9 +8390,12 @@ task.spawn(function()
         if tool then
             for _, v in pairs(tool:GetDescendants()) do
                 if (v:IsA("IntValue") or v:IsA("NumberValue")) and v.Value <= 0 then
+                    _G.IsReloading = true
                     keypress(0x52)
                     task.wait(0.05)
                     keyrelease(0x52)
+                    task.wait(0.3)
+                    _G.IsReloading = false
                     break
                 end
             end
@@ -8201,7 +8640,7 @@ function _AA_buy()
             break
         end
         
-        if stomping or grabbing or AS_busy then
+        if stomping or isGrabbing or AS_busy then
             break
         end
         
