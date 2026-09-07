@@ -2357,6 +2357,7 @@ AS_blacklistedTools = {
     "mask",
     "[Hamburger]",
     "[Pizza]",
+    "Cookie",
 }
 
 function AS_isBlacklisted(toolName)
