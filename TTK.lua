@@ -101,6 +101,7 @@ local _5 = game:GetService("VirtualInputManager")
 local _6 = game:GetService("UserInputService")
 local _7 = game:GetService("Workspace")
 local _8 = game:GetService("HttpService")
+local Lighting = game:GetService("Lighting")
 
 local _9 = _2.LocalPlayer
 if not _9 then
@@ -497,9 +498,129 @@ task.spawn(function()
     pcall(_197)
 end)
 
+local _fb = _39.Main:AddRightGroupbox("Extras")
+
+_fb:AddToggle('AntiFlashbang', {
+    Text = 'Anti Flashbang',
+    Default = false,
+})
+
+local AF_Enabled = false
+local AF_Cleanup = nil
+local EC = nil
+local CC = nil
+
+pcall(function()
+    EC = require(_4.Modules.Client.Controllers.ExposureController)
+    CC = require(_4.Modules.Client.Controllers.CameraController)
+end)
+
+if EC and EC.SetContribution then
+    local orig = EC.SetContribution
+    EC.SetContribution = function(self, name, value, ...)
+        if AF_Enabled and name == "Flashbang" then
+            return orig(self, name, nil, ...)
+        end
+        return orig(self, name, value, ...)
+    end
+end
+
+if CC and CC.ShakeImpulse then
+    local orig = CC.ShakeImpulse
+    CC.ShakeImpulse = function(self, intensity, ...)
+        if AF_Enabled then return nil end
+        return orig(self, intensity, ...)
+    end
+end
+
+if CC and CC.SetFlashSensitivity then
+    local orig = CC.SetFlashSensitivity
+    CC.SetFlashSensitivity = function(self, intensity, ...)
+        if AF_Enabled then return nil end
+        return orig(self, intensity, ...)
+    end
+end
+
+local function AF_Remove()
+    if not AF_Enabled then return end
+    
+    for _, v in pairs(Lighting:GetChildren()) do
+        if v:IsA("BlurEffect") and (v.Name == "FlashbangBlur" or v.Enabled) then
+            v:Destroy()
+        end
+    end
+    
+    if EC then
+        pcall(function() EC:SetContribution("Flashbang", nil) end)
+    end
+    
+    if CC and CC.SetFlashSensitivity then
+        pcall(function() CC:SetFlashSensitivity(0) end)
+    end
+end
+
+local function AF_Start()
+    if AF_Cleanup then AF_Cleanup:Disconnect() end
+    AF_Cleanup = _3.RenderStepped:Connect(AF_Remove)
+end
+
+_37.AntiFlashbang:OnChanged(function(value)
+    AF_Enabled = value
+    
+    if value then
+        AF_Remove()
+        AF_Start()
+    else
+        if AF_Cleanup then
+            AF_Cleanup:Disconnect()
+            AF_Cleanup = nil
+        end
+        if CC and CC.SetFlashSensitivity then
+            pcall(function() CC:SetFlashSensitivity(0) end)
+        end
+    end
+end)
+
+pcall(function()
+    local FC = require(_4.Modules.Client.Controllers.FlashbangController)
+    
+    if getsenv and FC then
+        local env = getsenv(FC)
+        
+        if env and env.computeIntensity then
+            local orig = env.computeIntensity
+            env.computeIntensity = function(p1)
+                if AF_Enabled then return 0 end
+                return orig(p1)
+            end
+        end
+        
+        if env and env.applyDetonationShake then
+            local orig = env.applyDetonationShake
+            env.applyDetonationShake = function(p1)
+                if AF_Enabled then return end
+                return orig(p1)
+            end
+        end
+    end
+end)
+
+pcall(function()
+    local GC = require(_4.Modules.Client.Controllers.GunController)
+    
+    if GC and GC.SetSprintBlockedByFlash then
+        local orig = GC.SetSprintBlockedByFlash
+        GC.SetSprintBlockedByFlash = function(self, blocked)
+            if AF_Enabled and blocked then return orig(self, false) end
+            return orig(self, blocked)
+        end
+    end
+end)
+
 local _40 = _39["UI Settings"]:AddLeftGroupbox("Menu")
 _40:AddToggle("KeybindMenuOpen", { Default = _33.KeybindFrame.Visible, Text = "Open Keybind Menu", Callback = function(v) _33.KeybindFrame.Visible = v end})
-_40:AddToggle("ShowCustomCursor", {Text = "Custom Cursor", Default = true, Callback = function(v) _33.ShowCustomCursor = v end})
+_40:AddToggle("ShowCustomCursor", {Text = "Custom Cursor", Default = true,
+        Callback = function(v) _33.ShowCustomCursor = v end})
 _40:AddDivider()
 _40:AddLabel("Menu bind"):AddKeyPicker("MenuKeybind", { Default = "RightShift", NoUI = true, Text = "Menu keybind" })
 
