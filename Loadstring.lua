@@ -1796,6 +1796,56 @@ end)
 
 Ragebot = _59:AddTab('Rage')
 
+OrbitGroupbox = Ragebot:AddLeftGroupbox('Strafing')
+
+OrbitToggle = OrbitGroupbox:AddToggle('OrbitToggle', {
+    Text = 'Ragebot',
+    Default = false,
+})
+
+OrbitToggle:AddKeyPicker('OrbitKeybind', {
+    Default = 'G',
+    SyncToggleState = false,
+    Mode = 'Toggle',
+    Text = 'Orbit Bind',
+    NoUI = false
+})
+
+OrbitGroupbox:AddSlider('OrbitRadius', {
+    Text = 'Radius',
+    Default = 5,
+    Min = 1,
+    Max = 15,
+    Rounding = 1,
+    Suffix = ' studs',
+})
+
+OrbitGroupbox:AddSlider('OrbitSpeed', {
+    Text = 'Speed',
+    Default = 3,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = 'x',
+})
+
+OrbitGroupbox:AddSlider('OrbitHeight', {
+    Text = 'Height',
+    Default = 2,
+    Min = 0,
+    Max = 10,
+    Rounding = 1,
+    Suffix = ' studs',
+})
+
+BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
+
+BehaviorB:AddDropdown('OBS', {
+    Text = 'Styles',
+    Values = {'Orbit', 'Above', 'Hide'},
+    Default = 'Orbit',
+})
+
 _60['UI Settings'] = _59:AddTab('UI Settings')
 
 shared.hitman = {
@@ -5725,6 +5775,8 @@ task.spawn(function()
     end
 end)
 
+-- RAGEBOT LOGIC
+
 OrbitEnabled = false
 OrbitConnection = nil
 OrbitTarget = nil
@@ -5757,48 +5809,40 @@ function Orbit()
     if _AA_busy then return end
     if stomping then return end
     if grabbing then return end
-
     local target = _104.targetplayer
     if not target then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
     if not target.Character then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
-    local BodyEffects = target.Character:FindFirstChild("BodyEffects")
+    local BodyEffects = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
     if not BodyEffects then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
     local KOCheck = BodyEffects:FindFirstChild("K.O")
     if not KOCheck or KOCheck.Value == true then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
     if Grabbed(target) then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
     if isDead(target) then
         OrbitTarget = nil
         if OrbitOriginalPosition then ReturnToPos() end
         return
     end
-
     OrbitTarget = target
-
     if not _56.Character then return end
     if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
     if not target.Character:FindFirstChild("HumanoidRootPart") then return end
@@ -5815,7 +5859,6 @@ function Orbit()
     local behavior = _G.OrbitBehavior or 'Orbit'
     local targetPos
     local lookAtPos = target.Character.HumanoidRootPart.Position
-
     if behavior == 'Orbit' then
         OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
         local offset = Vector3.new(
@@ -5829,7 +5872,6 @@ function Orbit()
     elseif behavior == 'Hide' then
         targetPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, -7, 0)
     end
-
     _56.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos, lookAtPos)
     _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
@@ -5846,7 +5888,6 @@ function StartOrbit()
     OrbitRunning = true
     OrbitOriginalPosition = nil
     OrbitIsReturning = false
-
     OrbitConnection = RunService.Heartbeat:Connect(function()
         Orbit()
     end)
@@ -5865,56 +5906,7 @@ function StopOrbit()
     OrbitAngle = 0
 end
 
-OrbitGroupbox = Ragebot:AddLeftGroupbox('Strafing')
-
-OrbitToggle = OrbitGroupbox:AddToggle('OrbitToggle', {
-    Text = 'Ragebot',
-    Default = false,
-})
-
-OrbitToggle:AddKeyPicker('OrbitKeybind', {
-    Default = 'G',
-    SyncToggleState = false,
-    Mode = 'Toggle',
-    Text = 'Orbit Bind',
-    NoUI = false
-})
-
-OrbitGroupbox:AddSlider('OrbitRadius', {
-    Text = 'Radius',
-    Default = 5,
-    Min = 1,
-    Max = 15,
-    Rounding = 1,
-    Suffix = ' studs',
-})
-
-OrbitGroupbox:AddSlider('OrbitSpeed', {
-    Text = 'Speed',
-    Default = 3,
-    Min = 0.5,
-    Max = 10,
-    Rounding = 1,
-    Suffix = 'x',
-})
-
-OrbitGroupbox:AddSlider('OrbitHeight', {
-    Text = 'Height',
-    Default = 2,
-    Min = 0,
-    Max = 10,
-    Rounding = 1,
-    Suffix = ' studs',
-})
-
-BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
-
-BehaviorB:AddDropdown('OBS', {
-    Text = 'Styles',
-    Values = {'Orbit', 'Above', 'Hide'},
-    Default = 'Orbit',
-})
-
+-- Connections
 Options.OBS:OnChanged(function(value)
     _G.OrbitBehavior = value
 end)
