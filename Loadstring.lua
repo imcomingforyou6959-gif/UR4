@@ -103,12 +103,16 @@ local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+Workspace = game:GetService('Workspace')
 Lighting = game:GetService('Lighting')
 MaterialService = game:GetService('MaterialService')
 RunService = game:GetService('RunService')
 GuiService = game:GetService("GuiService")
 TextChatService = game:GetService("TextChatService")
 TweenService = game:GetService("TweenService")
+Stats = game:GetService('Stats')
+Debris = game:GetService('Debris')
+Backpack = game:GetService('Backpack')
 
 if not LocalPlayer then
     return
@@ -1361,10 +1365,12 @@ Options.ContrastValue:OnChanged(function(value)
     end
 end)
 
+-- Aspect Ratio with horizontal and vertical only
 AspectRatioSection = WorldTab:AddRightGroupbox('Rendering & Camera')
 
 getgenv().Resolution = {
-    ["AspectRatio"] = 1
+    ["HorizontalStretch"] = 1,
+    ["VerticalStretch"] = 1
 }
 
 getgenv().AspectRatioStarted = nil
@@ -1375,8 +1381,16 @@ AspectRatioSection:AddToggle('AspectRatio', {
     Default = false,
 })
 
-AspectRatioSection:AddSlider('AspectRatioValueSlider', {
-    Text = 'Ratio',
+AspectRatioSection:AddSlider('AspectRatioHorizontalSlider', {
+    Text = 'Horizontal',
+    Default = 1,
+    Min = 0.1,
+    Max = 1.2,
+    Rounding = 2,
+})
+
+AspectRatioSection:AddSlider('AspectRatioVerticalSlider', {
+    Text = 'Vertical',
     Default = 1,
     Min = 0.1,
     Max = 1.2,
@@ -1386,28 +1400,36 @@ AspectRatioSection:AddSlider('AspectRatioValueSlider', {
 Toggles.AspectRatio:OnChanged(function(value)
     getgenv().AspectRatioEnabled = value
     if value then
-        getgenv().Resolution["AspectRatio"] = Options.AspectRatioValueSlider.Value
+        getgenv().Resolution["HorizontalStretch"] = Options.AspectRatioHorizontalSlider.Value
+        getgenv().Resolution["VerticalStretch"] = Options.AspectRatioVerticalSlider.Value
         if getgenv().AspectRatioStarted == nil then
-            game:GetService("RunService").RenderStepped:Connect(
-                function()
-                    pcall(function()
-                        if not getgenv().AspectRatioEnabled then return end
-                        local cam = workspace.CurrentCamera
-                        if cam then
-                            cam.CFrame = cam.CFrame * CFrame.new(0, 0, 0, 1, 0, 0, 0, getgenv().Resolution["AspectRatio"], 0, 0, 0, 1)
-                        end
-                    end)
-                end
-            )
+            game:GetService("RunService").RenderStepped:Connect(function()
+                pcall(function()
+                    if not getgenv().AspectRatioEnabled then return end
+                    local cam = workspace.CurrentCamera
+                    if cam then
+                        local currentCFrame = cam.CFrame
+                        local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = currentCFrame:GetComponents()
+                        local hStretch = getgenv().Resolution["HorizontalStretch"]
+                        local vStretch = getgenv().Resolution["VerticalStretch"]
+                        cam.CFrame = CFrame.new(X, Y, Z, R00 * hStretch, R01 * vStretch, R02, R10, R11 * vStretch, R12, R20 * hStretch, R21 * vStretch, R22)
+                    end
+                end)
+            end)
             getgenv().AspectRatioStarted = "Aori0001"
         end
     else
-        getgenv().Resolution["AspectRatio"] = 1
+        getgenv().Resolution["HorizontalStretch"] = 1
+        getgenv().Resolution["VerticalStretch"] = 1
     end
 end)
 
-Options.AspectRatioValueSlider:OnChanged(function(value)
-    getgenv().Resolution["AspectRatio"] = value
+Options.AspectRatioHorizontalSlider:OnChanged(function(value)
+    getgenv().Resolution["HorizontalStretch"] = value
+end)
+
+Options.AspectRatioVerticalSlider:OnChanged(function(value)
+    getgenv().Resolution["VerticalStretch"] = value
 end)
 
 AspectRatioSection:AddToggle('DisableRendering', {
@@ -3270,185 +3292,589 @@ _48:OnUnload(function()
     table.clear(ImageESP_Objects)
 end)
 
-_78:AddDivider()
-body_parts = {
-    "Head", "UpperTorso", "LowerTorso",
-    "LeftUpperArm", "LeftLowerArm", "LeftHand",
-    "RightUpperArm", "RightLowerArm", "RightHand",
-    "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
-    "RightUpperLeg", "RightLowerLeg", "RightFoot",
-    "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg",
-    "LeftArm", "RightArm", "LeftLeg", "RightLeg"
-}
+-- China hat core
+ChinaHat = {}
+enabled = false
+c1 = Color3.fromRGB(255, 0, 0)
+c2 = Color3.fromRGB(0, 255, 0)
+c3 = Color3.fromRGB(0, 0, 255)
+c4 = Color3.fromRGB(255, 255, 0)
+height = 0.7
+radius = 2
+sides = 25
+hatTrs = 0.35
+lineTrs = 1
+speed = 0.2
+offsetY = 0.5
+drawings = {}
+connection = nil
+Players = game:GetService("Players")
+LocalPlayer = Players.LocalPlayer
+cam = workspace.CurrentCamera
 
-LocalMaterialToggle = _78:AddToggle('LocalMaterialToggle', {
-    Text = 'Character Material',
+function lerp(a, b, t) return a + (b - a) * t end
+
+function lerpColor(a, b, t)
+    return Color3.new(lerp(a.R, b.R, t), lerp(a.G, b.G, t), lerp(a.B, b.B, t))
+end
+
+function getColor(progress, time)
+    local s = (progress + time * speed) % 1
+    if s < 0.25 then return lerpColor(c1, c2, s / 0.25)
+    elseif s < 0.5 then return lerpColor(c2, c3, (s - 0.25) / 0.25)
+    elseif s < 0.75 then return lerpColor(c3, c4, (s - 0.5) / 0.25)
+    else return lerpColor(c4, c1, (s - 0.75) / 0.25) end
+end
+
+function createDrawings()
+    if #drawings == sides then return end
+    for _, d in ipairs(drawings) do
+        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+    end
+    drawings = {}
+    for _ = 1, sides do
+        local line = Drawing.new('Line')
+        local triangle = Drawing.new('Triangle')
+        line.ZIndex = 2 line.Thickness = 1
+        triangle.ZIndex = 1 triangle.Filled = true
+        table.insert(drawings, {line, triangle})
+    end
+end
+
+function setVisibility(visible)
+    for _, d in ipairs(drawings) do
+        if d[1] then d[1].Visible = visible end
+        if d[2] then d[2].Visible = visible end
+    end
+end
+
+function cleanup()
+    if connection then connection:Disconnect() connection = nil end
+    for _, d in ipairs(drawings) do
+        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+    end
+    drawings = {}
+end
+
+function render()
+    if not enabled then setVisibility(false) return end
+    
+    local visibleCount = 0
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            local head = char and char:FindFirstChild('Head')
+            local hum = char and char:FindFirstChildOfClass('Humanoid')
+            if char and head and hum and hum.Health > 0 then
+                local headScreen = cam:WorldToViewportPoint(head.Position)
+                if headScreen.Z > 0 then
+                    visibleCount = visibleCount + 1
+                end
+            end
+        end
+    end
+    
+    if visibleCount == 0 then setVisibility(false) return end
+    
+    local needed = visibleCount * sides
+    if #drawings ~= needed then
+        for _, d in ipairs(drawings) do
+            pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+        end
+        drawings = {}
+        for _ = 1, needed do
+            local line = Drawing.new('Line')
+            local triangle = Drawing.new('Triangle')
+            line.ZIndex = 2 line.Thickness = 1
+            triangle.ZIndex = 1 triangle.Filled = true
+            table.insert(drawings, {line, triangle})
+        end
+    end
+    
+    local time = tick()
+    local fullCircle = math.pi * 2
+    local drawIndex = 0
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local char = player.Character
+            local head = char and char:FindFirstChild('Head')
+            local hum = char and char:FindFirstChildOfClass('Humanoid')
+            
+            if char and head and hum and hum.Health > 0 then
+                local headScreen = cam:WorldToViewportPoint(head.Position)
+                if headScreen.Z <= 0 then continue end
+                
+                local topPos = head.Position + Vector3.new(0, offsetY + height, 0)
+                local basePos = head.Position + Vector3.new(0, offsetY, 0)
+                
+                for i = 1, sides do
+                    drawIndex = drawIndex + 1
+                    local line, triangle = drawings[drawIndex][1], drawings[drawIndex][2]
+                    local progress1 = i / sides
+                    local angle1 = progress1 * fullCircle
+                    local angle2 = ((i % sides) + 1) / sides * fullCircle
+                    local point1 = basePos + Vector3.new(math.cos(angle1), 0, math.sin(angle1)) * radius
+                    local point2 = basePos + Vector3.new(math.cos(angle2), 0, math.sin(angle2)) * radius
+                    local screen1 = cam:WorldToViewportPoint(point1)
+                    local screen2 = cam:WorldToViewportPoint(point2)
+                    local screenTop = cam:WorldToViewportPoint(topPos)
+                    local col = getColor(progress1, time)
+                    
+                    if screen1.Z > 0 and screen2.Z > 0 and screenTop.Z > 0 then
+                        line.From = Vector2.new(screen1.X, screen1.Y)
+                        line.To = Vector2.new(screen2.X, screen2.Y)
+                        line.Color = col
+                        line.Transparency = lineTrs
+                        line.Visible = true
+                        
+                        triangle.PointA = Vector2.new(screenTop.X, screenTop.Y)
+                        triangle.PointB = line.From
+                        triangle.PointC = line.To
+                        triangle.Color = col
+                        triangle.Transparency = hatTrs
+                        triangle.Visible = true
+                    else
+                        line.Visible = false
+                        triangle.Visible = false
+                    end
+                end
+            end
+        end
+    end
+    
+    for i = drawIndex + 1, #drawings do
+        if drawings[i][1] then drawings[i][1].Visible = false end
+        if drawings[i][2] then drawings[i][2].Visible = false end
+    end
+end
+
+function ChinaHat:setEnabled(val)
+    enabled = val
+    if enabled then
+        if not connection then connection = game:GetService("RunService").RenderStepped:Connect(render) end
+    else
+        cleanup()
+    end
+end
+
+function ChinaHat:setColor1(c) c1 = c end
+function ChinaHat:setColor2(c) c2 = c end
+function ChinaHat:setColor3(c) c3 = c end
+function ChinaHat:setColor4(c) c4 = c end
+function ChinaHat:setHeight(h) height = h end
+function ChinaHat:setRadius(r) radius = r end
+function ChinaHat:setSides(s) sides = s drawings = {} end
+function ChinaHat:setHatTransparency(t) hatTrs = t end
+function ChinaHat:setLineTransparency(t) lineTrs = t end
+function ChinaHat:setSpeed(s) speed = s end
+function ChinaHat:setOffsetY(o) offsetY = o end
+
+_78:AddToggle("ChinaHatEnabled", {
+    Text = "China Hat",
     Default = false,
+}):AddColorPicker("ChinaHatColor1", {
+    Default = Color3.fromRGB(255, 0, 0),
+    Title = "Color 1",
+}):AddColorPicker("ChinaHatColor2", {
+    Default = Color3.fromRGB(0, 255, 0),
+    Title = "Color 2",
+}):AddColorPicker("ChinaHatColor3", {
+    Default = Color3.fromRGB(0, 0, 255),
+    Title = "Color 3",
+}):AddColorPicker("ChinaHatColor4", {
+    Default = Color3.fromRGB(255, 255, 0),
+    Title = "Color 4",
 })
 
-LocalMaterialToggle:AddColorPicker('LocalMaterialColor', {
-    Default = Color3.fromRGB(249, 217, 255),
+_78:AddSlider("ChinaHatRadius", {
+    Text = "Radius",
+    Default = 2,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
 })
 
-_78:AddSlider('LocalMaterialTransparency', {
-    Text = 'Transparency',
-    Default = 0.2,
+_78:AddSlider("ChinaHatHeight", {
+    Text = "Height",
+    Default = 0.7,
+    Min = 0.1,
+    Max = 5,
+    Rounding = 1,
+})
+
+_78:AddSlider("ChinaHatTransparency", {
+    Text = "Hat Transparency",
+    Default = 0.35,
     Min = 0,
     Max = 1,
     Rounding = 2,
 })
 
-LocalMaterialEnabled = false
-LocalMaterialLoop = nil
-original_data = {}
+_78:AddSlider("ChinaHatSpeed", {
+    Text = "Speed",
+    Default = 0.2,
+    Min = 0.01,
+    Max = 2,
+    Rounding = 2,
+})
 
-function store_original(part)
-    if not original_data[part] then
-        original_data[part] = {
-            Material = part.Material,
-            Color = part.Color,
-            Transparency = part.Transparency,
-            TextureID = part:IsA("MeshPart") and part.TextureID or nil,
-            ShirtTemplate = part:IsA("Shirt") and part.ShirtTemplate or nil,
-            PantsTemplate = part:IsA("Pants") and part.PantsTemplate or nil,
-            Graphic = part:IsA("ShirtGraphic") and part.Graphic or nil
-        }
+Toggles.ChinaHatEnabled:OnChanged(function(value)
+    ChinaHat:setEnabled(value)
+end)
+
+Options.ChinaHatColor1:OnChanged(function(value)
+    ChinaHat:setColor1(value)
+end)
+
+Options.ChinaHatColor2:OnChanged(function(value)
+    ChinaHat:setColor2(value)
+end)
+
+Options.ChinaHatColor3:OnChanged(function(value)
+    ChinaHat:setColor3(value)
+end)
+
+Options.ChinaHatColor4:OnChanged(function(value)
+    ChinaHat:setColor4(value)
+end)
+
+Options.ChinaHatRadius:OnChanged(function(value)
+    ChinaHat:setRadius(value)
+end)
+
+Options.ChinaHatHeight:OnChanged(function(value)
+    ChinaHat:setHeight(value)
+end)
+
+Options.ChinaHatTransparency:OnChanged(function(value)
+    ChinaHat:setHatTransparency(value)
+end)
+
+Options.ChinaHatSpeed:OnChanged(function(value)
+    ChinaHat:setSpeed(value)
+end)
+
+-- Character Material / Self Charms Core
+SelfChams = {}
+SC_lp = game:GetService("Players").LocalPlayer
+SC_loopManager = _52
+SC_enabled = false
+SC_color = Color3.fromRGB(155, 125, 175)
+SC_transparency = 0
+SC_reflectance = 0
+SC_material = 'ForceField'
+SC_effect = 'none'
+SC_addEffect = 'none'
+SC_particleColor = Color3.fromRGB(255, 255, 255)
+SC_particleTransparency = 0
+SC_heatTime = 0
+SC_charConnection = nil
+SC_cachedData = { parts = {}, clothing = {}, bodyColors = nil }
+SC_lastHeatTick = 0
+SC_heatConnection = nil
+
+SC_r15Parts = {
+    'LeftFoot', 'LeftLowerLeg', 'LeftUpperLeg',
+    'RightFoot', 'RightLowerLeg', 'RightUpperLeg',
+    'LeftHand', 'LeftLowerArm', 'LeftUpperArm',
+    'RightHand', 'RightLowerArm', 'RightUpperArm',
+    'LowerTorso', 'UpperTorso', 'Head'
+}
+
+SC_heatMap = {
+    LeftFoot = 0.7, LeftLowerLeg = 0.3, LeftUpperLeg = 0.5,
+    RightFoot = 0.7, RightLowerLeg = 0.3, RightUpperLeg = 0.5,
+    LeftHand = 0.7, LeftLowerArm = 0.3, LeftUpperArm = 0.5,
+    RightHand = 0.7, RightLowerArm = 0.3, RightUpperArm = 0.5,
+    LowerTorso = 0.3, UpperTorso = 0.5, Head = 0.5,
+}
+
+SC_partSet = {}
+for _, name in ipairs(SC_r15Parts) do SC_partSet[name] = true end
+
+function SC_isR15Part(name) return SC_partSet[name] == true end
+
+function SC_cacheCharacter(char)
+    if not char then return end
+    SC_cachedData.parts = {}
+    SC_cachedData.clothing = {}
+    SC_cachedData.bodyColors = nil
+    
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            SC_cachedData.parts[part.Name] = {
+                Material = part.Material, Color = part.Color,
+                Transparency = part.Transparency, Reflectance = part.Reflectance,
+                TextureID = part:IsA('MeshPart') and part.TextureID or nil,
+            }
+        end
+    end
+    
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA('Shirt') then SC_cachedData.clothing.Shirt = desc.ShirtTemplate
+        elseif desc:IsA('Pants') then SC_cachedData.clothing.Pants = desc.PantsTemplate end
     end
 end
 
-function ApplyLocalMaterial()
-    if not LocalPlayer:HasAppearanceLoaded() then
-        LocalPlayer.CharacterAppearanceLoaded:Wait()
+function SC_removeParticles(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) then
+            local stars = part:FindFirstChild('stars')
+            local specks = part:FindFirstChild('Specks')
+            if stars then pcall(function() stars:Destroy() end) end
+            if specks then pcall(function() specks:Destroy() end) end
+        end
     end
-    local character = LocalPlayer.Character
-    if not character then return end
-    local color = Options.LocalMaterialColor.Value
-    local transparency = math.clamp(Options.LocalMaterialTransparency.Value, 0, 0.9999999)
+end
+
+function SC_applyStars(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            local existing = part:FindFirstChild('stars')
+            if existing then existing:Destroy() end
+            pcall(function()
+                local stars = Instance.new('ParticleEmitter')
+                stars.Name = 'stars'
+                stars.Lifetime = NumberRange.new(0.45, 0.9)
+                stars.LockedToPart = true
+                stars.LightEmission = 1
+                stars.Drag = 5
+                stars.Squash = NumberSequence.new(-0.1)
+                stars.Speed = NumberRange.new(0.001, 0.001)
+                stars.Brightness = 3
+                stars.ZOffset = 1
+                stars.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.508, 0.05, 0.05), NumberSequenceKeypoint.new(1, 0)})
+                stars.Rate = 150
+                stars.Texture = 'rbxassetid://1084996976'
+                stars.EmissionDirection = Enum.NormalId.Bottom
+                stars.Color = ColorSequence.new(SC_particleColor)
+                stars.Transparency = NumberSequence.new(SC_particleTransparency)
+                stars.Parent = part
+            end)
+        end
+    end
+end
+
+function SC_applyParticles(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            local existing = part:FindFirstChild('Specks')
+            if existing then existing:Destroy() end
+            pcall(function()
+                local specks = Instance.new('ParticleEmitter')
+                specks.Name = 'Specks'
+                specks.Lifetime = NumberRange.new(0.22, 0.22)
+                specks.SpreadAngle = Vector2.new(90, 90)
+                local t = SC_particleTransparency
+                specks.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, math.min(1, t + 0.8)), NumberSequenceKeypoint.new(0.25, math.max(0, t - 0.1)), NumberSequenceKeypoint.new(1, math.min(1, t + 0.8))})
+                specks.LightEmission = 1
+                specks.Color = ColorSequence.new(SC_particleColor)
+                specks.Drag = 5
+                specks.Squash = NumberSequence.new(0)
+                specks.Speed = NumberRange.new(1, 1)
+                specks.Brightness = 4.2
+                specks.Size = NumberSequence.new(0.15)
+                specks.Acceleration = Vector3.new(0, -15, 0)
+                specks.RotSpeed = NumberRange.new(-45, 45)
+                specks.Rate = 100
+                specks.Texture = 'rbxassetid://7216849703'
+                specks.Parent = part
+            end)
+        end
+    end
+end
+
+function SC_applyChams(char, heatPulse, skipParticles)
+    if not char then return end
     
-    for _, partName in ipairs(body_parts) do
-        local part = character:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            store_original(part)
-            part.Material = Enum.Material.ForceField
-            part.Color = color
-            if part.Transparency ~= 1 then
-                part.Transparency = transparency
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA('Pants') or desc:IsA('Shirt') then
+            pcall(function() desc:Destroy() end)
+        end
+    end
+    
+    local mat = SC_material == 'Neon' and Enum.Material.Neon or SC_material == 'Glass' and Enum.Material.Glass or Enum.Material.ForceField
+    
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) then
+            local trans = SC_transparency
+            if SC_effect == 'heat' and SC_heatMap[part.Name] then
+                local base = SC_heatMap[part.Name]
+                if heatPulse then trans = base + (math.min(base + 0.2, 1) - base) * heatPulse
+                else trans = base end
+            end
+            
+            if part:IsA('MeshPart') then
+                pcall(function() part.Material = mat part.Color = SC_color part.Transparency = trans part.Reflectance = SC_reflectance part.TextureID = '' end)
+            elseif part:IsA('BasePart') then
+                pcall(function() part.Material = mat part.Color = SC_color part.Reflectance = SC_reflectance if part.Transparency < 1 then part.Transparency = trans end end)
             end
         end
     end
     
-    for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("Accessory") then
-            local handle = descendant:FindFirstChild("Handle")
-            if handle and handle:IsA("BasePart") then
-                store_original(handle)
-                handle.Material = Enum.Material.ForceField
-                handle.Color = color
-                if handle.Transparency ~= 1 then
-                    handle.Transparency = transparency
-                end
-                if handle:IsA("MeshPart") and handle.TextureID ~= "" then
-                    handle.TextureID = ""
-                end
-            end
-        end
-    end
-    
-    local shirt = character:FindFirstChild("Shirt")
-    if shirt and shirt:IsA("Shirt") and shirt.ShirtTemplate ~= "" then
-        store_original(shirt)
-        shirt.ShirtTemplate = ""
-    end
-    
-    local pants = character:FindFirstChild("Pants")
-    if pants and pants:IsA("Pants") and pants.PantsTemplate ~= "" then
-        store_original(pants)
-        pants.PantsTemplate = ""
-    end
-    
-    local shirtGraphic = character:FindFirstChild("Shirt Graphic")
-    if shirtGraphic and shirtGraphic:IsA("ShirtGraphic") and shirtGraphic.Graphic ~= "" then
-        store_original(shirtGraphic)
-        shirtGraphic.Graphic = ""
+    if not skipParticles then
+        if SC_addEffect == 'stars' then SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then SC_applyParticles(char)
+        else SC_removeParticles(char) end
     end
 end
 
-function remove_material(character)
-    if not character then return end
+function SC_restoreCharacter(char)
+    if not char then return end
+    SC_removeParticles(char)
     
-    for _, partName in ipairs(body_parts) do
-        local part = character:FindFirstChild(partName)
-        if part and part:IsA("BasePart") and original_data[part] then
-            part.Material = original_data[part].Material
-            part.Color = original_data[part].Color
-            part.Transparency = original_data[part].Transparency
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and SC_cachedData.parts[part.Name] then
+            local data = SC_cachedData.parts[part.Name]
+            pcall(function()
+                part.Material = data.Material part.Color = data.Color
+                part.Transparency = data.Transparency part.Reflectance = data.Reflectance
+                if part:IsA('MeshPart') and data.TextureID then part.TextureID = data.TextureID end
+            end)
         end
     end
     
-    for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("Accessory") then
-            local handle = descendant:FindFirstChild("Handle")
-            if handle and original_data[handle] then
-                handle.Material = original_data[handle].Material
-                handle.Color = original_data[handle].Color
-                handle.Transparency = original_data[handle].Transparency
-                if handle:IsA("MeshPart") and original_data[handle].TextureID then
-                    handle.TextureID = original_data[handle].TextureID
-                end
-            end
-        end
+    if SC_cachedData.clothing.Shirt then
+        pcall(function() local shirt = Instance.new('Shirt') shirt.ShirtTemplate = SC_cachedData.clothing.Shirt shirt.Parent = char end)
     end
-    
-    local shirt = character:FindFirstChild("Shirt")
-    if shirt and original_data[shirt] and original_data[shirt].ShirtTemplate then
-        shirt.ShirtTemplate = original_data[shirt].ShirtTemplate
+    if SC_cachedData.clothing.Pants then
+        pcall(function() local pants = Instance.new('Pants') pants.PantsTemplate = SC_cachedData.clothing.Pants pants.Parent = char end)
     end
-    
-    local pants = character:FindFirstChild("Pants")
-    if pants and original_data[pants] and original_data[pants].PantsTemplate then
-        pants.PantsTemplate = original_data[pants].PantsTemplate
-    end
-    
-    local shirtGraphic = character:FindFirstChild("Shirt Graphic")
-    if shirtGraphic and original_data[shirtGraphic] and original_data[shirtGraphic].Graphic then
-        shirtGraphic.Graphic = original_data[shirtGraphic].Graphic
-    end
-    
-    original_data = {}
 end
 
-Toggles.LocalMaterialToggle:OnChanged(function(value)
-    LocalMaterialEnabled = value
+function SC_stopHeatLoop()
+    if SC_heatConnection then SC_heatConnection:Disconnect() SC_heatConnection = nil end
+    SC_heatTime = 0 SC_lastHeatTick = 0
+end
+
+function SC_startHeatLoop()
+    SC_stopHeatLoop()
+    SC_lastHeatTick = tick()
+    SC_heatConnection = SC_loopManager.Heartbeat:Connect(function()
+        if not SC_enabled or SC_effect ~= 'heat' then SC_stopHeatLoop() return end
+        local char = SC_lp.Character
+        if not char then return end
+        local now = tick()
+        local dt = now - SC_lastHeatTick
+        SC_lastHeatTick = now
+        SC_heatTime = SC_heatTime + dt
+        local pulse = math.sin(SC_heatTime * 2) * 0.5 + 0.5
+        SC_applyChams(char, pulse, true)
+    end)
+end
+
+function SelfChams:setEnabled(val)
+    SC_enabled = val
+    local char = SC_lp.Character
     
-    if value then
-        ApplyLocalMaterial()
-        if LocalMaterialLoop then LocalMaterialLoop:Disconnect() end
-        LocalMaterialLoop = RunService.RenderStepped:Connect(ApplyLocalMaterial)
+    if SC_enabled then
+        SC_cacheCharacter(char)
+        SC_applyChams(char)
+        if SC_effect == 'heat' then SC_startHeatLoop() end
+        
+        if SC_charConnection then SC_charConnection:Disconnect() end
+        SC_charConnection = SC_lp.CharacterAdded:Connect(function(newChar)
+            newChar:WaitForChild('Humanoid')
+            task.wait(1.1)
+            if SC_enabled then
+                SC_cacheCharacter(newChar)
+                SC_applyChams(newChar)
+                if SC_effect == 'heat' then SC_startHeatLoop() end
+                task.wait(0.5)
+                SC_applyChams(newChar)
+            end
+        end)
     else
-        if LocalMaterialLoop then
-            LocalMaterialLoop:Disconnect()
-            LocalMaterialLoop = nil
-        end
-        if LocalPlayer.Character then
-            remove_material(LocalPlayer.Character)
-        end
+        SC_stopHeatLoop()
+        if SC_charConnection then SC_charConnection:Disconnect() SC_charConnection = nil end
+        SC_restoreCharacter(char)
     end
-end)
+end
 
-Options.LocalMaterialColor:OnChanged(function()
-    if LocalMaterialEnabled then ApplyLocalMaterial() end
-end)
-
-Options.LocalMaterialTransparency:OnChanged(function()
-    if LocalMaterialEnabled then ApplyLocalMaterial() end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function(character)
-    original_data = {}
-    if LocalMaterialEnabled then
-        task.wait(0.5)
-        ApplyLocalMaterial()
+function SelfChams:setColor(c) SC_color = c if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setTransparency(t) SC_transparency = t if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setReflectance(r) SC_reflectance = r if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setMaterial(m) SC_material = m if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setEffect(e)
+    SC_effect = e
+    if SC_enabled then
+        if e == 'heat' then SC_startHeatLoop()
+        else SC_stopHeatLoop() SC_applyChams(SC_lp.Character) end
     end
+end
+function SelfChams:setAddEffect(e)
+    SC_addEffect = e
+    if SC_enabled then
+        SC_removeParticles(SC_lp.Character)
+        if e == 'stars' then SC_applyStars(SC_lp.Character)
+        elseif e == 'particles' then SC_applyParticles(SC_lp.Character) end
+    end
+end
+function SelfChams:setParticleColor(c) SC_particleColor = c if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
+function SelfChams:setParticleTransparency(t) SC_particleTransparency = t if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
+
+-- UI
+_78:AddDivider()
+
+SC_Toggle = _78:AddToggle("SelfChamsToggle", {
+    Text = "Character Material",
+    Default = false,
+})
+
+SC_Toggle:AddColorPicker("SelfChamsColor", {
+    Default = Color3.fromRGB(155, 125, 175),
+    Title = "Cham Color",
+})
+
+_78:AddDropdown("SelfChamsMaterial", {
+    Text = "Material",
+    Values = {"ForceField", "Neon", "Glass"},
+    Default = "ForceField",
+})
+
+_78:AddDropdown("SelfChamsEffect", {
+    Text = "Effect",
+    Values = {"None", "Heat"},
+    Default = "None",
+})
+
+_78:AddDropdown("SelfChamsAddEffect", {
+    Text = "Add Effect",
+    Values = {"None", "Stars", "Particles"},
+    Default = "None",
+})
+
+_78:AddSlider("SelfChamsTransparency", {
+    Text = "Transparency",
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+_78:AddSlider("SelfChamsReflectance", {
+    Text = "Reflectance",
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+Toggles.SelfChamsToggle:OnChanged(function(value) SelfChams:setEnabled(value) end)
+Options.SelfChamsColor:OnChanged(function(value) SelfChams:setColor(value) end)
+Options.SelfChamsMaterial:OnChanged(function(value) SelfChams:setMaterial(value) end)
+Options.SelfChamsEffect:OnChanged(function(value) SelfChams:setEffect(value:lower()) end)
+Options.SelfChamsAddEffect:OnChanged(function(value) SelfChams:setAddEffect(value:lower()) end)
+Options.SelfChamsTransparency:OnChanged(function(value) SelfChams:setTransparency(value) end)
+Options.SelfChamsReflectance:OnChanged(function(value) SelfChams:setReflectance(value) end)
+
+-- Cleanup
+_48:OnUnload(function()
+    SelfChams:setEnabled(false)
 end)
 
 _78:AddDivider()
@@ -7769,22 +8195,44 @@ function updateBoxESP(player, boxData)
     end
 
     local headPart = character:FindFirstChild("Head")
-    local torsoPart = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso")
     local rootPart = character:FindFirstChild("HumanoidRootPart")
     
-    if not headPart or not torsoPart or not rootPart then
+    if not headPart or not rootPart then
         screenGui.Enabled = false
         return
     end
 
-    local headTopWorld = headPart.Position + Vector3.new(0, headPart.Size.Y / 2 + 0.5, 0)
-    local feetWorld = rootPart.Position - Vector3.new(0, 3.5, 0)
+    local sizeX, sizeY, sizeZ = 2.5, 6, 1.5
+    local corners = {
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(-sizeX / 2, -sizeY / 2, -sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(sizeX / 2, -sizeY / 2, -sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(-sizeX / 2, sizeY / 2, -sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(sizeX / 2, sizeY / 2, -sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(-sizeX / 2, -sizeY / 2, sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(sizeX / 2, -sizeY / 2, sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(-sizeX / 2, sizeY / 2, sizeZ / 2)).Position),
+        camera:WorldToViewportPoint((rootPart.CFrame * CFrame.new(sizeX / 2, sizeY / 2, sizeZ / 2)).Position),
+    }
 
-    local headTopScreen, headTopOnScreen = camera:WorldToViewportPoint(headTopWorld)
-    local feetScreen, feetOnScreen = camera:WorldToViewportPoint(feetWorld)
-    local rootScreen, rootOnScreen = camera:WorldToViewportPoint(rootPart.Position)
+    local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
 
-    if not headTopOnScreen or not feetOnScreen or not rootOnScreen then
+    for i = 1, 8 do
+        local corner = corners[i]
+        minX = math.min(minX, corner.X)
+        minY = math.min(minY, corner.Y)
+        maxX = math.max(maxX, corner.X)
+        maxY = math.max(maxY, corner.Y)
+    end
+
+    local anyOnScreen = false
+    for i = 1, 8 do
+        if corners[i].Z > 0 then
+            anyOnScreen = true
+            break
+        end
+    end
+
+    if not anyOnScreen then
         screenGui.Enabled = false
         return
     end
@@ -7792,14 +8240,10 @@ function updateBoxESP(player, boxData)
     screenGui.Enabled = true
     boxContainer.Visible = true
 
-    local height = math.abs(feetScreen.Y - headTopScreen.Y)
-    local width = height * 0.55
-
-    local centerX = rootScreen.X
-    local centerY = (headTopScreen.Y + feetScreen.Y) / 2
-
-    local boxX = centerX - (width / 2)
-    local boxY = headTopScreen.Y
+    local boxWidth = maxX - minX
+    local boxHeight = maxY - minY
+    local boxX = minX
+    local boxY = minY
 
     local thickness = _G.box_esp_thickness
     local fillInset = 1
@@ -7816,22 +8260,22 @@ function updateBoxESP(player, boxData)
     gradientImage.ImageTransparency = 0
     gradientImage.Visible = _G.box_esp_filled
 
-    topLine.Size = UDim2.new(0, width, 0, thickness)
+    topLine.Size = UDim2.new(0, boxWidth, 0, thickness)
     topLine.Position = UDim2.new(0, boxX, 0, boxY)
 
-    bottomLine.Size = UDim2.new(0, width, 0, thickness)
-    bottomLine.Position = UDim2.new(0, boxX, 0, boxY + height - thickness)
+    bottomLine.Size = UDim2.new(0, boxWidth, 0, thickness)
+    bottomLine.Position = UDim2.new(0, boxX, 0, boxY + boxHeight - thickness)
 
-    leftLine.Size = UDim2.new(0, thickness, 0, height)
+    leftLine.Size = UDim2.new(0, thickness, 0, boxHeight)
     leftLine.Position = UDim2.new(0, boxX, 0, boxY)
 
-    rightLine.Size = UDim2.new(0, thickness, 0, height)
-    rightLine.Position = UDim2.new(0, boxX + width - thickness, 0, boxY)
+    rightLine.Size = UDim2.new(0, thickness, 0, boxHeight)
+    rightLine.Position = UDim2.new(0, boxX + boxWidth - thickness, 0, boxY)
 
-    fillBox.Size = UDim2.new(0, width - fillInset * 2, 0, height - fillInset * 2)
+    fillBox.Size = UDim2.new(0, boxWidth - fillInset * 2, 0, boxHeight - fillInset * 2)
     fillBox.Position = UDim2.new(0, boxX + fillInset, 0, boxY + fillInset)
 
-    gradientImage.Size = UDim2.new(0, width - fillInset * 2, 0, height - fillInset * 2)
+    gradientImage.Size = UDim2.new(0, boxWidth - fillInset * 2, 0, boxHeight - fillInset * 2)
     gradientImage.Position = UDim2.new(0, boxX + fillInset, 0, boxY + fillInset)
 
     local barX = boxX - 5
@@ -7839,13 +8283,13 @@ function updateBoxESP(player, boxData)
 
     if _G.box_esp_bar_types["Health"] then
         local health_per = math.floor((humanoid.Health / humanoid.MaxHealth) * 100)
-        local barHeight = height * (health_per / 100)
+        local barHeight = boxHeight * (health_per / 100)
         
         healthBar.Size = UDim2.new(0, 2, 0, barHeight)
-        healthBar.Position = UDim2.new(0, barX, 0, barY + height - barHeight)
+        healthBar.Position = UDim2.new(0, barX, 0, barY + boxHeight - barHeight)
         healthBar.Visible = true
         
-        healthBarBackground.Size = UDim2.new(0, 2, 0, height)
+        healthBarBackground.Size = UDim2.new(0, 2, 0, boxHeight)
         healthBarBackground.Position = UDim2.new(0, barX, 0, barY)
         healthBarBackground.Visible = true
     else
@@ -7857,13 +8301,13 @@ function updateBoxESP(player, boxData)
         local armorVal = getArmorValue(character)
         local armor_per = math.floor((armorVal / 200) * 100)
         local armor_bar_x = barX - 5.4
-        local armor_bar_height = height * (armor_per / 100)
+        local armor_bar_height = boxHeight * (armor_per / 100)
         
         armorBar.Size = UDim2.new(0, 2, 0, armor_bar_height)
-        armorBar.Position = UDim2.new(0, armor_bar_x, 0, barY + height - armor_bar_height)
+        armorBar.Position = UDim2.new(0, armor_bar_x, 0, barY + boxHeight - armor_bar_height)
         armorBar.Visible = true
         
-        armorBarBackground.Size = UDim2.new(0, 2, 0, height)
+        armorBarBackground.Size = UDim2.new(0, 2, 0, boxHeight)
         armorBarBackground.Position = UDim2.new(0, armor_bar_x, 0, barY)
         armorBarBackground.Visible = true
     else
@@ -8365,6 +8809,10 @@ _48:OnUnload(function()
     pcall(function() RunService:UnbindFromRenderStep("KlaxCamlock") end)
     uninstallSilentAimHooksHard()
     skeletonCache = {}
+    if ChinaHat then ChinaHat:setEnabled(false) end
+    if connection then connection:Disconnect() connection = nil end
+    for _, d in ipairs(drawings) do pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end) end
+    drawings = {}
     if collectgarbage then collectgarbage() end
 end)
 
