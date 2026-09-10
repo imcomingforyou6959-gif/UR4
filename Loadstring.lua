@@ -98,6 +98,12 @@ task.spawn(function()
     pcall(_L29)
 end)
 
+repeat task["wait"]() until game:IsLoaded()
+
+if (identifyexecutor() == "AWP" or identifyexecutor() == "Nihon") then
+    cleardrawcache()
+end
+
 workspace.FallenPartsDestroyHeight = -0 / 0
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
@@ -3306,8 +3312,8 @@ hatTrs = 0.35
 lineTrs = 1
 speed = 0.2
 offsetY = 0.5
-drawings = {}
-connection = nil
+CH_drawings = {}
+CH_connection = nil
 Players = game:GetService("Players")
 LocalPlayer = Players.LocalPlayer
 cam = workspace.CurrentCamera
@@ -3326,38 +3332,23 @@ function getColor(progress, time)
     else return lerpColor(c4, c1, (s - 0.75) / 0.25) end
 end
 
-function createDrawings()
-    if #drawings == sides then return end
-    for _, d in ipairs(drawings) do
-        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
-    end
-    drawings = {}
-    for _ = 1, sides do
-        local line = Drawing.new('Line')
-        local triangle = Drawing.new('Triangle')
-        line.ZIndex = 2 line.Thickness = 1
-        triangle.ZIndex = 1 triangle.Filled = true
-        table.insert(drawings, {line, triangle})
-    end
-end
-
-function setVisibility(visible)
-    for _, d in ipairs(drawings) do
+function CH_setVisibility(visible)
+    for _, d in ipairs(CH_drawings) do
         if d[1] then d[1].Visible = visible end
         if d[2] then d[2].Visible = visible end
     end
 end
 
-function cleanup()
-    if connection then connection:Disconnect() connection = nil end
-    for _, d in ipairs(drawings) do
+function CH_cleanup()
+    if CH_connection then CH_connection:Disconnect() CH_connection = nil end
+    for _, d in ipairs(CH_drawings) do
         pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
     end
-    drawings = {}
+    CH_drawings = {}
 end
 
 function render()
-    if not enabled then setVisibility(false) return end
+    if not enabled then CH_setVisibility(false) return end
     
     local visibleCount = 0
     for _, player in ipairs(Players:GetPlayers()) do
@@ -3374,20 +3365,20 @@ function render()
         end
     end
     
-    if visibleCount == 0 then setVisibility(false) return end
+    if visibleCount == 0 then CH_setVisibility(false) return end
     
     local needed = visibleCount * sides
-    if #drawings ~= needed then
-        for _, d in ipairs(drawings) do
+    if #CH_drawings ~= needed then
+        for _, d in ipairs(CH_drawings) do
             pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
         end
-        drawings = {}
+        CH_drawings = {}
         for _ = 1, needed do
             local line = Drawing.new('Line')
             local triangle = Drawing.new('Triangle')
             line.ZIndex = 2 line.Thickness = 1
             triangle.ZIndex = 1 triangle.Filled = true
-            table.insert(drawings, {line, triangle})
+            table.insert(CH_drawings, {line, triangle})
         end
     end
     
@@ -3410,7 +3401,7 @@ function render()
                 
                 for i = 1, sides do
                     drawIndex = drawIndex + 1
-                    local line, triangle = drawings[drawIndex][1], drawings[drawIndex][2]
+                    local line, triangle = CH_drawings[drawIndex][1], CH_drawings[drawIndex][2]
                     local progress1 = i / sides
                     local angle1 = progress1 * fullCircle
                     local angle2 = ((i % sides) + 1) / sides * fullCircle
@@ -3443,18 +3434,19 @@ function render()
         end
     end
     
-    for i = drawIndex + 1, #drawings do
-        if drawings[i][1] then drawings[i][1].Visible = false end
-        if drawings[i][2] then drawings[i][2].Visible = false end
+    for i = drawIndex + 1, #CH_drawings do
+        if CH_drawings[i][1] then CH_drawings[i][1].Visible = false end
+        if CH_drawings[i][2] then CH_drawings[i][2].Visible = false end
     end
 end
 
 function ChinaHat:setEnabled(val)
     enabled = val
     if enabled then
-        if not connection then connection = game:GetService("RunService").RenderStepped:Connect(render) end
+        if not CH_connection then CH_connection = game:GetService("RunService").RenderStepped:Connect(render) end
     else
-        cleanup()
+        CH_setVisibility(false)
+        if CH_connection then CH_connection:Disconnect() CH_connection = nil end
     end
 end
 
@@ -3464,7 +3456,7 @@ function ChinaHat:setColor3(c) c3 = c end
 function ChinaHat:setColor4(c) c4 = c end
 function ChinaHat:setHeight(h) height = h end
 function ChinaHat:setRadius(r) radius = r end
-function ChinaHat:setSides(s) sides = s drawings = {} end
+function ChinaHat:setSides(s) sides = s CH_drawings = {} end
 function ChinaHat:setHatTransparency(t) hatTrs = t end
 function ChinaHat:setLineTransparency(t) lineTrs = t end
 function ChinaHat:setSpeed(s) speed = s end
