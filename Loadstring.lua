@@ -511,13 +511,10 @@ function applySkybox(skyName)
         end
         return
     end
-    
     if not Skyboxes[skyName] then return end
-    
     if Lighting:FindFirstChild('Skyboxzz') then
         Lighting.Skyboxzz:Destroy()
     end
-    
     sky = Instance.new('Sky')
     sky.Name = 'Skyboxzz'
     sky.SkyboxBk = Skyboxes[skyName].SkyboxBk
@@ -5077,10 +5074,17 @@ Options.WalkSpeed:OnChanged(_WalkSpeedChanged)
 Toggles.WalkSpeedEnabled:OnChanged(_WalkSpeedChanged)
 task.spawn(_WalkSpeedChanged)
 
+_Jumpnorm = 50
+_JPCached = false
+
 local function _JumpPowerLoop()
-    if not Toggles.JumpPowerEnabled.Value then return end
+    if not Toggles.JumpPowerEnabled.Value then 
+        return 
+    end
     local char = _56.Character
-    if not char then return end
+    if not char then 
+        return 
+    end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         hum.JumpPower = Options.JumpPower.Value
@@ -5088,14 +5092,44 @@ local function _JumpPowerLoop()
 end
 
 local function _JumpPowerChanged()
-    if not _JPConnection then
+    if _JPConnection then
+        _JPConnection:Disconnect()
+        _JPConnection = nil
+    end
+    local char = _56.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    
+    if Toggles.JumpPowerEnabled.Value then
+        if hum and not _JPCached then
+            _Jumpnorm = hum.JumpPower
+            _JPCached = true
+        end
+        
         _JPConnection = _52.RenderStepped:Connect(_JumpPowerLoop)
+    else
+        if hum then
+            hum.JumpPower = _Jumpnorm
+        end
+        _JPCached = false
     end
 end
 
 Options.JumpPower:OnChanged(_JumpPowerChanged)
 Toggles.JumpPowerEnabled:OnChanged(_JumpPowerChanged)
 task.spawn(_JumpPowerChanged)
+
+_56.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    _JPCached = false
+    if Toggles.JumpPowerEnabled.Value then
+        local hum = _56.Character:FindFirstChildOfClass("Humanoid")
+        if hum then
+            _Jumpnorm = hum.JumpPower
+            _JPCached = true
+        end
+    end
+    _JumpPowerChanged()
+end)
 
 local function syncStateFromUI()
     _104.enabled = Toggles.Enabled.Value
@@ -8718,35 +8752,34 @@ end
 _48:OnUnload(function()
     _AR_Running = false
     isRunning = false
-    cleanup()
-    _150()
-    _161()
-    _193()
-    _243.enabled = false
-    _245()
-    if _254 then _254:Disconnect() end
-    if _255 then _255:Disconnect() end
+    _G.x7f3k9m2 = false
+    _G.serverHopOnMod = false
+    pcall(cleanup)
+    pcall(_150)
+    pcall(_161)
+    pcall(_193)
+    pcall(cleanupCircleVisuals)
+    pcall(cleanupAllSkeletons)
     if _237 then _237:Disconnect() end
     if _121 then _121:Disconnect() _121 = nil end
-    if _133 then _133:Destroy() end
-    _138()
-    if _ForceRestHeartbeat then _ForceRestHeartbeat:Disconnect() end
-    if _NoclipConnection then _NoclipConnection:Disconnect() end
-    if _WSConnection then _WSConnection:Disconnect() end
-    if _JPConnection then _JPConnection:Disconnect() end
-    if skeletonConnection then skeletonConnection:Disconnect() end
-    if _AA_connections and _AA_connections.charAdded then _AA_connections.charAdded:Disconnect() end
+    if _254 then _254:Disconnect() end
+    if _255 then _255:Disconnect() end
+    if _ForceRestHeartbeat then _ForceRestHeartbeat:Disconnect() _ForceRestHeartbeat = nil end
+    if _NoclipConnection then _NoclipConnection:Disconnect() _NoclipConnection = nil end
+    if _WSConnection then _WSConnection:Disconnect() _WSConnection = nil end
+    if _JPConnection then _JPConnection:Disconnect() _JPConnection = nil end
     if SpinbotConnection then SpinbotConnection:Disconnect() SpinbotConnection = nil end
     if FaceTargetConnection then FaceTargetConnection:Disconnect() FaceTargetConnection = nil end
     if afkThread then task.cancel(afkThread) afkThread = nil end
+    if _AA_connections and _AA_connections.charAdded then _AA_connections.charAdded:Disconnect() _AA_connections.charAdded = nil end
     if _G.box_esp_connection then _G.box_esp_connection:Disconnect() _G.box_esp_connection = nil end
     for _, boxData in pairs(_G.box_esp_boxes) do if boxData and boxData.screenGui then pcall(function() boxData.screenGui:Destroy() end) end end
     table.clear(_G.box_esp_boxes)
     for _, label in pairs(ESP.labels) do if label then pcall(function() label:Destroy() end) end end
     table.clear(ESP.labels)
-    for player, lines in pairs(skeletonLines) do if lines then for _, line in ipairs(lines) do pcall(function() line:Remove() end) end end end
+    for _, lines in pairs(skeletonLines) do if lines then for _, line in ipairs(lines) do pcall(function() line:Remove() end) end end end
     table.clear(skeletonLines)
-    for player, conn in pairs(skeletonConnections) do if conn then pcall(function() conn:Disconnect() end) end end
+    for _, conn in pairs(skeletonConnections) do if conn then pcall(function() conn:Disconnect() end) end end
     table.clear(skeletonConnections)
     if skeletonRenderConnection then skeletonRenderConnection:Disconnect() skeletonRenderConnection = nil end
     if skeletonPlayerRemovingConnection then skeletonPlayerRemovingConnection:Disconnect() skeletonPlayerRemovingConnection = nil end
@@ -8759,52 +8792,30 @@ _48:OnUnload(function()
     if _132 then pcall(function() _132:Destroy() end) _132 = nil end
     if _G.TrailEnabled then local char = LocalPlayer.Character if char then local hrp = char:FindFirstChild('HumanoidRootPart') if hrp then for _, child in ipairs(hrp:GetChildren()) do if child:IsA('Trail') and child.Name == 'PlayerTrail' then pcall(function() child:Destroy() end) end end end end end
     if _G.aurp then for i = 1, #_G.aurp do if _G.aurp[i] then pcall(function() _G.aurp[i]:Destroy() end) end end table.clear(_G.aurp) end
-    local char = LocalPlayer.Character if char then local ff = char:FindFirstChild("FakeFF") if ff then pcall(function() ff:Destroy() end) end end
+    local char = LocalPlayer.Character
+    if char then local ff = char:FindFirstChild("FakeFF") if ff then pcall(function() ff:Destroy() end) end end
     if _G.Emotes and _G.Emotes.CurrentAnimation then pcall(function() _G.Emotes.CurrentAnimation:Stop() end) _G.Emotes.CurrentAnimation = nil end
     if _G.AntiStompConnection then _G.AntiStompConnection:Disconnect() _G.AntiStompConnection = nil end
     if _G.AntiStompCharAdded then _G.AntiStompCharAdded:Disconnect() _G.AntiStompCharAdded = nil end
     if _G.anti_sit_connection then _G.anti_sit_connection:Disconnect() _G.anti_sit_connection = nil end
     if _G.anti_sit_char_connection then _G.anti_sit_char_connection:Disconnect() _G.anti_sit_char_connection = nil end
-    for player, conn in pairs(_G.antiFlingConnections) do if conn then pcall(function() conn:Disconnect() end) end end
+    for _, conn in pairs(_G.antiFlingConnections) do if conn then pcall(function() conn:Disconnect() end) end end
     table.clear(_G.antiFlingConnections)
     if stompConnection then stompConnection:Disconnect() stompConnection = nil end
     if isGrabbing then isGrabbing = false grabbedTarget = nil grabReturnPos = nil end
     if DefenseCircleConnection then DefenseCircleConnection:Disconnect() DefenseCircleConnection = nil end
     if DefenseCircleVisualConnection then DefenseCircleVisualConnection:Disconnect() DefenseCircleVisualConnection = nil end
-    cleanupCircleVisuals()
-    if flightBody then if flightBody.bg then flightBody.bg:Destroy() end if flightBody.bv then flightBody.bv:Destroy() end flightBody = nil end
-    if noclipConn then noclipConn:Disconnect() noclipConn = nil end
-    if infiniteJumpConn then infiniteJumpConn:Disconnect() infiniteJumpConn = nil end
-    if walkspeedConn then walkspeedConn:Disconnect() walkspeedConn = nil end
-    if jumpConnection then jumpConnection:Disconnect() jumpConnection = nil end
-    if fullbrightConn then fullbrightConn:Disconnect() fullbrightConn = nil end
-    if lightingConn then lightingConn:Disconnect() lightingConn = nil end
-    if rotatingSkyConn then rotatingSkyConn:Disconnect() rotatingSkyConn = nil end
-    resetTextureColors()
-    resetMats()
-    if origSky then applySky(nil) origSky = nil end
-    if fovCircle then pcall(function() fovCircle:Remove() end) fovCircle = nil end
-    if camlockFOVCircle then pcall(function() camlockFOVCircle:Remove() end) camlockFOVCircle = nil end
-    if btpLine then pcall(function() btpLine:Remove() end) btpLine = nil end
-    for _, drop in pairs(rainDrops) do if drop and drop.line then pcall(function() drop.line:Remove() end) end end
-    table.clear(rainDrops)
-    for m in pairs(activeWeaponHighlights) do if m then pcall(function() local g = activeWeaponHighlights[m] if g then g:Destroy() end end) end end
-    table.clear(activeWeaponHighlights)
-    _G.x7f3k9m2 = false
     table.clear(_G.b8n4v6d2)
     table.clear(_G.j2h5g8f1)
     table.clear(_G.lastNotifyTime)
-    _G.serverHopOnMod = false
     if _oldRandom then pcall(function() hookfunction(math.random, _oldRandom) end) _oldRandom = nil end
-    pcall(function() cam.CameraType = Enum.CameraType.Custom cam.FieldOfView = 70 end)
-    pcall(function() Lighting.Brightness = origL.Brightness Lighting.ClockTime = origL.ClockTime Lighting.GlobalShadows = origL.GlobalShadows Lighting.FogStart = origL.FogStart Lighting.FogEnd = origL.FogEnd Lighting.FogColor = origL.FogColor end)
-    pcall(function() RunService:UnbindFromRenderStep("KlaxCamlock") end)
-    uninstallSilentAimHooksHard()
-    skeletonCache = {}
     if ChinaHat then ChinaHat:setEnabled(false) end
-    if connection then connection:Disconnect() connection = nil end
-    for _, d in ipairs(drawings) do pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end) end
-    drawings = {}
+    if _133 then _133:Destroy() end
+    _138()
+    for i, _139 in ipairs(_136) do pcall(function() _139:Remove() end) end
+    for i, _140 in ipairs(_137) do pcall(function() _140:Remove() end) end
+    _136 = {}
+    _137 = {}
     if collectgarbage then collectgarbage() end
 end)
 
