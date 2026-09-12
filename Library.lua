@@ -175,28 +175,13 @@ function Library:MakeDraggable(Instance, Cutoff)
                 return;
             end;
 
-            local Camera = workspace.CurrentCamera
-            -- Get the frame size, with a fallback
-            local FrameSize = Instance.AbsoluteSize
-            if FrameSize.Y <= 0 then
-                FrameSize = Vector2.new(Instance.Size.X.Offset, Instance.Size.Y.Offset)
-            end
-
             while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
-                -- Calculate the position
-                local NewX = Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X)
-                local NewY = Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
-
-                -- Get screen bounds
-                local ViewportSize = Camera.ViewportSize
-
-                -- Clamp to screen bounds with padding
-                local Padding = 5
-                NewX = math.clamp(NewX, Padding, ViewportSize.X - FrameSize.X - Padding)
-                NewY = math.clamp(NewY, Padding, ViewportSize.Y - FrameSize.Y - Padding)
-
-                -- Apply the clamped position
-                Instance.Position = UDim2.new(0, NewX, 0, NewY)
+                Instance.Position = UDim2.new(
+                    0,
+                    Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
+                    0,
+                    Mouse.Y - ObjPos.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
+                );
 
                 RenderStepped:Wait();
             end;
