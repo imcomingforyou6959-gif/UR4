@@ -3640,11 +3640,13 @@ end;
 
 Players.PlayerAdded:Connect(OnPlayerChange);
 Players.PlayerRemoving:Connect(OnPlayerChange);
+
 function Library:CreateSpotifyPlayer()
     local Spotify = {}
 
     local InputService      = UserInputService
     local UserInputService  = UserInputService
+    local Players           = game:GetService("Players")
 
     local Request = request
         or http_request
@@ -3745,13 +3747,19 @@ function Library:CreateSpotifyPlayer()
     local LastKnownPlaying = false
 
     -- lyrics state
-    local LyricsCache           = {}     -- [trackId] = { Plain, Synced, Parsed, HasSynced, Instrumental }
-    local CurrentLyrics         = {}     -- parsed lines for the playing track
+    local LyricsCache           = {}
+    local CurrentLyrics         = {}
     local CurrentLyricsSynced   = false
     local CurrentLyricsTrackId  = nil
     local CurrentLyricsLoading  = false
     local CurrentHighlightIndex = 0
     local SidebarTab            = "queue"
+
+    -- popout state
+    local LyricsPoppedOut       = false
+    local PopoutPosition        = nil
+    local PopoutScreenGui       = nil
+    local ConnectorScreenGui    = nil
 
     local Items = {}
     local Icons = {}
@@ -3932,8 +3940,19 @@ function Library:CreateSpotifyPlayer()
         Text="Lyrics", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Right,
         Position=UDim2.new(0.5,0,0,5),
-        Size=UDim2.new(0.5,-8,0,16), BorderSizePixel=0,
+        Size=UDim2.new(0.5,-30,0,16), BorderSizePixel=0,
     })
+
+    -- popout button (top-right of sidebar header)
+    Items["PopoutButton"] = New("TextButton", {
+        Name="\0", Font=Library.Font, TextSize=14,
+        Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
+        Text="⧉", BackgroundTransparency=1, AutoButtonColor=false,
+        TextXAlignment=Enum.TextXAlignment.Right,
+        AnchorPoint=Vector2.new(1,0),
+        Position=UDim2.new(1,-8,0,5),
+        Size=UDim2.new(0,20,0,16), BorderSizePixel=0,
+    }, { TextColor3='AccentColor' })
 
     -- queue panel
     Items["QueueScroll"] = New("ScrollingFrame", {
@@ -4194,7 +4213,6 @@ function Library:CreateSpotifyPlayer()
         if not Request or not trackName or not artistName then return nil end
         if trackName == "Unknown track" or artistName == "Unknown artist" then return nil end
 
-        -- LRCLIB prefers a single artist name; Spotify gives us "A, B, C"
         local primaryArtist = artistName:match("^([^,]+)") or artistName
         primaryArtist = primaryArtist:gsub("^%s*(.-)%s*$", "%1")
 
@@ -4341,7 +4359,6 @@ function Library:CreateSpotifyPlayer()
     local function LoadLyricsForTrack(track)
         if not track or not track.TrackId then return end
 
-        -- cache hit
         local cached = LyricsCache[track.TrackId]
         if cached then
             if cached.Instrumental then
@@ -4370,7 +4387,6 @@ function Library:CreateSpotifyPlayer()
             return
         end
 
-        -- fetch
         if CurrentLyricsLoading then return end
         CurrentLyricsLoading = true
         Items["LyricsText"].Text = "Loading lyrics…"
@@ -4383,7 +4399,6 @@ function Library:CreateSpotifyPlayer()
             local result = GetLyrics(track.Title, track.Artist, track.Album, track.Duration)
             CurrentLyricsLoading = false
 
-            -- track may have changed while we were fetching
             if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
 
             if not result then
@@ -4444,8 +4459,8 @@ function Library:CreateSpotifyPlayer()
         Items["LyricsScroll"].Visible = not isQueue
 
         if not isQueue then
-            -- auto-load if we have a track and haven't yet
-            if CurrentTrack and not CurrentLyricsLoading and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
+            if CurrentTrack and not CurrentLyricsLoading
+                and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
                 LoadLyricsForTrack(CurrentTrack)
             end
         end
@@ -4488,7 +4503,7 @@ function Library:CreateSpotifyPlayer()
             CurrentLyrics = {}
             CurrentLyricsSynced = false
             CurrentHighlightIndex = 0
-            if IsExpanded and SidebarTab == "lyrics" then
+            if SidebarTab == "lyrics" then
                 LoadLyricsForTrack(data)
             end
         end
@@ -4747,23 +4762,195 @@ function Library:CreateSpotifyPlayer()
             Items["PlayerArea"].Position = playerAreaPos
             Items["SearchBackground"].Position = searchPos
             Items["SearchResults"].Position = resultsPos
-            Items["LyricsFrame"].Position = lyricsPos
+            if not LyricsPoppedOut then
+                Items["LyricsFrame"].Position = lyricsPos
+            end
             Items["ExpandButton"].Rotation = expandRot
         else
             Tween(player, { Size = bool and ExpandedSize or CollapsedSize }, info)
             Tween(Items["PlayerArea"],      { Position = playerAreaPos }, info)
             Tween(Items["SearchBackground"],{ Position = searchPos },    info)
             Tween(Items["SearchResults"],   { Position = resultsPos },   info)
-            Tween(Items["LyricsFrame"],     { Position = lyricsPos },    info)
+            if not LyricsPoppedOut then
+                Tween(Items["LyricsFrame"], { Position = lyricsPos }, info)
+            end
             Tween(Items["ExpandButton"],    { Rotation = expandRot },    info)
         end
         Spotify:Center()
 
-        -- lazily load lyrics the first time we open expanded while on Lyrics tab
         if bool and SidebarTab == "lyrics" and CurrentTrack then
             if CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 and not CurrentLyricsLoading then
                 LoadLyricsForTrack(CurrentTrack)
             end
+        end
+    end
+
+    -- popout
+    local function EnsurePopoutGui()
+        if PopoutScreenGui and PopoutScreenGui.Parent then return PopoutScreenGui end
+        PopoutScreenGui = Instance.new("ScreenGui")
+        PopoutScreenGui.Name = "RawrHub_SpotifyPopout"
+        PopoutScreenGui.ResetOnSpawn = false
+        PopoutScreenGui.IgnoreGuiInset = true
+        PopoutScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        if syn and syn.protect_gui then
+            pcall(function() syn.protect_gui(PopoutScreenGui) end)
+        end
+        PopoutScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+        return PopoutScreenGui
+    end
+
+    local function EnsureConnectorGui()
+        if ConnectorScreenGui and ConnectorScreenGui.Parent then return ConnectorScreenGui end
+        ConnectorScreenGui = Instance.new("ScreenGui")
+        ConnectorScreenGui.Name = "RawrHub_SpotifyConnector"
+        ConnectorScreenGui.ResetOnSpawn = false
+        ConnectorScreenGui.IgnoreGuiInset = true
+        ConnectorScreenGui.DisplayOrder = -1
+        ConnectorScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        if syn and syn.protect_gui then
+            pcall(function() syn.protect_gui(ConnectorScreenGui) end)
+        end
+        ConnectorScreenGui.Parent = (gethui and gethui()) or game:GetService("CoreGui")
+        return ConnectorScreenGui
+    end
+
+    local function EnsureConnectorLine()
+        if Items["PopoutLine"] and Items["PopoutLine"].Parent then return Items["PopoutLine"] end
+        local gui = EnsureConnectorGui()
+        Items["PopoutLine"] = Instance.new("Frame")
+        Items["PopoutLine"].Name = "PopoutLine"
+        Items["PopoutLine"].AnchorPoint = Vector2.new(0.5, 0.5)
+        Items["PopoutLine"].BackgroundColor3 = Library.AccentColor
+        Items["PopoutLine"].BackgroundTransparency = 0.35
+        Items["PopoutLine"].BorderSizePixel = 0
+        Items["PopoutLine"].Size = UDim2.new(0, 0, 0, 1)
+        Items["PopoutLine"].Visible = false
+        Items["PopoutLine"].ZIndex = 1
+        Items["PopoutLine"].Parent = gui
+        return Items["PopoutLine"]
+    end
+
+    local function UpdateConnectorLine()
+        local line = Items["PopoutLine"]
+        if not line or not line.Visible then return end
+        if not LyricsPoppedOut then return end
+
+        local player = Items["SpotifyPlayer"]
+        local popout = Items["LyricsFrame"]
+        if not player or not player.Parent or not popout or not popout.Parent then
+            line.Visible = false
+            return
+        end
+
+        local playerPos  = player.AbsolutePosition
+        local playerSize = player.AbsoluteSize
+        local popPos     = popout.AbsolutePosition
+        local popSize    = popout.AbsoluteSize
+
+        -- nearest edge midpoint on the player toward the popout
+        local fromX, fromY
+        local popCenter = popPos + popSize * 0.5
+        local playerCenter = playerPos + playerSize * 0.5
+        if popCenter.X >= playerCenter.X then
+            fromX = playerPos.X + playerSize.X
+        else
+            fromX = playerPos.X
+        end
+        fromY = playerPos.Y + playerSize.Y * 0.5
+
+        -- nearest edge midpoint on the popout toward the player
+        local toX, toY
+        if playerCenter.X >= popCenter.X then
+            toX = popPos.X + popSize.X
+        else
+            toX = popPos.X
+        end
+        toY = popPos.Y + popSize.Y * 0.5
+
+        local fromVec = Vector2.new(fromX, fromY)
+        local toVec   = Vector2.new(toX, toY)
+        local delta   = toVec - fromVec
+        local dist    = delta.Magnitude
+        if dist <= 1 then
+            line.Visible = false
+            return
+        end
+
+        local angle  = math.deg(math.atan2(delta.Y, delta.X))
+        local center = fromVec + delta * 0.5
+
+        line.Position = UDim2.new(0, center.X, 0, center.Y)
+        line.Size     = UDim2.new(0, dist, 0, 1)
+        line.Rotation = angle
+        line.BackgroundColor3 = Library.AccentColor
+    end
+
+    local function PopOutLyrics()
+        if LyricsPoppedOut then return end
+        if not IsExpanded then SetExpanded(true, true) end
+
+        -- capture current on-screen position so it lands where it was
+        local frame = Items["LyricsFrame"]
+        local absPos = frame.AbsolutePosition
+        local absSize = frame.AbsoluteSize
+
+        frame.Parent = EnsurePopoutGui()
+        frame.AnchorPoint = Vector2.new(0, 0)
+        frame.Position = UDim2.new(0, absPos.X, 0, absPos.Y)
+        frame.Size = UDim2.new(0, math.max(absSize.X, 260), 0, math.max(absSize.Y, 200))
+        frame.ZIndex = 500
+
+        -- draggable via a dedicated handle area: we reuse the whole frame
+        -- and save position on drag end
+        Library:MakeDraggable(frame)
+
+        -- expand the frame's drag capture so the whole top row works
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                local p = frame.Position
+                PopoutPosition = UDim2.new(0, p.X.Offset, 0, p.Y.Offset)
+            end
+        end)
+
+        -- show connector line
+        local line = EnsureConnectorLine()
+        line.Visible = true
+
+        LyricsPoppedOut = true
+        Items["PopoutButton"].Text = "⧈"
+        Items["PopoutButton"].TextColor3 = Library.AccentColor
+    end
+
+    local function PopInLyrics()
+        if not LyricsPoppedOut then return end
+
+        local frame = Items["LyricsFrame"]
+        frame.Parent = Items["SpotifyPlayer"]
+        frame.AnchorPoint = Vector2.new(0, 0)
+        -- restore collapsed/expanded relative position
+        if IsExpanded then
+            frame.Position = UDim2.new(0, 270, 0, 10)
+        else
+            frame.Position = UDim2.new(1, 10, 0, 10)
+        end
+        frame.Size = UDim2.new(0, 260, 0, 146)
+        frame.ZIndex = 1
+
+        if Items["PopoutLine"] then
+            Items["PopoutLine"].Visible = false
+        end
+
+        LyricsPoppedOut = false
+        Items["PopoutButton"].Text = "⧉"
+    end
+
+    local function TogglePopout()
+        if LyricsPoppedOut then
+            PopInLyrics()
+        else
+            PopOutLyrics()
         end
     end
 
@@ -4908,6 +5095,10 @@ function Library:CreateSpotifyPlayer()
         SetSidebarTab("lyrics")
     end)
 
+    Items["PopoutButton"].MouseButton1Click:Connect(function()
+        TogglePopout()
+    end)
+
     Items["ExpandButton"].MouseButton1Click:Connect(function()
         SetExpanded(not IsExpanded)
     end)
@@ -4990,12 +5181,21 @@ function Library:CreateSpotifyPlayer()
                 local p = math.min(CurrentTrack.Progress + ((tick() - CurrentTrack.UpdatedAt) * 1000),
                                    CurrentTrack.Duration)
                 SetProgress(p, CurrentTrack.Duration, true)
-                -- drive lyrics highlight off the same extrapolated position
                 if SidebarTab == "lyrics" and CurrentLyricsSynced then
                     UpdateLyricsHighlight(p)
                 end
             end
             task.wait(0.1)
+        end
+    end)
+
+    -- connector line updater (runs only when popped out)
+    task.spawn(function()
+        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+            if LyricsPoppedOut then
+                UpdateConnectorLine()
+            end
+            task.wait(0.05)
         end
     end)
 
