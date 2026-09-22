@@ -4007,11 +4007,12 @@ function Library:CreateSpotifyPlayer()
 
     Items["CoverFrame"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
-        Position=UDim2.new(0,0,0,2),
-        Size=UDim2.new(0,50,0,50),
-        BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        Position=UDim2.new(0,0,0,-3),
+        Size=UDim2.new(0,60,0,60),
+        BorderSizePixel=0,
+        BackgroundTransparency=1,
         ZIndex=3,
-    }, { BackgroundColor3='BackgroundColor' })
+    })
     New("UICorner", { Name="\0", Parent=Items["CoverFrame"], CornerRadius=UDim.new(1,0) })
 
     New("UIStroke", { Name="\0", Parent=Items["CoverFrame"],
@@ -4035,11 +4036,10 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0.5,0,0.5,0),
         Image=PlaceholderImage, BackgroundTransparency=1,
         ScaleType=Enum.ScaleType.Crop,
-        Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
+        Size=UDim2.new(1.5,0,1.5,0), BorderSizePixel=0,
         Rotation=0,
         ZIndex=3,
     })
-    New("UICorner", { Name="\0", Parent=Items["Cover"], CornerRadius=UDim.new(0.5,0) })
 
     local CoverHole = New("Frame", {
         Name="\0", Parent=Items["CoverFrame"],
@@ -4057,8 +4057,8 @@ function Library:CreateSpotifyPlayer()
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
         BackgroundTransparency=1,
-        Position=UDim2.new(0,60,0,2),
-        Size=UDim2.new(1,-176,0,53),
+        Position=UDim2.new(0,68,0,2),
+        Size=UDim2.new(1,-186,0,53),
         BorderSizePixel=0,
         ZIndex=3,
     })
@@ -4112,7 +4112,7 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["PlayerArea"],
         TextColor3=ThemeInactiveText, Text="0:00 / 0:00", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,60,0,56), Size=UDim2.new(0,90,0,12),
+        Position=UDim2.new(0,68,0,58), Size=UDim2.new(0,90,0,12),
         BorderSizePixel=0,
         ZIndex=3,
     })
