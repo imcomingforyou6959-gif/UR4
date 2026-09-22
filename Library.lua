@@ -3657,15 +3657,22 @@ function Library:CreateSpotifyPlayer()
 
     local SpotifyFolder = (Library.Directory or "spotifyforRawr") .. "/Spotify"
     local CacheFolder   = SpotifyFolder .. "/Cache"
-    local TokenPath     = (Library.Directory or "spotifyforRawr") .. "/token.txt"
+    local TrackCache    = SpotifyFolder .. "/Tracks"
+    local TokenPath     = (Library.Directory or "spotifyforRawr") .. "/audius_key.txt"
     local PlaceholderImage = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-    local PollInterval  = 1
 
     if not isfolder(SpotifyFolder) then makefolder(SpotifyFolder) end
     if not isfolder(CacheFolder)   then makefolder(CacheFolder)   end
+    if not isfolder(TrackCache)    then makefolder(TrackCache)    end
 
     local ThemeInactiveText = Color3.fromRGB(180, 180, 180)
     local ThemeLyricsDim    = Color3.fromRGB(110, 110, 110)
+
+    local AUDIUS_BASE   = "https://api.audius.co"
+    local AUDIUS_APP    = "RawrHub"
+
+    -- If you hardcode your key here, users don't need token.txt
+    local HARDCODED_KEY = "6d844b1335d457750c28b4822aae357fd63af227"
 
     local function New(Class, Props, RegProps, Hud)
         local inst = Library:Create(Class, Props)
@@ -3681,55 +3688,18 @@ function Library:CreateSpotifyPlayer()
         ):Play()
     end
 
-    -- token
     local function ReadToken()
-        if not isfile(TokenPath) then writefile(TokenPath, "") return "" end
-        return (readfile(TokenPath):gsub("^%s*(.-)%s*$", "%1"))
+        if not isfile(TokenPath) then writefile(TokenPath, HARDCODED_KEY) return HARDCODED_KEY end
+        local raw = (readfile(TokenPath):gsub("^%s*(.-)%s*$", "%1"))
+        if raw == "" then return HARDCODED_KEY end
+        return raw
     end
 
-    local function DecodeTokenConfig(RawToken)
-        local Clean = (RawToken or ""):gsub("^%s*(.-)%s*$", "%1")
-        if Clean == "" then
-            return { Raw="", AccessToken="", RefreshToken="", ClientId="", ClientSecret="", ExpiresAt=0 }
-        end
-        if Clean:sub(1,1) ~= "{" then
-            return { Raw=Clean, AccessToken=Clean, RefreshToken="", ClientId="", ClientSecret="", ExpiresAt=math.huge }
-        end
-        local ok, parsed = pcall(HttpService.JSONDecode, HttpService, Clean)
-        if not ok or type(parsed) ~= "table" then
-            return { Raw=Clean, AccessToken="", RefreshToken="", ClientId="", ClientSecret="", ExpiresAt=0 }
-        end
-        return {
-            Raw = Clean,
-            AccessToken  = tostring(parsed.access_token  or parsed.token or ""):gsub("^%s*(.-)%s*$","%1"),
-            RefreshToken = tostring(parsed.refresh_token or ""):gsub("^%s*(.-)%s*$","%1"),
-            ClientId     = tostring(parsed.client_id     or ""):gsub("^%s*(.-)%s*$","%1"),
-            ClientSecret = tostring(parsed.client_secret or ""):gsub("^%s*(.-)%s*$","%1"),
-            ExpiresAt    = tonumber(parsed.expires_at) or 0,
-        }
+    local function WriteToken(tok)
+        writefile(TokenPath, tok or HARDCODED_KEY)
     end
 
-    local function EncodeTokenConfig(Config)
-        if not Config then return "" end
-        if (Config.RefreshToken or "") == "" then return Config.AccessToken or "" end
-        local ok, enc = pcall(HttpService.JSONEncode, HttpService, {
-            access_token=Config.AccessToken or "", refresh_token=Config.RefreshToken or "",
-            client_id=Config.ClientId or "", client_secret=Config.ClientSecret or "",
-            expires_at=math.floor(tonumber(Config.ExpiresAt) or 0),
-        })
-        return ok and enc or ""
-    end
-
-    local function WriteToken(ConfigOrToken)
-        if type(ConfigOrToken) == "table" then
-            writefile(TokenPath, EncodeTokenConfig(ConfigOrToken))
-        else
-            writefile(TokenPath, ConfigOrToken or "")
-        end
-    end
-
-    local TokenConfig = DecodeTokenConfig(ReadToken())
-    local Token = TokenConfig.AccessToken
+    local Token = ReadToken()
 
     -- state
     local CollapsedSize = UDim2.new(0, 248, 0, 88)
@@ -3742,11 +3712,21 @@ function Library:CreateSpotifyPlayer()
     local IsExpanded = false
     local Seeking = false
     local SearchRequestId = 0
-    local SearchDelay = 0.25
+    local SearchDelay = 0.35
     local UpdateQueueCanvas
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
+
+    -- Audius playback state
+    local AudioPlayer   = nil      -- Sound instance
+    local TrackCacheMap = {}       -- trackId -> cached asset path
+    local LocalQueue    = {}       -- list of pending track tables
+    local LocalHistory  = {}       -- list of played track tables
+    local ShuffleOn     = false
+    local RepeatMode    = "off"    -- "off" | "all" | "one"
+    local LoadingTrackId = nil
+    local LoadingSpinner = 0
 
     -- lyrics state
     local LyricsCache           = {}
@@ -3782,7 +3762,7 @@ function Library:CreateSpotifyPlayer()
         Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     end
 
-    -- root frame
+    -- root frame (identical)
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
         Position=UDim2.new(0, 30, 0, 240),
@@ -3829,7 +3809,7 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["SearchBackground"],
         AnchorPoint=Vector2.new(0,0.5),
         PlaceholderColor3=ThemeInactiveText,
-        PlaceholderText="Search songs, artists, albums…",
+        PlaceholderText="Search Audius…",
         Size=UDim2.new(1,-16,0,15),
         TextColor3=Library.FontColor, Text="",
         BackgroundTransparency=1,
@@ -3917,7 +3897,7 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- sidebar (queue + lyrics)
+    -- sidebar
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -3933,7 +3913,6 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    -- tab row
     Items["QueueTab"] = New("TextButton", {
         Name="\0", Font=Library.Font, TextSize=14,
         Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
@@ -3952,7 +3931,6 @@ function Library:CreateSpotifyPlayer()
         Size=UDim2.new(0.5,-10,0,16), BorderSizePixel=0,
     })
 
-    -- accent underline for the active tab
     Items["TabUnderline"] = New("Frame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,10,0,23),
@@ -3960,7 +3938,6 @@ function Library:CreateSpotifyPlayer()
         BackgroundColor3=Library.AccentColor,
     }, { BackgroundColor3='AccentColor' })
 
-    -- queue panel
     Items["QueueScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,10,0,28),
@@ -3985,7 +3962,6 @@ function Library:CreateSpotifyPlayer()
         if UpdateQueueCanvas then UpdateQueueCanvas() end
     end)
 
-    -- lyrics panel
     Items["LyricsScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,10,0,28),
@@ -4008,7 +3984,6 @@ function Library:CreateSpotifyPlayer()
         BorderSizePixel=0, TextWrapped=true, RichText=true, LineHeight=1.35,
     })
 
-    -- fade overlays for lyrics (top and bottom edges)
     Items["LyricsFadeTop"] = New("Frame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,10,0,28),
@@ -4084,19 +4059,19 @@ function Library:CreateSpotifyPlayer()
 
     Items["Title"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
-        TextColor3=Library.FontColor, Text="Spotify", BackgroundTransparency=1,
+        TextColor3=Library.FontColor, Text="Audius", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     }, { TextColor3='FontColor' })
     Items["Artist"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
-        TextColor3=ThemeInactiveText, Text="No track detected", BackgroundTransparency=1,
+        TextColor3=ThemeInactiveText, Text="Search for a track", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     })
     Items["Album"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
-        TextColor3=ThemeInactiveText, Text="Waiting for Spotify", BackgroundTransparency=1,
+        TextColor3=ThemeInactiveText, Text="Powered by Audius", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     })
@@ -4149,7 +4124,9 @@ function Library:CreateSpotifyPlayer()
         ImageColor3=Library.FontColor, BackgroundTransparency=1,
     }, { ImageColor3='FontColor' })
 
-    -- logic
+    -- ============================================================
+    --  LOGIC
+    -- ============================================================
     local function FormatTime(ms)
         local total = math.max(math.floor((ms or 0) / 1000), 0)
         return string.format("%d:%02d", math.floor(total/60), total % 60)
@@ -4228,7 +4205,7 @@ function Library:CreateSpotifyPlayer()
         Items["QueueScroll"].CanvasPosition = Vector2.new()
     end
 
-    -- lyrics
+    -- lyrics (LRC parser unchanged)
     local function ParseLRC(lrcText)
         if not lrcText or lrcText == "" then return {} end
         local lines = {}
@@ -4254,7 +4231,6 @@ function Library:CreateSpotifyPlayer()
 
         local primaryArtist = artistName:match("^([^,]+)") or artistName
         primaryArtist = primaryArtist:gsub("^%s*(.-)%s*$", "%1")
-
         local durationSec = durationMs and math.floor(durationMs / 1000) or nil
 
         local function buildUrl(includeAlbum, includeDuration)
@@ -4272,16 +4248,10 @@ function Library:CreateSpotifyPlayer()
 
         local function tryGet(url)
             local ok, resp = pcall(Request, {
-                Url = url,
-                Method = "GET",
-                Headers = {
-                    ["User-Agent"] = "RawrHub Spotify Player (https://github.com/imcomingforyou6959-gif/UR4)",
-                    ["Accept"] = "application/json",
-                },
+                Url = url, Method = "GET",
+                Headers = { ["User-Agent"] = "RawrHub Audius Player", ["Accept"] = "application/json" },
             })
-            if not ok or not resp or resp.StatusCode ~= 200 or not resp.Body or resp.Body == "" then
-                return nil
-            end
+            if not ok or not resp or resp.StatusCode ~= 200 or not resp.Body or resp.Body == "" then return nil end
             local dok, decoded = pcall(HttpService.JSONDecode, HttpService, resp.Body)
             if not dok or type(decoded) ~= "table" then return nil end
             return decoded
@@ -4291,54 +4261,31 @@ function Library:CreateSpotifyPlayer()
             or tryGet(buildUrl(true, false))
             or tryGet(buildUrl(false, true))
             or tryGet(buildUrl(false, false))
-
         if not decoded then return nil end
 
         if decoded.instrumental then
             return { Instrumental = true, Plain = "", Synced = "", HasSynced = false }
         end
-
         local synced = decoded.syncedLyrics or ""
         local plain  = decoded.plainLyrics  or ""
         if synced == "" and plain == "" then return nil end
-
-        return {
-            Plain = plain,
-            Synced = synced,
-            HasSynced = synced ~= "",
-            Instrumental = false,
-        }
+        return { Plain = plain, Synced = synced, HasSynced = synced ~= "", Instrumental = false }
     end
 
-    -- Render lyrics with dimmed inactive lines and a bold accent-colored
-    -- active line. Called whenever the active index changes.
     local function RenderLyrics(activeIndex)
         if not CurrentLyrics or #CurrentLyrics == 0 then return end
-
         local accent = Library.AccentColor
         local accentHex = string.format("#%02X%02X%02X",
-            math.floor(accent.R * 255),
-            math.floor(accent.G * 255),
-            math.floor(accent.B * 255))
-
-        local dimColor = ThemeLyricsDim
+            math.floor(accent.R*255), math.floor(accent.G*255), math.floor(accent.B*255))
         local dimHex = string.format("#%02X%02X%02X",
-            math.floor(dimColor.R * 255),
-            math.floor(dimColor.G * 255),
-            math.floor(dimColor.B * 255))
+            math.floor(ThemeLyricsDim.R*255), math.floor(ThemeLyricsDim.G*255), math.floor(ThemeLyricsDim.B*255))
 
         local buf = {}
         for i, line in ipairs(CurrentLyrics) do
             if i == activeIndex then
-                buf[#buf+1] = string.format(
-                    "<font color=\"%s\"><b>%s</b></font>",
-                    accentHex, line.Text
-                )
+                buf[#buf+1] = string.format("<font color=\"%s\"><b>%s</b></font>", accentHex, line.Text)
             else
-                buf[#buf+1] = string.format(
-                    "<font color=\"%s\">%s</font>",
-                    dimHex, line.Text
-                )
+                buf[#buf+1] = string.format("<font color=\"%s\">%s</font>", dimHex, line.Text)
             end
         end
         Items["LyricsText"].Text = table.concat(buf, "\n")
@@ -4352,14 +4299,9 @@ function Library:CreateSpotifyPlayer()
         end
     end
 
-    -- Compute the scroll target for a given line index so the active line
-    -- sits at about 35% from the top of the viewport. Uses average line
-    -- height so wrapping is accounted for.
     local function ScrollToActiveLine(activeIndex, myGen)
         task.spawn(function()
-            task.wait()
-            task.wait()
-
+            task.wait(); task.wait()
             if myGen and myGen ~= CurrentHighlightIndex then return end
             if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
 
@@ -4374,31 +4316,21 @@ function Library:CreateSpotifyPlayer()
 
             local lineHeight = totalH / totalLines
             local lineCenter = (activeIndex - 0.5) * lineHeight
-
             local targetY   = lineCenter - viewportH * 0.35
             local maxScroll = math.max(totalH - viewportH, 0)
             targetY = math.clamp(targetY, 0, maxScroll)
-
             if math.abs(targetY - scroll.CanvasPosition.Y) < 2 then return end
-
-            Tween(scroll, {
-                CanvasPosition = Vector2.new(0, targetY),
-            }, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
+            Tween(scroll, { CanvasPosition = Vector2.new(0, targetY) },
+                TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
         end)
     end
 
     local function UpdateLyricsHighlight(currentMs)
         if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
-
         local activeIndex = 1
         for i, line in ipairs(CurrentLyrics) do
-            if line.Time <= currentMs then
-                activeIndex = i
-            else
-                break
-            end
+            if line.Time <= currentMs then activeIndex = i else break end
         end
-
         if activeIndex ~= CurrentHighlightIndex then
             CurrentHighlightIndex = activeIndex
             RenderLyrics(activeIndex)
@@ -4426,14 +4358,11 @@ function Library:CreateSpotifyPlayer()
 
     local function LoadLyricsForTrack(track)
         if not track or not track.TrackId then return end
-
         local cached = LyricsCache[track.TrackId]
         if cached then
             if cached.Instrumental then
                 SetLyricsEmpty("Instrumental track — no lyrics.")
-                CurrentLyrics = {}
-                CurrentLyricsSynced = false
-                CurrentHighlightIndex = 0
+                CurrentLyrics = {}; CurrentLyricsSynced = false; CurrentHighlightIndex = 0
                 return
             end
             CurrentLyrics = cached.Parsed or {}
@@ -4447,50 +4376,37 @@ function Library:CreateSpotifyPlayer()
             end
             return
         end
-
         if CurrentLyricsLoading then return end
         CurrentLyricsLoading = true
         SetLyricsEmpty("Loading lyrics…")
-        CurrentLyrics = {}
-        CurrentLyricsSynced = false
-        CurrentHighlightIndex = 0
+        CurrentLyrics = {}; CurrentLyricsSynced = false; CurrentHighlightIndex = 0
 
         task.spawn(function()
             local result = GetLyrics(track.Title, track.Artist, track.Album, track.Duration)
             CurrentLyricsLoading = false
-
             if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
 
             if not result then
-                LyricsCache[track.TrackId] = { Plain = "", Synced = "", Parsed = {}, HasSynced = false, Instrumental = false }
+                LyricsCache[track.TrackId] = { Plain="", Synced="", Parsed={}, HasSynced=false, Instrumental=false }
                 SetLyricsEmpty("No lyrics found for this track.")
                 return
             end
-
             if result.Instrumental then
-                LyricsCache[track.TrackId] = { Instrumental = true, Parsed = {}, HasSynced = false, Plain = "", Synced = "" }
+                LyricsCache[track.TrackId] = { Instrumental=true, Parsed={}, HasSynced=false, Plain="", Synced="" }
                 SetLyricsEmpty("Instrumental track — no lyrics.")
                 return
             end
-
             local parsed = result.HasSynced and ParseLRC(result.Synced) or {}
             LyricsCache[track.TrackId] = {
-                Plain = result.Plain,
-                Synced = result.Synced,
-                Parsed = parsed,
-                HasSynced = result.HasSynced,
-                Instrumental = false,
+                Plain=result.Plain, Synced=result.Synced, Parsed=parsed,
+                HasSynced=result.HasSynced, Instrumental=false,
             }
-
             CurrentLyrics = parsed
             CurrentLyricsSynced = result.HasSynced
             CurrentHighlightIndex = 0
-
             if result.HasSynced then
                 RenderLyrics(1)
-                if CurrentTrack and CurrentTrack.Progress then
-                    UpdateLyricsHighlight(CurrentTrack.Progress)
-                end
+                if CurrentTrack and CurrentTrack.Progress then UpdateLyricsHighlight(CurrentTrack.Progress) end
             else
                 SetLyricsPlain(result.Plain ~= "" and result.Plain or "No lyrics available.")
             end
@@ -4507,41 +4423,252 @@ function Library:CreateSpotifyPlayer()
         Items["LyricsFadeTop"].Visible = not isQueue
         Items["LyricsFadeBottom"].Visible = not isQueue
 
-        -- slide the underline to the active tab
-        local underline = Items["TabUnderline"]
-        local targetX = isQueue and 10 or (Items["LyricsFrame"].AbsoluteSize.X * 0.5)
-        Tween(underline, {
+        Tween(Items["TabUnderline"], {
             Position = UDim2.new(isQueue and 0 or 0.5, 10, 0, 23),
         }, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
 
-        if not isQueue then
-            if CurrentTrack and not CurrentLyricsLoading
-                and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
-                LoadLyricsForTrack(CurrentTrack)
+        if not isQueue and CurrentTrack and not CurrentLyricsLoading
+            and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
+            LoadLyricsForTrack(CurrentTrack)
+        end
+    end
+
+    -- ============================================================
+    --  AUDIUS API
+    -- ============================================================
+    local function ApiUrl(path)
+        return AUDIUS_BASE .. path .. (path:find("?") and "&" or "?") .. "app_name=" .. AUDIUS_APP
+    end
+
+    local function HttpGet(url)
+        local ok, body = pcall(function() return game:HttpGet(url, true) end)
+        if ok then return body end
+        if Request then
+            local ok2, resp = pcall(Request, { Url = url, Method = "GET" })
+            if ok2 and resp and resp.Body then return resp.Body end
+        end
+        return nil
+    end
+
+    local function DecodeJson(body)
+        if not body or body == "" then return nil end
+        local ok, decoded = pcall(HttpService.JSONDecode, HttpService, body)
+        return ok and decoded or nil
+    end
+
+    local function SearchTracks(q)
+        local url = ApiUrl("/v1/tracks/search?query=" .. HttpService:UrlEncode(q))
+        local body = HttpGet(url)
+        local data = DecodeJson(body)
+        local out = {}
+        if not data or type(data.data) ~= "table" then return out end
+        for _, t in data.data do
+            local artist = t.user and t.user.name or "Unknown artist"
+            local artwork = t.artwork and (t.artwork["480x480"] or t.artwork["150x150"]) or PlaceholderImage
+            table.insert(out, {
+                Title   = t.title or "Unknown track",
+                Artist  = artist,
+                Album   = t.genre or "Audius",
+                TrackId = t.id,
+                Uri     = "audius:track:" .. tostring(t.id),
+                Duration = tonumber(t.duration) and (tonumber(t.duration) * 1000) or 0,
+                Cover   = artwork,
+                Permalink = t.permalink,
+            })
+        end
+        return out
+    end
+
+    -- Download the track to disk, return the custom asset URL
+    local function GetTrackAsset(trackId)
+        if not trackId or trackId == "" then return nil, "No track id" end
+        if TrackCacheMap[trackId] then return TrackCacheMap[trackId], nil end
+
+        local cached = TrackCache .. "/" .. tostring(trackId):gsub("[^%w_%-]", "_") .. ".mp3"
+        if isfile(cached) then
+            local ok, asset = pcall(GetCustomAsset, cached)
+            if ok and asset then
+                TrackCacheMap[trackId] = asset
+                return asset, nil
             end
+        end
+
+        if not Request then return nil, "No request function" end
+        local streamUrl = ApiUrl("/v1/tracks/" .. trackId .. "/stream")
+        local ok, resp = pcall(Request, { Url = streamUrl, Method = "GET" })
+        if not ok or not resp or not resp.Body then return nil, "Stream fetch failed" end
+        if #resp.Body < 1000 then return nil, "Stream too small (probably blocked)" end
+
+        writefile(cached, resp.Body)
+        local aok, asset = pcall(GetCustomAsset, cached)
+        if not aok or not asset then return nil, "getcustomasset failed" end
+        TrackCacheMap[trackId] = asset
+        return asset, nil
+    end
+
+    -- ============================================================
+    --  LOCAL PLAYBACK
+    -- ============================================================
+    local function EnsureAudioPlayer()
+        if AudioPlayer and AudioPlayer.Parent then return AudioPlayer end
+        AudioPlayer = Instance.new("Sound")
+        AudioPlayer.Name = "RawrHubAudius"
+        AudioPlayer.Volume = 0.5
+        AudioPlayer.Looped = false
+        AudioPlayer.Parent = game:GetService("SoundService")
+        return AudioPlayer
+    end
+
+    local function StopAudio()
+        if AudioPlayer then
+            pcall(function() AudioPlayer:Stop() end)
+        end
+    end
+
+    local function PlayTrack(track)
+        if not track then return end
+
+        -- If already playing this track, resume
+        if CurrentTrack and CurrentTrack.TrackId == track.TrackId and AudioPlayer and AudioPlayer.IsPlaying then
+            return
+        end
+
+        LocalHistory[#LocalHistory+1] = CurrentTrack
+        CurrentTrack = track
+        CurrentTrack.Progress = 0
+        CurrentTrack.UpdatedAt = tick()
+        CurrentTrack.IsPlaying = true
+        CurrentTrack.Duration = CurrentTrack.Duration or 0
+        LastKnownPlaying = true
+
+        Items["Title"].Text   = track.Title or "Unknown"
+        Items["Artist"].Text  = track.Artist or "Unknown artist"
+        Items["Album"].Text   = track.Album or "Audius"
+        Items["Cover"].Image  = track.Cover or PlaceholderImage
+        SetControlState(CurrentTrack)
+        SetProgress(0, CurrentTrack.Duration, true)
+
+        LoadingTrackId = track.TrackId
+
+        task.spawn(function()
+            local asset, err = GetTrackAsset(track.TrackId)
+            if LoadingTrackId ~= track.TrackId then return end
+            LoadingTrackId = nil
+
+            if not asset then
+                Library:Notify("Failed to load: " .. tostring(err), 3)
+                Items["Album"].Text = "Load failed — skipping"
+                task.wait(0.5)
+                return
+            end
+
+            local snd = EnsureAudioPlayer()
+            snd.SoundId = asset
+            snd.TimePosition = 0
+            snd.Volume = snd.Volume or 0.5
+            snd:Play()
+
+            -- Update duration from actual sound if we didn't have it
+            task.wait(0.2)
+            if snd.TimeLength and snd.TimeLength > 0 then
+                CurrentTrack.Duration = snd.TimeLength * 1000
+                SetProgress(0, CurrentTrack.Duration, true)
+            end
+
+            -- Track changes detection thread
+            if not track._EndWatcher then
+                track._EndWatcher = true
+                task.spawn(function()
+                    while AudioPlayer == snd and CurrentTrack and CurrentTrack.TrackId == track.TrackId do
+                        if not snd.IsPlaying and snd.TimePosition >= (snd.TimeLength - 0.5) and snd.TimeLength > 0 then
+                            -- Song ended
+                            if RepeatMode == "one" then
+                                snd.TimePosition = 0
+                                snd:Play()
+                            else
+                                Spotify:_NextInternal()
+                            end
+                            break
+                        end
+                        task.wait(0.5)
+                    end
+                end)
+            end
+        end)
+
+        -- Load lyrics if sidebar is open
+        if SidebarTab == "lyrics" then
+            LoadLyricsForTrack(CurrentTrack)
+        else
+            CurrentLyricsTrackId = CurrentTrack.TrackId
+            CurrentLyrics = {}
+            CurrentLyricsSynced = false
+        end
+    end
+
+    local function PlayPause()
+        local snd = EnsureAudioPlayer()
+        if CurrentTrack and snd.IsPlaying then
+            snd:Pause()
+            CurrentTrack.IsPlaying = false
+            LastKnownPlaying = false
+        else
+            snd:Resume()
+            if CurrentTrack then
+                CurrentTrack.IsPlaying = true
+                CurrentTrack.UpdatedAt = tick()
+                CurrentTrack.Progress = (snd.TimePosition or 0) * 1000
+            end
+            LastKnownPlaying = true
+        end
+        SetControlState(CurrentTrack or { IsPlaying = LastKnownPlaying })
+    end
+
+    function Spotify:_NextInternal()
+        -- Advance through local queue
+        local nxt
+        if ShuffleOn and #SearchTrackResults > 0 then
+            nxt = SearchTrackResults[math.random(1, #SearchTrackResults)]
+        elseif #LocalQueue > 0 then
+            nxt = table.remove(LocalQueue, 1)
+        elseif #SearchTrackResults > 0 then
+            -- loop search results
+            nxt = SearchTrackResults[1]
+        end
+        if nxt then
+            PlayTrack(nxt)
+        else
+            StopAudio()
+            CurrentTrack = nil
+            LastKnownPlaying = false
+            SetDisplay(nil, "Queue empty — search for a track")
+        end
+    end
+
+    function Spotify:_PrevInternal()
+        local prev = table.remove(LocalHistory)
+        if prev then
+            PlayTrack(prev)
         end
     end
 
     local function SetDisplay(data, emptyText)
         if not data then
+            StopAudio()
             CurrentTrack = nil
             LastKnownPlaying = false
-            CurrentLyrics = {}
-            CurrentLyricsSynced = false
-            CurrentLyricsTrackId = nil
-            CurrentHighlightIndex = 0
-            Items["Title"].Text   = "Spotify"
-            Items["Artist"].Text  = "No track detected"
-            Items["Album"].Text   = emptyText or "Nothing is currently playing"
+            CurrentLyrics = {}; CurrentLyricsSynced = false
+            CurrentLyricsTrackId = nil; CurrentHighlightIndex = 0
+            Items["Title"].Text   = "Audius"
+            Items["Artist"].Text  = "Search for a track"
+            Items["Album"].Text   = emptyText or "Powered by Audius"
             Items["Cover"].Image  = PlaceholderImage
             SetLyricsEmpty("Nothing is currently playing.")
             SetControlState(nil)
-            SetQueueDisplay(nil, nil, "Nothing is currently playing.")
+            SetQueueDisplay(nil, LocalQueue, "Queue is empty.")
             SetProgress(0, 0, true)
             return
         end
-
-        local trackChanged = (data.TrackId ~= CurrentLyricsTrackId)
         CurrentTrack = data
         LastKnownPlaying = data.IsPlaying == true
         Items["Title"].Text  = data.Title
@@ -4549,226 +4676,17 @@ function Library:CreateSpotifyPlayer()
         Items["Album"].Text  = data.Album
         Items["Cover"].Image = data.Cover or PlaceholderImage
         SetControlState(data)
-        if not Seeking then
-            SetProgress(data.Progress, data.Duration, true)
-        end
-
-        if trackChanged then
-            CurrentLyricsTrackId = data.TrackId
-            CurrentLyrics = {}
-            CurrentLyricsSynced = false
-            CurrentHighlightIndex = 0
-            if SidebarTab == "lyrics" then
-                LoadLyricsForTrack(data)
-            end
-        end
-    end
-
-    local function RefreshAccessToken()
-        if not Request or TokenConfig.RefreshToken == "" then return false end
-        if TokenConfig.ClientId == "" or TokenConfig.ClientSecret == "" then return false end
-        local body = table.concat({
-            "grant_type=refresh_token",
-            "refresh_token=" .. HttpService:UrlEncode(TokenConfig.RefreshToken),
-            "client_id=" .. HttpService:UrlEncode(TokenConfig.ClientId),
-            "client_secret=" .. HttpService:UrlEncode(TokenConfig.ClientSecret),
-        }, "&")
-        local ok, resp = pcall(Request, {
-            Url = "https://accounts.spotify.com/api/token",
-            Method = "POST",
-            Headers = { ["Content-Type"] = "application/x-www-form-urlencoded" },
-            Body = body,
-        })
-        if not ok or not resp or resp.StatusCode ~= 200 or not resp.Body or resp.Body == "" then return false end
-        local dok, payload = pcall(HttpService.JSONDecode, HttpService, resp.Body)
-        if not dok or type(payload) ~= "table" or not payload.access_token then return false end
-        TokenConfig.AccessToken = tostring(payload.access_token)
-        TokenConfig.ExpiresAt   = tick() + math.max((tonumber(payload.expires_in) or 3600) - 30, 0)
-        if payload.refresh_token and payload.refresh_token ~= "" then
-            TokenConfig.RefreshToken = tostring(payload.refresh_token)
-        end
-        Token = TokenConfig.AccessToken
-        WriteToken(TokenConfig)
-        return true
-    end
-
-    local function EnsureAccessToken()
-        if TokenConfig.RefreshToken == "" then
-            Token = TokenConfig.AccessToken
-            return Token ~= ""
-        end
-        if TokenConfig.AccessToken ~= "" and tick() < (TokenConfig.ExpiresAt or 0) then
-            Token = TokenConfig.AccessToken
-            return true
-        end
-        return RefreshAccessToken()
-    end
-
-    local function MakeRequest(url, method, retryOnAuth, body)
-        if not Request or not EnsureAccessToken() or Token == "" then return nil end
-        local reqBody = body
-        if type(body) == "table" then
-            local eok, enc = pcall(HttpService.JSONEncode, HttpService, body)
-            if not eok then return nil end
-            reqBody = enc
-        end
-        local ok, resp = pcall(Request, {
-            Url = "https://api.spotify.com/v1/" .. url,
-            Method = method or "GET",
-            Headers = {
-                ["Authorization"] = "Bearer " .. Token,
-                ["Content-Type"]  = "application/json",
-            },
-            Body = reqBody,
-        })
-        if not ok or not resp then return nil end
-        if resp.StatusCode == 401 and retryOnAuth ~= false and TokenConfig.RefreshToken ~= "" and RefreshAccessToken() then
-            return MakeRequest(url, method, false, body)
-        end
-        if resp.StatusCode < 200 or resp.StatusCode >= 300 then return nil end
-        if not resp.Body or resp.Body == "" then return true end
-        local dok, decoded = pcall(HttpService.JSONDecode, HttpService, resp.Body)
-        return dok and decoded or nil
-    end
-
-    local function CacheImage(id, url)
-        if not GetCustomAsset or not id or not url or url == "" then return PlaceholderImage end
-        local safe = tostring(id):gsub("[^%w_%-]", "_")
-        local path = CacheFolder .. "/" .. safe .. ".png"
-        if not isfile(path) then
-            pcall(function() writefile(path, game:HttpGet(url)) end)
-        end
-        if isfile(path) then
-            local aok, asset = pcall(GetCustomAsset, path)
-            if aok then return asset end
-        end
-        return PlaceholderImage
-    end
-
-    local function ValidateToken()
-        local d = MakeRequest("me")
-        return d and d.display_name
-    end
-
-    local function GetCurrentTrack()
-        local d = MakeRequest("me/player")
-        if not d or not d.item then return nil end
-        local artists = {}
-        for _, a in d.item.artists or {} do table.insert(artists, a.name) end
-        local coverUrl = d.item.album and d.item.album.images and d.item.album.images[2] and d.item.album.images[2].url
-        return {
-            Title = d.item.name or "Unknown track",
-            Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
-            Album = d.item.album and d.item.album.name or "Unknown album",
-            TrackId = d.item.id or "",
-            Progress = d.progress_ms or 0,
-            Duration = d.item.duration_ms or 0,
-            Cover = CacheImage(d.item.album and d.item.album.id or d.item.id, coverUrl),
-            Device = d.device and d.device.name or "none",
-            IsPlaying = d.is_playing == true,
-            Shuffle = d.shuffle_state == true,
-            RepeatState = tostring(d.repeat_state or "off"),
-            Uri = d.item.uri or "",
-            UpdatedAt = tick(),
-        }
-    end
-
-    local function GetQueue()
-        local d = MakeRequest("me/player/queue")
-        local out = {}
-        if not d or type(d.queue) ~= "table" then return out end
-        for _, t in d.queue do
-            local artists = {}
-            for _, a in t.artists or {} do table.insert(artists, a.name) end
-            table.insert(out, {
-                Title = t.name or "Unknown track",
-                Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
-            })
-        end
-        return out
-    end
-
-    local function SearchTracks(q)
-        local d = MakeRequest("search?type=track&limit=8&q=" .. HttpService:UrlEncode(q))
-        local out = {}
-        if not d or not d.tracks or not d.tracks.items then return out end
-        for _, t in d.tracks.items do
-            local artists = {}
-            local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
-                or t.album and t.album.images and t.album.images[2] and t.album.images[2].url
-            for _, a in t.artists or {} do table.insert(artists, a.name) end
-            table.insert(out, {
-                Title = t.name or "Unknown track",
-                Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
-                Album = t.album and t.album.name or "Unknown album",
-                AlbumId = t.album and t.album.id or "",
-                Uri = t.uri or "",
-                Cover = CacheImage(t.album and t.album.id or t.id, coverUrl),
-            })
-        end
-        return out
-    end
-
-    local function GetAlbumTracks(albumId)
-        local out = {}
-        if not albumId or albumId == "" then return out end
-        local d = MakeRequest("albums/" .. albumId)
-        if not d or type(d) ~= "table" or type(d.tracks) ~= "table" or type(d.tracks.items) ~= "table" then
-            return out
-        end
-        local coverUrl = d.images and d.images[3] and d.images[3].url
-            or d.images and d.images[2] and d.images[2].url
-            or d.images and d.images[1] and d.images[1].url
-        for _, t in d.tracks.items do
-            local artists = {}
-            for _, a in t.artists or {} do table.insert(artists, a.name) end
-            table.insert(out, {
-                Title = t.name or "Unknown track",
-                Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
-                Album = d.name or "Unknown album",
-                AlbumId = albumId,
-                Uri = t.uri or "",
-                Cover = CacheImage(albumId, coverUrl),
-                IsAlbumTrack = true,
-            })
-        end
-        return out
-    end
-
-    local function Previous() return MakeRequest("me/player/previous", "POST", true, {}) end
-    local function Next()     return MakeRequest("me/player/next",     "POST", true, {}) end
-
-    local function Resume()
-        local pos = 0
-        if CurrentTrack and CurrentTrack.Progress and CurrentTrack.Duration and CurrentTrack.Duration > 0 then
-            pos = math.max(math.floor(CurrentTrack.Progress), 0)
-        end
-        return MakeRequest("me/player/play", "PUT", true, { position_ms = pos })
-    end
-
-    local function Pause()    return MakeRequest("me/player/pause",    "PUT",  true, {}) end
-    local function Shuffle(e) return MakeRequest("me/player/shuffle?state=" .. tostring(e), "PUT", true, {}) end
-    local function Repeat(e)  return MakeRequest("me/player/repeat?state=" .. (e and "context" or "off"), "PUT", true, {}) end
-    local function Seek(ms)   return MakeRequest("me/player/seek?position_ms=" .. math.max(math.floor(ms or 0), 0), "PUT", true, {}) end
-    local function PlayUri(uri)
-        if not uri or uri == "" then return nil end
-        return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
+        if not Seeking then SetProgress(data.Progress, data.Duration, true) end
     end
 
     local function UpdateResults()
         for i, btn in ResultButtons do
             local r = SearchResults[i]
             if r then
-                btn.Frame.Visible     = true
-                btn.Cover.Image       = r.Cover or PlaceholderImage
-                btn.Title.Text        = r.Title
-                if r.IsBack then
-                    btn.Album.Text = r.Album or "Return to search results"
-                elseif r.IsAlbumTrack then
-                    btn.Album.Text = r.Artist
-                else
-                    btn.Album.Text = r.Album
-                end
+                btn.Frame.Visible = true
+                btn.Cover.Image   = r.Cover or PlaceholderImage
+                btn.Title.Text    = r.Title
+                btn.Album.Text    = r.Artist
             else
                 btn.Frame.Visible = false
                 btn.Cover.Image   = PlaceholderImage
@@ -4778,18 +4696,11 @@ function Library:CreateSpotifyPlayer()
         end
     end
 
-    local LastEmptyTokenNotification = 0
-    local function NotifyEmptyToken()
-        if Token ~= "" or TokenConfig.RefreshToken ~= "" then return end
-        local now = tick()
-        if now - LastEmptyTokenNotification < 1 then return end
-        LastEmptyTokenNotification = now
-        Library:Notify("Empty Spotify Token", 3)
-    end
-
     local function ApplyVisibility()
         Items["SpotifyPlayer"].Visible = IsVisible
-        if IsVisible then NotifyEmptyToken() end
+        if IsVisible and Token == "" then
+            Library:Notify("Audius key missing", 3)
+        end
     end
 
     local function AlignAboveKeybindList()
@@ -4859,13 +4770,7 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
-    local function RefreshSoon()
-        task.delay(0.35, function()
-            if Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent then
-                Spotify:Refresh()
-            end
-        end)
-    end
+    local function RefreshSoon() end  -- no-op for Audius (no remote state)
 
     local function SetSeekingFromInput(input)
         if not CurrentTrack or not CurrentTrack.Duration or CurrentTrack.Duration <= 0 then return end
@@ -4878,7 +4783,9 @@ function Library:CreateSpotifyPlayer()
         SetProgress(pos, CurrentTrack.Duration, true)
     end
 
-    -- public api
+    -- ============================================================
+    --  PUBLIC API
+    -- ============================================================
     function Spotify:SetVisibility(b) IsVisible = b ApplyVisibility() end
     function Spotify:Center()
         task.wait()
@@ -4898,64 +4805,48 @@ function Library:CreateSpotifyPlayer()
         return Items["SpotifyPlayer"].AbsolutePosition, Items["SpotifyPlayer"].AbsoluteSize
     end
     function Spotify:SetToken(newToken)
-        TokenConfig = DecodeTokenConfig(newToken)
-        Token = TokenConfig.AccessToken
-        WriteToken(TokenConfig)
-        Spotify:Refresh()
+        Token = (newToken or ""):gsub("^%s*(.-)%s*$", "%1")
+        WriteToken(Token)
+        Library:Notify("Audius key set", 2)
     end
 
     function Spotify:Refresh()
-        if not Request then SetDisplay(nil, "Executor request API unavailable") return false end
-        if Token == "" and TokenConfig.RefreshToken == "" then
-            SetDisplay(nil, "Add a token or refresh config to " .. TokenPath)
-            return false
-        end
-        if TokenConfig.RefreshToken ~= "" and (TokenConfig.ClientId == "" or TokenConfig.ClientSecret == "") then
-            SetDisplay(nil, "token.txt needs client_id and client_secret")
-            return false
-        end
-        if not EnsureAccessToken() then SetDisplay(nil, "Could not refresh Spotify token") return false end
-
-        local track = GetCurrentTrack()
-        if not track then
-            local me = MakeRequest("me")
-            if me == nil then
-                SetDisplay(nil, "Invalid token in " .. TokenPath)
-                return false
+        -- Audius has no "current track" API. If we're playing locally, just
+        -- sync the UI; otherwise show the empty state.
+        if CurrentTrack then
+            if not Seeking then
+                local snd = AudioPlayer
+                if snd and snd.Parent and CurrentTrack.IsPlaying then
+                    CurrentTrack.Progress = (snd.TimePosition or 0) * 1000
+                    CurrentTrack.Duration = (snd.TimeLength or 0) * 1000
+                    SetProgress(CurrentTrack.Progress, CurrentTrack.Duration, true)
+                    if SidebarTab == "lyrics" and CurrentLyricsSynced then
+                        UpdateLyricsHighlight(CurrentTrack.Progress)
+                    end
+                end
             end
+            SetDisplay(CurrentTrack)
+            SetQueueDisplay(CurrentTrack, LocalQueue, "Queue is empty.")
+        else
+            SetDisplay(nil, "Search for a track to play")
         end
-        SetDisplay(track, "Nothing is currently playing")
-        SetQueueDisplay(track, GetQueue(), "No upcoming tracks.")
-        return track ~= nil
+        return CurrentTrack ~= nil
     end
 
-    -- events
+    -- ============================================================
+    --  EVENTS
+    -- ============================================================
     for i, btn in ResultButtons do
         btn.Button.MouseButton1Click:Connect(function()
             local r = SearchResults[i]
             if not r then return end
-            if r.IsBack then
-                SearchAlbumBrowse = nil
-                SearchResults = SearchTrackResults
-                UpdateResults()
-                return
+            -- Add to local queue and play
+            table.insert(LocalQueue, r)
+            if not CurrentTrack then
+                local first = table.remove(LocalQueue, 1)
+                PlayTrack(first)
             end
-            if r.IsAlbumTrack then
-                PlayUri(r.Uri)
-                RefreshSoon()
-                return
-            end
-            SearchAlbumBrowse = r.AlbumId
-            SearchResults = GetAlbumTracks(r.AlbumId)
-            if #SearchResults > 0 then
-                table.insert(SearchResults, 1, {
-                    Title = "< Back",
-                    Album = r.Album or "Back to results",
-                    Cover = r.Cover,
-                    IsBack = true,
-                })
-            end
-            UpdateResults()
+            SetQueueDisplay(CurrentTrack, LocalQueue, "Queue is empty.")
         end)
     end
 
@@ -4969,45 +4860,30 @@ function Library:CreateSpotifyPlayer()
         QueueSearch(Items["SearchInput"].Text)
     end)
 
-    Items["QueueTab"].MouseButton1Click:Connect(function()
-        SetSidebarTab("queue")
-    end)
-
-    Items["LyricsTab"].MouseButton1Click:Connect(function()
-        SetSidebarTab("lyrics")
-    end)
+    Items["QueueTab"].MouseButton1Click:Connect(function() SetSidebarTab("queue") end)
+    Items["LyricsTab"].MouseButton1Click:Connect(function() SetSidebarTab("lyrics") end)
 
     Items["ExpandButton"].MouseButton1Click:Connect(function()
         SetExpanded(not IsExpanded)
     end)
 
     Items["PlayPause"].MouseButton1Click:Connect(function()
-        if LastKnownPlaying then
-            LastKnownPlaying = false
-            if CurrentTrack then CurrentTrack.IsPlaying = false end
-            Pause()
-        else
-            LastKnownPlaying = true
-            if CurrentTrack then CurrentTrack.IsPlaying = true end
-            Resume()
-        end
-        if Icons["PlayPause"] then
-            Icons["PlayPause"].Image = LastKnownPlaying
-                and "rbxassetid://9607545382"
-                or  "rbxassetid://9622475855"
-        end
-        RefreshSoon()
+        PlayPause()
     end)
 
     Items["Shuffle"].MouseButton1Click:Connect(function()
-        Shuffle(not (CurrentTrack and CurrentTrack.Shuffle))
-        RefreshSoon()
+        ShuffleOn = not ShuffleOn
+        if CurrentTrack then CurrentTrack.Shuffle = ShuffleOn end
+        SetControlState(CurrentTrack or { Shuffle = ShuffleOn })
     end)
 
     Items["Repeat"].MouseButton1Click:Connect(function()
-        local on = CurrentTrack and CurrentTrack.RepeatState and CurrentTrack.RepeatState ~= "off"
-        Repeat(not on)
-        RefreshSoon()
+        if RepeatMode == "off" then RepeatMode = "all"
+        elseif RepeatMode == "all" then RepeatMode = "one"
+        else RepeatMode = "off" end
+        if CurrentTrack then CurrentTrack.RepeatState = RepeatMode end
+        SetControlState(CurrentTrack or { RepeatState = RepeatMode })
+        Library:Notify("Repeat: " .. RepeatMode, 1.5)
     end)
 
     Items["ProgressHitbox"].InputBegan:Connect(function(input)
@@ -5030,9 +4906,10 @@ function Library:CreateSpotifyPlayer()
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
         Seeking = false
-        if CurrentTrack then
-            Seek(CurrentTrack.Progress)
-            RefreshSoon()
+        if CurrentTrack and AudioPlayer then
+            pcall(function()
+                AudioPlayer.TimePosition = math.max(CurrentTrack.Progress or 0, 0) / 1000
+            end)
         end
     end)
 
@@ -5043,10 +4920,16 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
+    -- Poll local state instead of remote
     task.spawn(function()
         while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
-            Spotify:Refresh()
-            task.wait(PollInterval)
+            if CurrentTrack and AudioPlayer and AudioPlayer.Parent then
+                if AudioPlayer.IsPlaying then
+                    CurrentTrack.Progress = (AudioPlayer.TimePosition or 0) * 1000
+                    CurrentTrack.Duration = (AudioPlayer.TimeLength or 0) * 1000
+                end
+            end
+            task.wait(0.5)
         end
     end)
 
@@ -5055,9 +4938,8 @@ function Library:CreateSpotifyPlayer()
             if Seeking and CurrentTrack then
                 SetSeekingFromInput({ Position = UserInputService:GetMouseLocation() })
             end
-            if CurrentTrack and CurrentTrack.IsPlaying and not Seeking then
-                local p = math.min(CurrentTrack.Progress + ((tick() - CurrentTrack.UpdatedAt) * 1000),
-                                   CurrentTrack.Duration)
+            if CurrentTrack and CurrentTrack.IsPlaying and not Seeking and AudioPlayer then
+                local p = (AudioPlayer.TimePosition or 0) * 1000
                 SetProgress(p, CurrentTrack.Duration, true)
                 if SidebarTab == "lyrics" and CurrentLyricsSynced then
                     UpdateLyricsHighlight(p)
