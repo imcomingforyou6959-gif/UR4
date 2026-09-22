@@ -3669,7 +3669,7 @@ function Library:CreateSpotifyPlayer()
     local ThemeLyricsDim    = Color3.fromRGB(110, 110, 110)
 
     local AUDIUS_BASE   = "https://api.audius.co"
-    local AUDIUS_APP    = "RawrHub"
+    local AUDIUS_APP    = "rawrmusic"
 
     -- If you hardcode your key here, users don't need token.txt
     local HARDCODED_KEY = "6d844b1335d457750c28b4822aae357fd63af227"
