@@ -3660,7 +3660,7 @@ function Library:CreateSpotifyPlayer()
     if not isfolder(CacheFolder)   then makefolder(CacheFolder)   end
 
     local ThemeInactiveText = Color3.fromRGB(180, 180, 180)
-    local SKIP_ASSET_ID = "rbxassetid://13321918743"
+    local SKIP_ASSET_ID = "rbxassetid://9607545497"
 
     local function New(Class, Props, RegProps, Hud)
         local inst = Library:Create(Class, Props)
