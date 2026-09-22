@@ -3742,6 +3742,7 @@ function Library:CreateSpotifyPlayer()
     local CustomPosition
 
     local Items = {}
+    local Icons = {}   -- ← icons stored separately, NOT on the Instance
 
     local function CreateControlButton(Key, Parent, Image, FrameSize, IconSize, IconOffsetY)
         local btn = New("TextButton", {
@@ -3751,7 +3752,7 @@ function Library:CreateSpotifyPlayer()
             BackgroundTransparency=1, Text="",
         })
         Items[Key] = btn
-        Items[Key].Icon = New("ImageLabel", {
+        Icons[Key] = New("ImageLabel", {
             Name="\0", Parent=btn,
             AnchorPoint=Vector2.new(0.5,0.5),
             Position=UDim2.new(0.5,0,0.5,IconOffsetY or 0),
@@ -4058,9 +4059,9 @@ function Library:CreateSpotifyPlayer()
     local function SetControlState(data)
         local shuffleOn = data and data.Shuffle
         local repeatOn  = data and data.RepeatState and data.RepeatState ~= "off"
-        Items["Shuffle"].Icon.ImageColor3   = shuffleOn and Library.AccentColor or Library.FontColor
-        Items["Repeat"].Icon.ImageColor3    = repeatOn  and Library.AccentColor or Library.FontColor
-        Items["PlayPause"].Icon.Image       = data and data.IsPlaying
+        Icons["Shuffle"].ImageColor3   = shuffleOn and Library.AccentColor or Library.FontColor
+        Icons["Repeat"].ImageColor3    = repeatOn  and Library.AccentColor or Library.FontColor
+        Icons["PlayPause"].Image       = data and data.IsPlaying
             and "rbxassetid://9607545382"
             or  "rbxassetid://9622475855"
     end
@@ -4595,6 +4596,7 @@ function Library:CreateSpotifyPlayer()
     Spotify:Center()
     return Spotify
 end
+
 Library.Directory = "spotifyforRawr"
 
 local Spotify = Library:CreateSpotifyPlayer()
