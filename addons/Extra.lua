@@ -3757,6 +3757,10 @@ function Library:CreateSpotifyPlayer()
     local CurrentHighlightIndex = 0
     local SidebarTab            = "queue"
 
+    -- context menu state
+    local ContextMenuFrame      = nil
+    local ContextMenuTrack      = nil
+
     local Items = {}
     local Icons = {}
 
@@ -4127,10 +4131,11 @@ function Library:CreateSpotifyPlayer()
         BorderSizePixel=0,
     })
 
+    -- controls: prev | shuffle | playpause | repeat | next
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
         AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0),
-        Size=UDim2.new(0,96,0,24), BorderSizePixel=0,
+        Size=UDim2.new(0,132,0,24), BorderSizePixel=0,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
         FillDirection=Enum.FillDirection.Horizontal,
@@ -4139,6 +4144,7 @@ function Library:CreateSpotifyPlayer()
 
     CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
     CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 20, 20, 0)
+    CreateControlButton("Skip",      Items["Controls"], "SKIP_BUTTON_ID_HERE",   16, 16, 0)
     CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 12, 12, 0)
 
     Items["ExpandButton"] = New("ImageButton", {
@@ -4148,6 +4154,115 @@ function Library:CreateSpotifyPlayer()
         Image="rbxassetid://9607545497", Rotation=0,
         ImageColor3=Library.FontColor, BackgroundTransparency=1,
     }, { ImageColor3='FontColor' })
+
+    -- context menu (built lazily, only when a search result is right-clicked)
+    local function CloseContextMenu()
+        if ContextMenuFrame then
+            ContextMenuFrame:Destroy()
+            ContextMenuFrame = nil
+        end
+        ContextMenuTrack = nil
+    end
+
+    local function EnsureContextMenu()
+        if ContextMenuFrame and ContextMenuFrame.Parent then return ContextMenuFrame end
+
+        ContextMenuFrame = New("Frame", {
+            Name="\0", Parent=Library.ScreenGui,
+            BackgroundColor3=Library.BackgroundColor,
+            BackgroundTransparency=0.05,
+            BorderSizePixel=0,
+            Size=UDim2.new(0, 160, 0, 0),
+            AutomaticSize=Enum.AutomaticSize.Y,
+            Visible=false,
+            ZIndex=200,
+        }, { BackgroundColor3='BackgroundColor' })
+        New("UICorner", { Name="\0", Parent=ContextMenuFrame, CornerRadius=UDim.new(0,6) })
+        New("UIStroke", { Name="\0", Parent=ContextMenuFrame,
+            ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
+            Color=Library.OutlineColor }, { Color='OutlineColor' })
+        New("UIStroke", { Name="\0", Parent=ContextMenuFrame,
+            ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
+            Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+
+        New("UIListLayout", { Name="\0", Parent=ContextMenuFrame,
+            SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,0) })
+        New("UIPadding", { Name="\0", Parent=ContextMenuFrame,
+            PaddingTop=UDim.new(0,4), PaddingBottom=UDim.new(0,4) })
+
+        return ContextMenuFrame
+    end
+
+    local function AddContextOption(text, callback, isDestructive)
+        local menu = EnsureContextMenu()
+
+        local btn = New("TextButton", {
+            Name="\0", Parent=menu,
+            Size=UDim2.new(1,0,0,26), BorderSizePixel=0,
+            BackgroundTransparency=1, AutoButtonColor=false,
+            Font=Library.Font, TextSize=14,
+            TextColor3=isDestructive and Color3.fromRGB(230,90,90) or Library.FontColor,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            Text=text,
+        })
+        New("UIPadding", { Name="\0", Parent=btn, PaddingLeft=UDim.new(0,10) })
+
+        btn.MouseEnter:Connect(function()
+            Tween(btn, { BackgroundTransparency = 0.7, BackgroundColor3 = Library.AccentColor }, TweenInfo.new(0.1))
+        end)
+        btn.MouseLeave:Connect(function()
+            Tween(btn, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
+        end)
+
+        btn.MouseButton1Click:Connect(function()
+            local track = ContextMenuTrack
+            CloseContextMenu()
+            if callback and track then callback(track) end
+        end)
+    end
+
+    local function ShowContextMenu(track, mouseX, mouseY)
+        CloseContextMenu()
+        ContextMenuTrack = track
+
+        EnsureContextMenu()
+        ContextMenuFrame.Visible = true
+
+        AddContextOption("Play now", function(t)
+            if t.Uri and t.Uri ~= "" then
+                PlayUri(t.Uri)
+                RefreshSoon()
+            end
+        end)
+        AddContextOption("Add to queue", function(t)
+            if t.Uri and t.Uri ~= "" then
+                AddToQueue(t.Uri)
+                Library:Notify("Added to queue", 2)
+                RefreshSoon()
+            end
+        end)
+
+        -- position near the mouse but clamped to the viewport
+        local viewport = workspace.CurrentCamera.ViewportSize
+        local menuSize = ContextMenuFrame.AbsoluteSize
+        local x = math.clamp(mouseX, 8, viewport.X - menuSize.X - 8)
+        local y = math.clamp(mouseY, 8, viewport.Y - menuSize.Y - 8)
+        ContextMenuFrame.Position = UDim2.new(0, x, 0, y)
+    end
+
+    -- Close the context menu if the user clicks anywhere else
+    InputService.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if not ContextMenuFrame or not ContextMenuFrame.Visible then return end
+        local mx, my = input.Position.X, input.Position.Y
+        local pos = ContextMenuFrame.AbsolutePosition
+        local size = ContextMenuFrame.AbsoluteSize
+        if mx < pos.X or mx > pos.X + size.X
+            or my < pos.Y or my > pos.Y + size.Y then
+            CloseContextMenu()
+        end
+    end)
 
     -- logic
     local function FormatTime(ms)
@@ -4310,8 +4425,6 @@ function Library:CreateSpotifyPlayer()
         }
     end
 
-    -- Render lyrics with dimmed inactive lines and a bold accent-colored
-    -- active line. Called whenever the active index changes.
     local function RenderLyrics(activeIndex)
         if not CurrentLyrics or #CurrentLyrics == 0 then return end
 
@@ -4352,9 +4465,6 @@ function Library:CreateSpotifyPlayer()
         end
     end
 
-    -- Compute the scroll target for a given line index so the active line
-    -- sits at about 35% from the top of the viewport. Uses average line
-    -- height so wrapping is accounted for.
     local function ScrollToActiveLine(activeIndex, myGen)
         task.spawn(function()
             task.wait()
@@ -4507,10 +4617,7 @@ function Library:CreateSpotifyPlayer()
         Items["LyricsFadeTop"].Visible = not isQueue
         Items["LyricsFadeBottom"].Visible = not isQueue
 
-        -- slide the underline to the active tab
-        local underline = Items["TabUnderline"]
-        local targetX = isQueue and 10 or (Items["LyricsFrame"].AbsoluteSize.X * 0.5)
-        Tween(underline, {
+        Tween(Items["TabUnderline"], {
             Position = UDim2.new(isQueue and 0 or 0.5, 10, 0, 23),
         }, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
 
@@ -4754,6 +4861,15 @@ function Library:CreateSpotifyPlayer()
         if not uri or uri == "" then return nil end
         return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
     end
+    -- Appends a track to the end of the user's queue. Spotify's
+    -- POST /me/player/queue endpoint takes a uri as a query param.
+    local function AddToQueue(uri)
+        if not uri or uri == "" then return nil end
+        return MakeRequest(
+            "me/player/queue?uri=" .. HttpService:UrlEncode(uri),
+            "POST", true, {}
+        )
+    end
 
     local function UpdateResults()
         for i, btn in ResultButtons do
@@ -4957,6 +5073,15 @@ function Library:CreateSpotifyPlayer()
             end
             UpdateResults()
         end)
+
+        -- right-click opens a context menu with Play now / Add to queue
+        btn.Button.MouseButton2Click:Connect(function()
+            local r = SearchResults[i]
+            if not r then return end
+            if r.IsBack then return end
+            local mouse = UserInputService:GetMouseLocation()
+            ShowContextMenu(r, mouse.X, mouse.Y)
+        end)
     end
 
     Items["SearchInput"].FocusLost:Connect(function(enter)
@@ -5001,6 +5126,20 @@ function Library:CreateSpotifyPlayer()
 
     Items["Shuffle"].MouseButton1Click:Connect(function()
         Shuffle(not (CurrentTrack and CurrentTrack.Shuffle))
+        RefreshSoon()
+    end)
+
+    Items["Skip"].MouseButton1Click:Connect(function()
+        Next()
+        -- small optimistic feedback so the icon feels responsive
+        if Icons["Skip"] then
+            Tween(Icons["Skip"], { ImageColor3 = Library.AccentColor }, TweenInfo.new(0.1))
+            task.delay(0.25, function()
+                if Icons["Skip"] then
+                    Tween(Icons["Skip"], { ImageColor3 = Library.FontColor }, TweenInfo.new(0.2))
+                end
+            end)
+        end
         RefreshSoon()
     end)
 
