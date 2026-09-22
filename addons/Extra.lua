@@ -453,11 +453,6 @@ do
             Parent = DisplayFrame;
         });
 
-        -- 1/16/23
-        -- Rewrote this to be placed inside the Library ScreenGui
-        -- There was some issue which caused RelativeOffset to be way off
-        -- Thus the color picker would never show
-
         local PickerFrameOuter = Library:Create('Frame', {
             Name = 'Color';
             BackgroundColor3 = Color3.new(1, 1, 1);
@@ -3761,6 +3756,13 @@ function Library:CreateSpotifyPlayer()
     local ContextMenuFrame      = nil
     local ContextMenuTrack      = nil
 
+    -- FIX: forward-declare these so the context menu callbacks can reference
+    -- them. They're defined later in the logic section. Without this, the
+    -- callbacks call nil globals and silently do nothing.
+    local PlayUri
+    local AddToQueue
+    local RefreshSoon
+
     local Items = {}
     local Icons = {}
 
@@ -4131,7 +4133,7 @@ function Library:CreateSpotifyPlayer()
         BorderSizePixel=0,
     })
 
-    -- controls: prev | shuffle | playpause | repeat | next
+    -- controls pal ;3 prev | shuffle | playpause | repeat | next
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
         AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0),
@@ -4144,7 +4146,7 @@ function Library:CreateSpotifyPlayer()
 
     CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
     CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 20, 20, 0)
-    CreateControlButton("Skip",      Items["Controls"], "SKIP_BUTTON_ID_HERE",   16, 16, 0)
+    CreateControlButton("Skip",      Items["Controls"], "13321918743",   16, 16, 0)
     CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 12, 12, 0)
 
     Items["ExpandButton"] = New("ImageButton", {
@@ -4857,13 +4859,18 @@ function Library:CreateSpotifyPlayer()
     local function Shuffle(e) return MakeRequest("me/player/shuffle?state=" .. tostring(e), "PUT", true, {}) end
     local function Repeat(e)  return MakeRequest("me/player/repeat?state=" .. (e and "context" or "off"), "PUT", true, {}) end
     local function Seek(ms)   return MakeRequest("me/player/seek?position_ms=" .. math.max(math.floor(ms or 0), 0), "PUT", true, {}) end
-    local function PlayUri(uri)
+
+    -- Assign to the forward-declared locals so the context menu closures
+    -- above resolve to the real implementations.
+    function PlayUri(uri)
         if not uri or uri == "" then return nil end
         return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
     end
-    -- Appends a track to the end of the user's queue. Spotify's
-    -- POST /me/player/queue endpoint takes a uri as a query param.
-    local function AddToQueue(uri)
+
+    -- Appends a track to the user's queue. Spotify's queue endpoint takes
+    -- the uri as a query param and requires an active device context, but
+    -- does not need a request body.
+    function AddToQueue(uri)
         if not uri or uri == "" then return nil end
         return MakeRequest(
             "me/player/queue?uri=" .. HttpService:UrlEncode(uri),
@@ -4975,7 +4982,9 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
-    local function RefreshSoon()
+    -- Assign to the forward-declared local so the context menu closures
+    -- above resolve to the real implementation.
+    function RefreshSoon()
         task.delay(0.35, function()
             if Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent then
                 Spotify:Refresh()
@@ -5131,7 +5140,6 @@ function Library:CreateSpotifyPlayer()
 
     Items["Skip"].MouseButton1Click:Connect(function()
         Next()
-        -- small optimistic feedback so the icon feels responsive
         if Icons["Skip"] then
             Tween(Icons["Skip"], { ImageColor3 = Library.AccentColor }, TweenInfo.new(0.1))
             task.delay(0.25, function()
