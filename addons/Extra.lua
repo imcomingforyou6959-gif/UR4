@@ -4013,14 +4013,6 @@ function Library:CreateSpotifyPlayer()
         BackgroundTransparency=1,
         ZIndex=3,
     })
-    New("UICorner", { Name="\0", Parent=Items["CoverFrame"], CornerRadius=UDim.new(1,0) })
-
-    New("UIStroke", { Name="\0", Parent=Items["CoverFrame"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.Black, Thickness=1 }, { Color='Black' })
-    New("UIStroke", { Name="\0", Parent=Items["CoverFrame"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
     local CoverMask = New("Frame", {
         Name="\0", Parent=Items["CoverFrame"],
@@ -4028,7 +4020,6 @@ function Library:CreateSpotifyPlayer()
         BackgroundTransparency=1, ClipsDescendants=true,
         ZIndex=3,
     })
-    New("UICorner", { Name="\0", Parent=CoverMask, CornerRadius=UDim.new(1,0) })
 
     Items["Cover"] = New("ImageLabel", {
         Name="\0", Parent=CoverMask,
@@ -4041,19 +4032,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=3,
     })
     New("UICorner", { Name="\0", Parent=Items["Cover"], CornerRadius=UDim.new(0.5,0) })
-
-    local CoverHole = New("Frame", {
-        Name="\0", Parent=Items["CoverFrame"],
-        AnchorPoint=Vector2.new(0.5,0.5),
-        Position=UDim2.new(0.5,0,0.5,0),
-        Size=UDim2.new(0,8,0,8), BorderSizePixel=0,
-        BackgroundColor3=Library.BackgroundColor,
-        ZIndex=4,
-    }, { BackgroundColor3='BackgroundColor' })
-    New("UICorner", { Name="\0", Parent=CoverHole, CornerRadius=UDim.new(1,0) })
-    New("UIStroke", { Name="\0", Parent=CoverHole,
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.Black, Thickness=1 }, { Color='Black' })
 
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
