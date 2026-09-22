@@ -3747,6 +3747,9 @@ function Library:CreateSpotifyPlayer()
     local UpdateQueueCanvas
     local IsVisible = true
     local CustomPosition
+    -- FIX: optimistic play/pause state so rapid clicks register correctly
+    -- and don't depend on the 1s-stale CurrentTrack.IsPlaying snapshot.
+    local LastKnownPlaying = false
 
     local Items = {}
     local Icons = {}   -- icons stored separately, NOT on the Instance
@@ -3830,7 +3833,7 @@ function Library:CreateSpotifyPlayer()
         ClearTextOnFocus=false, BorderSizePixel=0,
     }, { TextColor3='FontColor' })
 
-    -- FIX: automatic canvas sizing so all 8 rows are reachable; height
+    -- automatic canvas sizing so all 8 rows are reachable; height
     -- bumped from 114 to 128 so ~3 rows fit comfortably instead of 2.5.
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -3856,7 +3859,7 @@ function Library:CreateSpotifyPlayer()
 
     for Index = 1, 8 do
         local Row = {}
-        -- FIX: row height 36 -> 42 so title+album don't touch.
+        -- row height 36 -> 42 so title+album don't touch.
         Row.Frame = New("Frame", {
             Name="\0", Parent=Items["SearchResults"],
             Size=UDim2.new(1,-8,0,42),
@@ -3870,7 +3873,7 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(1,-22,0,1), BorderSizePixel=0,
             BackgroundColor3=Library.OutlineColor,
         }, { BackgroundColor3='OutlineColor' })
-        -- FIX: cover 30 -> 34 at (4,4) to fill the taller row nicely.
+        -- cover 30 -> 34 at (4,4) to fill the taller row nicely.
         Row.Cover = New("ImageLabel", {
             Name="\0", Parent=Row.Frame,
             Image=PlaceholderImage, BackgroundTransparency=1,
@@ -3878,7 +3881,7 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(0,34,0,34),
             Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
         })
-        -- FIX: title at (40,4) height 17; album at (40,22) height 16.
+        -- title at (40,4) height 17; album at (40,22) height 16.
         Row.Title = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
             Parent=Row.Frame, TextColor3=Library.FontColor,
@@ -3983,7 +3986,7 @@ function Library:CreateSpotifyPlayer()
         Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
     })
 
-    -- FIX: Info frame height 38 -> 53, padding 1 -> 2. Total stacked text
+    -- Info frame height 38 -> 53, padding 1 -> 2. Total stacked text
     -- is 17 + 2 + 16 + 2 + 16 = 53. Before, album was clipped by 4px.
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
@@ -3995,7 +3998,7 @@ function Library:CreateSpotifyPlayer()
     New("UIListLayout", { Name="\0", Parent=Items["Info"],
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2) })
 
-    -- FIX: label heights 14/13/13 -> 17/16/16 (matches real TextSize=14 metrics)
+    -- label heights 14/13/13 -> 17/16/16 (matches real TextSize=14 metrics)
     Items["Title"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=Library.FontColor, Text="Spotify", BackgroundTransparency=1,
@@ -4035,7 +4038,7 @@ function Library:CreateSpotifyPlayer()
         BackgroundTransparency=1, BorderSizePixel=0, Text="",
     })
 
-    -- FIX: moved Time below Info (y=56, height 12) so it no longer
+    -- moved Time below Info (y=56, height 12) so it no longer
     -- overlaps the Album row. PlayerArea is 68 tall; 56+12 = 68.
     Items["Time"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["PlayerArea"],
@@ -4088,17 +4091,30 @@ function Library:CreateSpotifyPlayer()
         Items["Time"].Text = FormatTime(current) .. " / " .. FormatTime(total)
     end
 
+    -- FIX: prefer LastKnownPlaying when it disagrees with the server's
+    -- snapshot, so the play/pause icon matches what the user just pressed
+    -- instead of snapping back to the stale polled value.
     local function SetControlState(data)
         local shuffleOn = data and data.Shuffle
         local repeatOn  = data and data.RepeatState and data.RepeatState ~= "off"
         Icons["Shuffle"].ImageColor3   = shuffleOn and Library.AccentColor or Library.FontColor
         Icons["Repeat"].ImageColor3    = repeatOn  and Library.AccentColor or Library.FontColor
-        Icons["PlayPause"].Image       = data and data.IsPlaying
-            and "rbxassetid://9607545382"
-            or  "rbxassetid://9622475855"
+
+        local playing
+        if data == nil then
+            playing = false
+        elseif data.IsPlaying ~= LastKnownPlaying then
+            playing = LastKnownPlaying
+        else
+            playing = data.IsPlaying == true
+        end
+
+        Icons["PlayPause"].Image = playing
+            and "rbxassetid://9607545382"   -- currently playing → show pause icon
+            or  "rbxassetid://9622475855"   -- currently paused  → show play icon
     end
 
-    -- FIX: bail if the ScrollFrame hasn't laid out yet; on first frame
+    -- bail if the ScrollFrame hasn't laid out yet; on first frame
     -- AbsoluteSize.X is 0 which produced a 1px label with huge wrapped height.
     UpdateQueueCanvas = function()
         local label  = Items["QueueText"]
@@ -4145,6 +4161,7 @@ function Library:CreateSpotifyPlayer()
     local function SetDisplay(data, emptyText)
         if not data then
             CurrentTrack = nil
+            LastKnownPlaying = false                    -- FIX
             Items["Title"].Text   = "Spotify"
             Items["Artist"].Text  = "No track detected"
             Items["Album"].Text   = emptyText or "Nothing is currently playing"
@@ -4155,6 +4172,7 @@ function Library:CreateSpotifyPlayer()
             return
         end
         CurrentTrack = data
+        LastKnownPlaying = data.IsPlaying == true      -- FIX
         Items["Title"].Text  = data.Title
         Items["Artist"].Text = data.Artist
         Items["Album"].Text  = data.Album
@@ -4336,10 +4354,9 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
-    -- FIX: every state-changing endpoint now sends an empty JSON body {} and
+    -- every state-changing endpoint sends an empty JSON body {} and
     -- retryOnAuth=true. Without a body, several executors send
-    -- Content-Length: 0 which Spotify rejects with a silent no-op, which is
-    -- exactly why Pause/Next/Previous/Shuffle/Repeat/Seek did nothing.
+    -- Content-Length: 0 which Spotify rejects with a silent no-op.
     local function Previous() return MakeRequest("me/player/previous", "POST", true, {}) end
     local function Next()     return MakeRequest("me/player/next",     "POST", true, {}) end
     local function Resume()   return MakeRequest("me/player/play",     "PUT",  true, {}) end
@@ -4450,8 +4467,10 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
+    -- Bumped from 0.2 to 0.35 so the poll doesn't fetch stale playback
+    -- state right after a pause/resume/seek request.
     local function RefreshSoon()
-        task.delay(0.2, function()
+        task.delay(0.35, function()
             if Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent then
                 Spotify:Refresh()
             end
@@ -4497,7 +4516,7 @@ function Library:CreateSpotifyPlayer()
         Spotify:Refresh()
     end
 
-    -- FIX: /me/player returns 204 (no body) when nothing is playing, which
+    -- /me/player returns 204 (no body) when nothing is playing, which
     -- made GetCurrentTrack return nil. The old code called ValidateToken()
     -- FIRST, and that returns d.display_name, which is nil for some token
     -- scopes — so it falsely reported "Invalid token" whenever nothing was
@@ -4575,13 +4594,26 @@ function Library:CreateSpotifyPlayer()
         SetExpanded(not IsExpanded)
     end)
 
-    -- PlayPause button: works correctly now that Refresh() populates
-    -- CurrentTrack properly and Pause/Resume send {} bodies.
+    -- FIX: optimistic flip of LastKnownPlaying. The old logic read
+    -- CurrentTrack.IsPlaying, which lags up to 1s behind because the poll
+    -- loop only refreshes once per second. Clicking rapidly would call
+    -- Pause() twice in a row and never call Resume().
     Items["PlayPause"].MouseButton1Click:Connect(function()
-        if CurrentTrack and CurrentTrack.IsPlaying then
+        if LastKnownPlaying then
+            LastKnownPlaying = false
+            if CurrentTrack then CurrentTrack.IsPlaying = false end
             Pause()
         else
+            LastKnownPlaying = true
+            if CurrentTrack then CurrentTrack.IsPlaying = true end
             Resume()
+        end
+        -- Repaint immediately so the user sees the flip without waiting
+        -- for the poll.
+        if Icons["PlayPause"] then
+            Icons["PlayPause"].Image = LastKnownPlaying
+                and "rbxassetid://9607545382"
+                or  "rbxassetid://9622475855"
         end
         RefreshSoon()
     end)
@@ -4604,7 +4636,7 @@ function Library:CreateSpotifyPlayer()
         SetSeekingFromInput(input)
     end)
 
-    -- FIX: these were silent no-ops before because InputService was nil.
+    -- these were silent no-ops before because InputService was nil.
     InputService.InputChanged:Connect(function(input)
         if not Seeking then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
