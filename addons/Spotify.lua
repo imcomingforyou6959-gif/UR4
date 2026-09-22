@@ -8,9 +8,6 @@ local Spotify = {} do
 	Spotify.Groupbox  = nil
 	Spotify._Visible  = false
 
-	-- ============================================================
-	--  internal: locate stray Spotify frames in the tree
-	-- ============================================================
 	local function FindSpotifyRoots(Library)
 		local found = {}
 		local roots = {}
@@ -42,9 +39,6 @@ local Spotify = {} do
 		return found
 	end
 
-	-- ============================================================
-	--  internal: prune duplicate/orphan frames
-	-- ============================================================
 	function Spotify:PruneDuplicates(keepNewest)
 		local roots = FindSpotifyRoots(self.Library)
 		if #roots <= 1 then return 0 end
@@ -60,33 +54,21 @@ local Spotify = {} do
 		return removed
 	end
 
-	-- ============================================================
-	--  internal: lazily build and cache the player
-	-- ============================================================
 	function Spotify:Ensure()
 		if self.Instance then return self.Instance end
-
 		local removed = self:PruneDuplicates(false)
 		if removed > 0 then
-			print(("[Spotify] Pruned %d duplicate frame(s) before building."):format(removed))
+			print(("removed %d duplicate frame(s) before building."):format(removed))
 		end
-
 		if type(self.Library.CreateSpotifyPlayer) ~= "function" then
-			error("[Spotify] Library.CreateSpotifyPlayer is missing — is Extra.lua up to date?")
+			error("Library.CreateSpotifyPlayer is missing — is Extra.lua up to date?")
 		end
-
-		print("[Spotify] Building player…")
 		self.Instance = self.Library:CreateSpotifyPlayer()
 		self.Instance:SetVisibility(false)
-
 		getgenv().Spotify = self.Instance
-		print("[Spotify] Player created ✓")
 		return self.Instance
 	end
 
-	-- ============================================================
-	--  public: apply visibility, building lazily if needed
-	-- ============================================================
 	function Spotify:SetVisible(value)
 		self._Visible = value and true or false
 
@@ -104,9 +86,6 @@ local Spotify = {} do
 		end
 	end
 
-	-- ============================================================
-	--  public: same shape as SaveManager / ThemeManager
-	-- ============================================================
 	function Spotify:SetLibrary(library)
 		self.Library = library
 	end
@@ -115,18 +94,15 @@ local Spotify = {} do
 		self.Folder = folder
 		if not isfolder(folder) then makefolder(folder) end
 	end
-
-	-- ============================================================
-	--  public: build the groupbox and controls into a tab
-	-- ============================================================
+	
 	function Spotify:BuildSpotifySection(tab)
 		assert(self.Library, "Spotify:SetLibrary must be called before BuildSpotifySection")
 
-		local box = tab:AddRightGroupbox('Spotify')
+		local box = tab:AddRightGroupbox('Widgets')
 		self.Groupbox = box
 
 		local toggle = box:AddToggle('SpotifyVisible', {
-			Text    = 'Show Spotify Player',
+			Text    = 'Spotify',
 			Default = false,
 		})
 		self.Toggle = toggle
@@ -143,34 +119,12 @@ local Spotify = {} do
 			NoUI            = false,
 		})
 
-		box:AddButton('Show / Hide', function()
-			toggle:SetValue(not toggle.Value)
-		end)
-
-		box:AddButton('Refresh Now', function()
+		box:AddButton('Refresh Player', function()
 			if Spotify.Instance and Spotify.Instance.Refresh then
 				Spotify.Instance:Refresh()
 			end
 		end)
 
-		box:AddButton('Remove Duplicates', function()
-			local removed = Spotify:PruneDuplicates(true)
-			self.Library:Notify(("Removed %d duplicate(s)"):format(removed), 3)
-		end)
-
-		box:AddButton('Destroy Player', function()
-			if Spotify.Instance and Spotify.Instance.SetVisibility then
-				Spotify.Instance:SetVisibility(false)
-			end
-			local removed = Spotify:PruneDuplicates(false)
-			print(("[Spotify] Destroyed %d frame(s)."):format(removed))
-			Spotify.Instance = nil
-			getgenv().Spotify = nil
-			toggle:SetValue(false)
-		end)
-
-		-- If a persisted config already had SpotifyVisible = true, apply it
-		-- now that everything exists.
 		if toggle.Value then
 			Spotify:SetVisible(true)
 		end
@@ -178,9 +132,6 @@ local Spotify = {} do
 		return box
 	end
 
-	-- ============================================================
-	--  public: tear everything down on library unload
-	-- ============================================================
 	function Spotify:Unload()
 		if self.Instance and self.Instance.SetVisibility then
 			self.Instance:SetVisibility(false)
