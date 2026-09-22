@@ -3742,6 +3742,7 @@ function Library:CreateSpotifyPlayer()
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
+    local CoverSpin = 0
 
     -- lyrics state
     local LyricsCache           = {}
@@ -3786,28 +3787,40 @@ function Library:CreateSpotifyPlayer()
         Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     end
 
-    -- root frame (matches library frame styling — no corner radius)
+    -- ============================================================
+    --  ROOT FRAME (matches library window style)
+    -- ============================================================
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
         Position=UDim2.new(0, 30, 0, 240),
         Size=CollapsedSize, BorderSizePixel=0,
-        BackgroundColor3=Library.BackgroundColor,
+        BackgroundColor3=Library.MainColor,
         ClipsDescendants=true,
         ZIndex = 50,
-    }, { BackgroundColor3='BackgroundColor' })
+    }, { BackgroundColor3='MainColor' })
     Library:MakeDraggable(Items["SpotifyPlayer"])
 
     New("UIStroke", { Name="\0", Parent=Items["SpotifyPlayer"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor }, { Color='OutlineColor' })
+        Color=Library.Black, Thickness=1 }, { Color='Black' })
     New("UIStroke", { Name="\0", Parent=Items["SpotifyPlayer"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
+    -- inner backing frame (library uses BackgroundColor inside)
+    Items["InnerBacking"] = New("Frame", {
+        Name="\0", Parent=Items["SpotifyPlayer"],
+        Position=UDim2.new(0,1,0,1), Size=UDim2.new(1,-2,1,-2),
+        BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        ZIndex=0,
+    }, { BackgroundColor3='BackgroundColor' })
+
+    -- top accent liner (2px, matches library tab/groupbox highlight)
     Items["AccentLiner"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Size=UDim2.new(1,0,0,1), BorderSizePixel=0,
+        Size=UDim2.new(1,0,0,2), BorderSizePixel=0,
         BackgroundColor3=Library.AccentColor,
+        ZIndex=2,
     }, { BackgroundColor3='AccentColor' })
 
     -- search
@@ -3815,15 +3828,13 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -40),
         Size=UDim2.new(0, 250, 0, 24),
-        BorderSizePixel=0, BackgroundColor3=Library.MainColor,
-    }, { BackgroundColor3='MainColor' })
+        BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        ZIndex=1,
+    }, { BackgroundColor3='BackgroundColor' })
 
     New("UIStroke", { Name="\0", Parent=Items["SearchBackground"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor }, { Color='OutlineColor' })
-    New("UIStroke", { Name="\0", Parent=Items["SearchBackground"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
     Items["SearchInput"] = New("TextBox", {
         Name="\0", Font=Library.Font, TextSize=14,
@@ -3837,6 +3848,7 @@ function Library:CreateSpotifyPlayer()
         TextXAlignment=Enum.TextXAlignment.Left,
         Position=UDim2.new(0,6,0.5,-1),
         ClearTextOnFocus=false, BorderSizePixel=0,
+        ZIndex=2,
     }, { TextColor3='FontColor' })
 
     Items["SearchResults"] = New("ScrollingFrame", {
@@ -3847,15 +3859,13 @@ function Library:CreateSpotifyPlayer()
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
         ScrollBarThickness=0,
-        BackgroundColor3=Library.BackgroundColor,
-    }, { BackgroundColor3='BackgroundColor' })
+        BackgroundColor3=Library.MainColor,
+        ZIndex=1,
+    }, { BackgroundColor3='MainColor' })
 
     New("UIStroke", { Name="\0", Parent=Items["SearchResults"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor }, { Color='OutlineColor' })
-    New("UIStroke", { Name="\0", Parent=Items["SearchResults"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
     New("UIListLayout", { Name="\0", Parent=Items["SearchResults"],
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4),
@@ -3868,6 +3878,7 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(1,-8,0,42),
             BorderSizePixel=0, BackgroundTransparency=1,
             BackgroundColor3=Library.MainColor, Visible=false,
+            ZIndex=2,
         })
         Row.Divider = New("Frame", {
             Name="\0", Parent=Row.Frame,
@@ -3875,6 +3886,7 @@ function Library:CreateSpotifyPlayer()
             Position=UDim2.new(0.5,0,1,-1),
             Size=UDim2.new(1,-22,0,1), BorderSizePixel=0,
             BackgroundColor3=Library.OutlineColor,
+            ZIndex=2,
         }, { BackgroundColor3='OutlineColor' })
         Row.Cover = New("ImageLabel", {
             Name="\0", Parent=Row.Frame,
@@ -3882,6 +3894,7 @@ function Library:CreateSpotifyPlayer()
             ScaleType=Enum.ScaleType.Crop,
             Size=UDim2.new(0,34,0,34),
             Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
+            ZIndex=2,
         })
         Row.Title = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
@@ -3891,6 +3904,7 @@ function Library:CreateSpotifyPlayer()
             Position=UDim2.new(0,44,0,4),
             Size=UDim2.new(1,-48,0,17),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
         }, { TextColor3='FontColor' })
         Row.Album = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
@@ -3900,11 +3914,13 @@ function Library:CreateSpotifyPlayer()
             Position=UDim2.new(0,44,0,22),
             Size=UDim2.new(1,-48,0,16),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
         })
         Row.Button = New("TextButton", {
             Name="\0", Parent=Row.Frame,
             Size=UDim2.new(1,0,1,0),
             BorderSizePixel=0, BackgroundTransparency=1, Text="",
+            ZIndex=3,
         })
         ResultButtons[Index] = Row
     end
@@ -3914,15 +3930,13 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
         Size=UDim2.new(0,260,0,146),
-        BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
-    }, { BackgroundColor3='BackgroundColor' })
+        BorderSizePixel=0, BackgroundColor3=Library.MainColor,
+        ZIndex=1,
+    }, { BackgroundColor3='MainColor' })
 
     New("UIStroke", { Name="\0", Parent=Items["LyricsFrame"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor }, { Color='OutlineColor' })
-    New("UIStroke", { Name="\0", Parent=Items["LyricsFrame"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
     -- tab row
     Items["QueueTab"] = New("TextButton", {
@@ -3932,6 +3946,7 @@ function Library:CreateSpotifyPlayer()
         TextXAlignment=Enum.TextXAlignment.Left,
         Position=UDim2.new(0,8,0,6),
         Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        ZIndex=2,
     }, { TextColor3='AccentColor' })
 
     Items["LyricsTab"] = New("TextButton", {
@@ -3941,6 +3956,7 @@ function Library:CreateSpotifyPlayer()
         TextXAlignment=Enum.TextXAlignment.Right,
         Position=UDim2.new(0.5,0,0,6),
         Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        ZIndex=2,
     })
 
     -- queue panel
@@ -3951,6 +3967,7 @@ function Library:CreateSpotifyPlayer()
         BorderSizePixel=0, BackgroundTransparency=1,
         CanvasSize=UDim2.new(), ScrollBarThickness=1,
         ScrollBarImageColor3=Library.OutlineColor,
+        ZIndex=2,
     }, { ScrollBarImageColor3='OutlineColor' })
 
     Items["QueueText"] = New("TextLabel", {
@@ -3962,6 +3979,7 @@ function Library:CreateSpotifyPlayer()
         TextYAlignment=Enum.TextYAlignment.Top,
         Size=UDim2.new(1,-8,0,0),
         BorderSizePixel=0, TextWrapped=true, RichText=true,
+        ZIndex=2,
     })
 
     Items["QueueScroll"]:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
@@ -3977,6 +3995,7 @@ function Library:CreateSpotifyPlayer()
         CanvasSize=UDim2.new(), ScrollBarThickness=1,
         ScrollBarImageColor3=Library.OutlineColor,
         Visible=false,
+        ZIndex=2,
     }, { ScrollBarImageColor3='OutlineColor' })
 
     Items["LyricsText"] = New("TextLabel", {
@@ -3988,6 +4007,7 @@ function Library:CreateSpotifyPlayer()
         TextYAlignment=Enum.TextYAlignment.Top,
         Size=UDim2.new(1,-8,0,0),
         BorderSizePixel=0, TextWrapped=true, RichText=true,
+        ZIndex=2,
     })
 
     -- player area
@@ -3997,28 +4017,61 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0,10,0,10),
         Size=UDim2.new(1,-20,0,68),
         BorderSizePixel=0,
+        ZIndex=2,
     })
 
+    -- ============================================================
+    --  CIRCLE COVER WITH VINYL SPIN
+    -- ============================================================
     Items["CoverFrame"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
         Position=UDim2.new(0,0,0,2),
         Size=UDim2.new(0,50,0,50),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        ZIndex=3,
     }, { BackgroundColor3='BackgroundColor' })
+    New("UICorner", { Name="\0", Parent=Items["CoverFrame"], CornerRadius=UDim.new(1,0) })
 
     New("UIStroke", { Name="\0", Parent=Items["CoverFrame"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor }, { Color='OutlineColor' })
+        Color=Library.Black, Thickness=1 }, { Color='Black' })
     New("UIStroke", { Name="\0", Parent=Items["CoverFrame"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+
+    -- mask frame (round clip for the rotating image)
+    local CoverMask = New("Frame", {
+        Name="\0", Parent=Items["CoverFrame"],
+        Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
+        BackgroundTransparency=1, ClipsDescendants=true,
+        ZIndex=3,
+    })
+    New("UICorner", { Name="\0", Parent=CoverMask, CornerRadius=UDim.new(1,0) })
 
     Items["Cover"] = New("ImageLabel", {
-        Name="\0", Parent=Items["CoverFrame"],
+        Name="\0", Parent=CoverMask,
+        AnchorPoint=Vector2.new(0.5,0.5),
+        Position=UDim2.new(0.5,0,0.5,0),
         Image=PlaceholderImage, BackgroundTransparency=1,
         ScaleType=Enum.ScaleType.Crop,
-        Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
+        Size=UDim2.new(1.4,0,1.4,0), BorderSizePixel=0,
+        Rotation=0,
+        ZIndex=3,
     })
+
+    -- center hole (vinyl record look)
+    local CoverHole = New("Frame", {
+        Name="\0", Parent=Items["CoverFrame"],
+        AnchorPoint=Vector2.new(0.5,0.5),
+        Position=UDim2.new(0.5,0,0.5,0),
+        Size=UDim2.new(0,8,0,8), BorderSizePixel=0,
+        BackgroundColor3=Library.BackgroundColor,
+        ZIndex=4,
+    }, { BackgroundColor3='BackgroundColor' })
+    New("UICorner", { Name="\0", Parent=CoverHole, CornerRadius=UDim.new(1,0) })
+    New("UIStroke", { Name="\0", Parent=CoverHole,
+        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
+        Color=Library.Black, Thickness=1 }, { Color='Black' })
 
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
@@ -4026,6 +4079,7 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0,60,0,2),
         Size=UDim2.new(1,-176,0,53),
         BorderSizePixel=0,
+        ZIndex=3,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Info"],
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2) })
@@ -4035,36 +4089,42 @@ function Library:CreateSpotifyPlayer()
         TextColor3=Library.FontColor, Text="Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        ZIndex=3,
     }, { TextColor3='FontColor' })
     Items["Artist"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="No track detected", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        ZIndex=3,
     })
     Items["Album"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="Waiting for Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        ZIndex=3,
     })
 
     Items["ProgressFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0,0,1,-3), Size=UDim2.new(1,0,0,3),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        ZIndex=3,
     }, { BackgroundColor3='BackgroundColor' })
 
     Items["ProgressFill"] = New("Frame", {
         Name="\0", Parent=Items["ProgressFrame"],
         Size=UDim2.new(0,0,1,0), BorderSizePixel=0,
         BackgroundColor3=Library.AccentColor,
+        ZIndex=3,
     }, { BackgroundColor3='AccentColor' })
 
     Items["ProgressHitbox"] = New("TextButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0,0,1,-14), Size=UDim2.new(1,0,0,14),
         BackgroundTransparency=1, BorderSizePixel=0, Text="",
+        ZIndex=4,
     })
 
     Items["Time"] = New("TextLabel", {
@@ -4073,12 +4133,14 @@ function Library:CreateSpotifyPlayer()
         TextXAlignment=Enum.TextXAlignment.Left,
         Position=UDim2.new(0,60,0,56), Size=UDim2.new(0,90,0,12),
         BorderSizePixel=0,
+        ZIndex=3,
     })
 
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
         AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0),
         Size=UDim2.new(0,132,0,24), BorderSizePixel=0,
+        ZIndex=3,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
         FillDirection=Enum.FillDirection.Horizontal,
@@ -4096,6 +4158,7 @@ function Library:CreateSpotifyPlayer()
         Size=UDim2.new(0,14,0,14), BorderSizePixel=0, AutoButtonColor=false,
         Image="rbxassetid://9607545497", Rotation=0,
         ImageColor3=Library.FontColor, BackgroundTransparency=1,
+        ZIndex=4,
     }, { ImageColor3='FontColor' })
 
     -- context menu
@@ -4112,20 +4175,20 @@ function Library:CreateSpotifyPlayer()
 
         ContextMenuFrame = New("Frame", {
             Name="\0", Parent=Library.ScreenGui,
-            BackgroundColor3=Library.BackgroundColor,
+            BackgroundColor3=Library.MainColor,
             BackgroundTransparency=0,
             BorderSizePixel=0,
             Size=UDim2.new(0, 160, 0, 0),
             AutomaticSize=Enum.AutomaticSize.Y,
             Visible=false,
             ZIndex=200,
-        }, { BackgroundColor3='BackgroundColor' })
+        }, { BackgroundColor3='MainColor' })
         New("UIStroke", { Name="\0", Parent=ContextMenuFrame,
             ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-            Color=Library.OutlineColor }, { Color='OutlineColor' })
+            Color=Library.Black, Thickness=1 }, { Color='Black' })
         New("UIStroke", { Name="\0", Parent=ContextMenuFrame,
             ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-            Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+            Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
         New("UIListLayout", { Name="\0", Parent=ContextMenuFrame,
             SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,0) })
@@ -4277,7 +4340,8 @@ function Library:CreateSpotifyPlayer()
         for i, t in tracks or {} do
             if i > 6 then break end
             buf[#buf+1] = string.format("%d. %s\n%s", i, t.Title or "Unknown track", t.Artist or "Unknown artist")
-        end        Items["QueueText"].Text = table.concat(buf, "\n\n")
+        end
+        Items["QueueText"].Text = table.concat(buf, "\n\n")
         UpdateQueueCanvas()
         Items["QueueScroll"].CanvasPosition = Vector2.new()
     end
@@ -4329,7 +4393,7 @@ function Library:CreateSpotifyPlayer()
                 Url = url,
                 Method = "GET",
                 Headers = {
-                    ["User-Agent"] = "RawrHub Spotify Player (https://github.com/imcomingforyou6959-gif/UR4)",
+                    ["User-Agent"] = "rawr baby (https://github.com/imcomingforyou6959-gif/UR4)",
                     ["Accept"] = "application/json",
                 },
             })
@@ -4565,6 +4629,7 @@ function Library:CreateSpotifyPlayer()
             Items["Artist"].Text  = "No track detected"
             Items["Album"].Text   = emptyText or "Nothing is currently playing"
             Items["Cover"].Image  = PlaceholderImage
+            Items["Cover"].Rotation = 0
             SetLyricsEmpty("Nothing is currently playing.")
             SetControlState(nil)
             SetQueueDisplay(nil, nil, "Nothing is currently playing.")
@@ -4578,7 +4643,13 @@ function Library:CreateSpotifyPlayer()
         Items["Title"].Text  = data.Title
         Items["Artist"].Text = data.Artist
         Items["Album"].Text  = data.Album
-        Items["Cover"].Image = data.Cover or PlaceholderImage
+
+        local newCover = data.Cover or PlaceholderImage
+        if Items["Cover"].Image ~= newCover then
+            Items["Cover"].Image = newCover
+            Items["Cover"].Rotation = 0
+        end
+
         SetControlState(data)
         if not Seeking then
             SetProgress(data.Progress, data.Duration, true)
@@ -5125,6 +5196,19 @@ function Library:CreateSpotifyPlayer()
                 end
             end
             task.wait(0.1)
+        end
+    end)
+
+    -- vinyl spin
+    task.spawn(function()
+        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+            if CurrentTrack and LastKnownPlaying then
+                CoverSpin = (CoverSpin + 0.8) % 360
+                if Items["Cover"] and Items["Cover"].Parent then
+                    Items["Cover"].Rotation = CoverSpin
+                end
+            end
+            task.wait(0.03)
         end
     end)
 
