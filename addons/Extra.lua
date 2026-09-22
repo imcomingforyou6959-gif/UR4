@@ -4691,8 +4691,6 @@ function Library:CreateSpotifyPlayer()
 end
 
 Library.Directory = "spotifyforRawr"
-
-local Spotify = Library:CreateSpotifyPlayer()
 -- Spotify:SetVisibility(false)
 -- Spotify:SetToken('<paste token here>')
 
