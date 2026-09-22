@@ -4146,7 +4146,7 @@ function Library:CreateSpotifyPlayer()
 
     CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
     CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 20, 20, 0)
-    CreateControlButton("Skip",      Items["Controls"], "13321918743",   16, 16, 0)
+    CreateControlButton("Skip",      Items["Controls"], "rbxassetid://13321918743", 16, 16, 0)
     CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 12, 12, 0)
 
     Items["ExpandButton"] = New("ImageButton", {
