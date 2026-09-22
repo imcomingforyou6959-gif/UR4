@@ -3640,7 +3640,6 @@ end;
 
 Players.PlayerAdded:Connect(OnPlayerChange);
 Players.PlayerRemoving:Connect(OnPlayerChange);
-
 function Library:CreateSpotifyPlayer()
     local Spotify = {}
 
@@ -3744,6 +3743,15 @@ function Library:CreateSpotifyPlayer()
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
+
+    -- lyrics state
+    local LyricsCache           = {}     -- [trackId] = { Plain, Synced, Parsed, HasSynced, Instrumental }
+    local CurrentLyrics         = {}     -- parsed lines for the playing track
+    local CurrentLyricsSynced   = false
+    local CurrentLyricsTrackId  = nil
+    local CurrentLyricsLoading  = false
+    local CurrentHighlightIndex = 0
+    local SidebarTab            = "queue"
 
     local Items = {}
     local Icons = {}
@@ -3893,7 +3901,7 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- queue panel
+    -- sidebar (queue + lyrics)
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -3908,15 +3916,26 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    Items["QueueLabel"] = New("TextLabel", {
+    -- tab row
+    Items["QueueTab"] = New("TextButton", {
         Name="\0", Font=Library.Font, TextSize=14,
         Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
-        Text="Queue", BackgroundTransparency=1,
+        Text="Queue", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,8,0,6),
-        Size=UDim2.new(1,-16,0,14), BorderSizePixel=0,
+        Position=UDim2.new(0,8,0,5),
+        Size=UDim2.new(0.5,-8,0,16), BorderSizePixel=0,
     }, { TextColor3='AccentColor' })
 
+    Items["LyricsTab"] = New("TextButton", {
+        Name="\0", Font=Library.Font, TextSize=14,
+        Parent=Items["LyricsFrame"], TextColor3=ThemeInactiveText,
+        Text="Lyrics", BackgroundTransparency=1, AutoButtonColor=false,
+        TextXAlignment=Enum.TextXAlignment.Right,
+        Position=UDim2.new(0.5,0,0,5),
+        Size=UDim2.new(0.5,-8,0,16), BorderSizePixel=0,
+    })
+
+    -- queue panel
     Items["QueueScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,8,0,24),
@@ -3940,6 +3959,28 @@ function Library:CreateSpotifyPlayer()
     Items["QueueScroll"]:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
         if UpdateQueueCanvas then UpdateQueueCanvas() end
     end)
+
+    -- lyrics panel (hidden by default)
+    Items["LyricsScroll"] = New("ScrollingFrame", {
+        Name="\0", Parent=Items["LyricsFrame"],
+        Position=UDim2.new(0,8,0,24),
+        Size=UDim2.new(1,-16,1,-32),
+        BorderSizePixel=0, BackgroundTransparency=1,
+        CanvasSize=UDim2.new(), ScrollBarThickness=1,
+        ScrollBarImageColor3=Library.OutlineColor,
+        Visible=false,
+    }, { ScrollBarImageColor3='OutlineColor' })
+
+    Items["LyricsText"] = New("TextLabel", {
+        Name="\0", Font=Library.Font, TextSize=14,
+        Parent=Items["LyricsScroll"], TextColor3=ThemeInactiveText,
+        Text="Expand the player to load lyrics.",
+        BackgroundTransparency=1,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        TextYAlignment=Enum.TextYAlignment.Top,
+        Size=UDim2.new(1,-8,0,0),
+        BorderSizePixel=0, TextWrapped=true, RichText=true,
+    })
 
     -- player area
     Items["PlayerArea"] = New("Frame", {
@@ -4129,19 +4170,285 @@ function Library:CreateSpotifyPlayer()
         Items["QueueScroll"].CanvasPosition = Vector2.new()
     end
 
+    -- lyrics
+    local function ParseLRC(lrcText)
+        if not lrcText or lrcText == "" then return {} end
+        local lines = {}
+        for raw in lrcText:gmatch("[^\r\n]+") do
+            local minutes, seconds, hundredths, text = raw:match("^%[(%d+):(%d+)%.(%d+)%]%s*(.*)$")
+            if not minutes then
+                minutes, seconds, text = raw:match("^%[(%d+):(%d+)%]%s*(.*)$")
+                hundredths = "0"
+            end
+            if minutes and seconds and text and text ~= "" then
+                local timeMs = (tonumber(minutes) * 60 + tonumber(seconds)) * 1000
+                    + tonumber(hundredths or 0) * 10
+                table.insert(lines, { Time = timeMs, Text = text })
+            end
+        end
+        table.sort(lines, function(a, b) return a.Time < b.Time end)
+        return lines
+    end
+
+    local function GetLyrics(trackName, artistName, albumName, durationMs)
+        if not Request or not trackName or not artistName then return nil end
+        if trackName == "Unknown track" or artistName == "Unknown artist" then return nil end
+
+        -- LRCLIB prefers a single artist name; Spotify gives us "A, B, C"
+        local primaryArtist = artistName:match("^([^,]+)") or artistName
+        primaryArtist = primaryArtist:gsub("^%s*(.-)%s*$", "%1")
+
+        local durationSec = durationMs and math.floor(durationMs / 1000) or nil
+
+        local function buildUrl(includeAlbum, includeDuration)
+            local url = "https://lrclib.net/api/get?"
+                .. "track_name=" .. HttpService:UrlEncode(trackName)
+                .. "&artist_name=" .. HttpService:UrlEncode(primaryArtist)
+            if includeAlbum and albumName and albumName ~= "" and albumName ~= "Unknown album" then
+                url = url .. "&album_name=" .. HttpService:UrlEncode(albumName)
+            end
+            if includeDuration and durationSec then
+                url = url .. "&duration=" .. tostring(durationSec)
+            end
+            return url
+        end
+
+        local function tryGet(url)
+            local ok, resp = pcall(Request, {
+                Url = url,
+                Method = "GET",
+                Headers = {
+                    ["User-Agent"] = "RawrHub Spotify Player (https://github.com/imcomingforyou6959-gif/UR4)",
+                    ["Accept"] = "application/json",
+                },
+            })
+            if not ok or not resp or resp.StatusCode ~= 200 or not resp.Body or resp.Body == "" then
+                return nil
+            end
+            local dok, decoded = pcall(HttpService.JSONDecode, HttpService, resp.Body)
+            if not dok or type(decoded) ~= "table" then return nil end
+            return decoded
+        end
+
+        local decoded = tryGet(buildUrl(true, true))
+            or tryGet(buildUrl(true, false))
+            or tryGet(buildUrl(false, true))
+            or tryGet(buildUrl(false, false))
+
+        if not decoded then return nil end
+
+        if decoded.instrumental then
+            return { Instrumental = true, Plain = "", Synced = "", HasSynced = false }
+        end
+
+        local synced = decoded.syncedLyrics or ""
+        local plain  = decoded.plainLyrics  or ""
+        if synced == "" and plain == "" then return nil end
+
+        return {
+            Plain = plain,
+            Synced = synced,
+            HasSynced = synced ~= "",
+            Instrumental = false,
+        }
+    end
+
+    local function RenderLyrics(activeIndex)
+        if not CurrentLyrics or #CurrentLyrics == 0 then return end
+
+        local accent = Library.AccentColor
+        local accentHex = string.format("#%02X%02X%02X",
+            math.floor(accent.R * 255),
+            math.floor(accent.G * 255),
+            math.floor(accent.B * 255))
+
+        local buf = {}
+        for i, line in ipairs(CurrentLyrics) do
+            if i == activeIndex then
+                buf[#buf+1] = string.format(
+                    "<font color=\"%s\"><b>%s</b></font>",
+                    accentHex, line.Text
+                )
+            else
+                buf[#buf+1] = line.Text
+            end
+        end
+        Items["LyricsText"].Text = table.concat(buf, "\n")
+
+        local availX = Items["LyricsScroll"].AbsoluteSize.X
+        if availX > 0 then
+            local width = math.max(availX - 8, 1)
+            Items["LyricsText"].Size = UDim2.new(0, width, 0, Items["LyricsText"].TextBounds.Y + 8)
+            Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, Items["LyricsText"].TextBounds.Y + 8)
+        end
+    end
+
+    local function UpdateLyricsHighlight(currentMs)
+        if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
+
+        local activeIndex = 1
+        for i, line in ipairs(CurrentLyrics) do
+            if line.Time <= currentMs then
+                activeIndex = i
+            else
+                break
+            end
+        end
+
+        if activeIndex ~= CurrentHighlightIndex then
+            CurrentHighlightIndex = activeIndex
+            RenderLyrics(activeIndex)
+
+            -- gently scroll so the active line sits near the middle
+            if activeIndex > 3 then
+                local lineHeight = 20
+                local targetY = (activeIndex - 3) * lineHeight
+                local maxScroll = math.max(
+                    (Items["LyricsText"].TextBounds.Y) - Items["LyricsScroll"].AbsoluteSize.Y,
+                    0
+                )
+                targetY = math.clamp(targetY, 0, maxScroll)
+                Tween(Items["LyricsScroll"], {
+                    CanvasPosition = Vector2.new(0, targetY),
+                }, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+            end
+        end
+    end
+
+    local function LoadLyricsForTrack(track)
+        if not track or not track.TrackId then return end
+
+        -- cache hit
+        local cached = LyricsCache[track.TrackId]
+        if cached then
+            if cached.Instrumental then
+                Items["LyricsText"].Text = "Instrumental track — no lyrics."
+                Items["LyricsText"].TextColor3 = ThemeInactiveText
+                CurrentLyrics = {}
+                CurrentLyricsSynced = false
+                CurrentHighlightIndex = 0
+                return
+            end
+            CurrentLyrics = cached.Parsed or {}
+            CurrentLyricsSynced = cached.HasSynced
+            CurrentHighlightIndex = 0
+            if cached.HasSynced then
+                RenderLyrics(0)
+                if track.Progress then UpdateLyricsHighlight(track.Progress) end
+            else
+                Items["LyricsText"].Text = cached.Plain ~= "" and cached.Plain or "No lyrics available."
+                Items["LyricsText"].TextColor3 = ThemeInactiveText
+                local availX = Items["LyricsScroll"].AbsoluteSize.X
+                if availX > 0 then
+                    Items["LyricsText"].Size = UDim2.new(0, math.max(availX - 8, 1), 0, Items["LyricsText"].TextBounds.Y + 8)
+                    Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, Items["LyricsText"].TextBounds.Y + 8)
+                end
+            end
+            return
+        end
+
+        -- fetch
+        if CurrentLyricsLoading then return end
+        CurrentLyricsLoading = true
+        Items["LyricsText"].Text = "Loading lyrics…"
+        Items["LyricsText"].TextColor3 = ThemeInactiveText
+        CurrentLyrics = {}
+        CurrentLyricsSynced = false
+        CurrentHighlightIndex = 0
+
+        task.spawn(function()
+            local result = GetLyrics(track.Title, track.Artist, track.Album, track.Duration)
+            CurrentLyricsLoading = false
+
+            -- track may have changed while we were fetching
+            if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
+
+            if not result then
+                LyricsCache[track.TrackId] = { Plain = "", Synced = "", Parsed = {}, HasSynced = false, Instrumental = false }
+                Items["LyricsText"].Text = "No lyrics found for this track."
+                Items["LyricsText"].TextColor3 = ThemeInactiveText
+                local availX = Items["LyricsScroll"].AbsoluteSize.X
+                if availX > 0 then
+                    Items["LyricsText"].Size = UDim2.new(0, math.max(availX - 8, 1), 0, 24)
+                    Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, 24)
+                end
+                return
+            end
+
+            if result.Instrumental then
+                LyricsCache[track.TrackId] = { Instrumental = true, Parsed = {}, HasSynced = false, Plain = "", Synced = "" }
+                Items["LyricsText"].Text = "Instrumental track — no lyrics."
+                Items["LyricsText"].TextColor3 = ThemeInactiveText
+                return
+            end
+
+            local parsed = result.HasSynced and ParseLRC(result.Synced) or {}
+            LyricsCache[track.TrackId] = {
+                Plain = result.Plain,
+                Synced = result.Synced,
+                Parsed = parsed,
+                HasSynced = result.HasSynced,
+                Instrumental = false,
+            }
+
+            CurrentLyrics = parsed
+            CurrentLyricsSynced = result.HasSynced
+            CurrentHighlightIndex = 0
+
+            if result.HasSynced then
+                RenderLyrics(0)
+                if CurrentTrack and CurrentTrack.Progress then
+                    UpdateLyricsHighlight(CurrentTrack.Progress)
+                end
+            else
+                Items["LyricsText"].Text = result.Plain ~= "" and result.Plain or "No lyrics available."
+                Items["LyricsText"].TextColor3 = ThemeInactiveText
+                local availX = Items["LyricsScroll"].AbsoluteSize.X
+                if availX > 0 then
+                    Items["LyricsText"].Size = UDim2.new(0, math.max(availX - 8, 1), 0, Items["LyricsText"].TextBounds.Y + 8)
+                    Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, Items["LyricsText"].TextBounds.Y + 8)
+                end
+            end
+        end)
+    end
+
+    local function SetSidebarTab(name)
+        SidebarTab = name
+        local isQueue = name == "queue"
+        Items["QueueTab"].TextColor3  = isQueue and Library.AccentColor or ThemeInactiveText
+        Items["LyricsTab"].TextColor3 = (not isQueue) and Library.AccentColor or ThemeInactiveText
+        Items["QueueScroll"].Visible  = isQueue
+        Items["LyricsScroll"].Visible = not isQueue
+
+        if not isQueue then
+            -- auto-load if we have a track and haven't yet
+            if CurrentTrack and not CurrentLyricsLoading and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
+                LoadLyricsForTrack(CurrentTrack)
+            end
+        end
+    end
+
     local function SetDisplay(data, emptyText)
         if not data then
             CurrentTrack = nil
             LastKnownPlaying = false
+            CurrentLyrics = {}
+            CurrentLyricsSynced = false
+            CurrentLyricsTrackId = nil
+            CurrentHighlightIndex = 0
             Items["Title"].Text   = "Spotify"
             Items["Artist"].Text  = "No track detected"
             Items["Album"].Text   = emptyText or "Nothing is currently playing"
             Items["Cover"].Image  = PlaceholderImage
+            Items["LyricsText"].Text = "Nothing is currently playing."
+            Items["LyricsText"].TextColor3 = ThemeInactiveText
             SetControlState(nil)
             SetQueueDisplay(nil, nil, "Nothing is currently playing.")
             SetProgress(0, 0, true)
             return
         end
+
+        local trackChanged = (data.TrackId ~= CurrentLyricsTrackId)
         CurrentTrack = data
         LastKnownPlaying = data.IsPlaying == true
         Items["Title"].Text  = data.Title
@@ -4151,6 +4458,16 @@ function Library:CreateSpotifyPlayer()
         SetControlState(data)
         if not Seeking then
             SetProgress(data.Progress, data.Duration, true)
+        end
+
+        if trackChanged then
+            CurrentLyricsTrackId = data.TrackId
+            CurrentLyrics = {}
+            CurrentLyricsSynced = false
+            CurrentHighlightIndex = 0
+            if IsExpanded and SidebarTab == "lyrics" then
+                LoadLyricsForTrack(data)
+            end
         end
     end
 
@@ -4328,10 +4645,6 @@ function Library:CreateSpotifyPlayer()
     local function Previous() return MakeRequest("me/player/previous", "POST", true, {}) end
     local function Next()     return MakeRequest("me/player/next",     "POST", true, {}) end
 
-    -- Resume: Spotify ignores an empty {} body on /me/player/play when the
-    -- current context was a single track — it treats it as "no change" and
-    -- stays paused. Passing the current position_ms forces it to actually
-    -- start playback again from where we left off.
     local function Resume()
         local pos = 0
         if CurrentTrack and CurrentTrack.Progress and CurrentTrack.Duration and CurrentTrack.Duration > 0 then
@@ -4422,6 +4735,13 @@ function Library:CreateSpotifyPlayer()
             Tween(Items["ExpandButton"],    { Rotation = expandRot },    info)
         end
         Spotify:Center()
+
+        -- lazily load lyrics the first time we open expanded while on Lyrics tab
+        if bool and SidebarTab == "lyrics" and CurrentTrack then
+            if CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 and not CurrentLyricsLoading then
+                LoadLyricsForTrack(CurrentTrack)
+            end
+        end
     end
 
     local function RunSearch(query)
@@ -4557,6 +4877,14 @@ function Library:CreateSpotifyPlayer()
         QueueSearch(Items["SearchInput"].Text)
     end)
 
+    Items["QueueTab"].MouseButton1Click:Connect(function()
+        SetSidebarTab("queue")
+    end)
+
+    Items["LyricsTab"].MouseButton1Click:Connect(function()
+        SetSidebarTab("lyrics")
+    end)
+
     Items["ExpandButton"].MouseButton1Click:Connect(function()
         SetExpanded(not IsExpanded)
     end)
@@ -4639,12 +4967,17 @@ function Library:CreateSpotifyPlayer()
                 local p = math.min(CurrentTrack.Progress + ((tick() - CurrentTrack.UpdatedAt) * 1000),
                                    CurrentTrack.Duration)
                 SetProgress(p, CurrentTrack.Duration, true)
+                -- drive lyrics highlight off the same extrapolated position
+                if SidebarTab == "lyrics" and CurrentLyricsSynced then
+                    UpdateLyricsHighlight(p)
+                end
             end
             task.wait(0.1)
         end
     end)
 
     UpdateResults()
+    SetSidebarTab("queue")
     SetExpanded(false, true)
     Spotify:Center()
     return Spotify
