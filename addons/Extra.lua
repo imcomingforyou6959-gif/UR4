@@ -4036,10 +4036,11 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0.5,0,0.5,0),
         Image=PlaceholderImage, BackgroundTransparency=1,
         ScaleType=Enum.ScaleType.Crop,
-        Size=UDim2.new(1.5,0,1.5,0), BorderSizePixel=0,
+        Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
         Rotation=0,
         ZIndex=3,
     })
+    New("UICorner", { Name="\0", Parent=Items["Cover"], CornerRadius=UDim.new(0.5,0) })
 
     local CoverHole = New("Frame", {
         Name="\0", Parent=Items["CoverFrame"],
