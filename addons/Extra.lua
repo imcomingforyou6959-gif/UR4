@@ -3742,7 +3742,7 @@ function Library:CreateSpotifyPlayer()
     local CustomPosition
 
     local Items = {}
-    local Icons = {}   -- ← icons stored separately, NOT on the Instance
+    local Icons = {}   -- icons stored separately, NOT on the Instance
 
     local function CreateControlButton(Key, Parent, Image, FrameSize, IconSize, IconOffsetY)
         local btn = New("TextButton", {
@@ -3752,6 +3752,10 @@ function Library:CreateSpotifyPlayer()
             BackgroundTransparency=1, Text="",
         })
         Items[Key] = btn
+        -- FIX #2: do NOT register icons with the theme system.
+        -- The Shuffle/Repeat/PlayPause icons have their colors and image
+        -- managed manually in SetControlState(); registering them would
+        -- cause a theme refresh to clobber the accent color on active state.
         Icons[Key] = New("ImageLabel", {
             Name="\0", Parent=btn,
             AnchorPoint=Vector2.new(0.5,0.5),
@@ -3759,7 +3763,15 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(0,IconSize,0,IconSize),
             BorderSizePixel=0, BackgroundTransparency=1,
             Image=Image, ImageColor3=Library.FontColor,
-        }, { ImageColor3='FontColor' })
+        })  -- ← no RegProps (was: { ImageColor3='FontColor' })
+    end
+
+    -- FIX #3: If the library ScreenGui uses Global ZIndexBehavior, a child
+    -- with ZIndex=1 would render BEHIND the parent frame's background,
+    -- hiding every child (cover art, text, search bar). Force Sibling
+    -- behavior so the ZIndex=50 on the root works as intended.
+    if Library.ScreenGui and Library.ScreenGui.ZIndexBehavior == Enum.ZIndexBehavior.Global then
+        Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     end
 
     -- ===== Root frame =====
@@ -3815,11 +3827,16 @@ function Library:CreateSpotifyPlayer()
         ClearTextOnFocus=false, BorderSizePixel=0,
     }, { TextColor3='FontColor' })
 
+    -- FIX #1: Enable automatic canvas sizing + vertical scroll.
+    -- Previously CanvasSize stayed (0,0) so rows past the visible 114px
+    -- (about 3 rows) were clipped and unreachable.
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -170),
         Size=UDim2.new(0, 250, 0, 114),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
+        AutomaticCanvasSize=Enum.AutomaticSize.Y,           -- ← ADD
+        ScrollingDirection=Enum.ScrollingDirection.Y,       -- ← ADD
         ScrollBarThickness=0,
         BackgroundColor3=Library.BackgroundColor,
     }, { BackgroundColor3='BackgroundColor' })
@@ -3831,8 +3848,10 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
+    -- FIX #5: center rows so the 8px slack from (1,-8) is symmetric.
     New("UIListLayout", { Name="\0", Parent=Items["SearchResults"],
-        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4) })
+        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4),
+        HorizontalAlignment=Enum.HorizontalAlignment.Center })   -- ← ADD
 
     for Index = 1, 8 do
         local Row = {}
@@ -3852,6 +3871,7 @@ function Library:CreateSpotifyPlayer()
         Row.Cover = New("ImageLabel", {
             Name="\0", Parent=Row.Frame,
             Image=PlaceholderImage, BackgroundTransparency=1,
+            ScaleType=Enum.ScaleType.Crop,                       -- ← ADD (FIX #4)
             Size=UDim2.new(0,30,0,30),
             Position=UDim2.new(0,3,0,3), BorderSizePixel=0,
         })
@@ -3955,6 +3975,7 @@ function Library:CreateSpotifyPlayer()
     Items["Cover"] = New("ImageLabel", {
         Name="\0", Parent=Items["CoverFrame"],
         Image=PlaceholderImage, BackgroundTransparency=1,
+        ScaleType=Enum.ScaleType.Crop,                           -- ← ADD (FIX #4)
         Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
     })
 
@@ -4015,9 +4036,12 @@ function Library:CreateSpotifyPlayer()
         BorderSizePixel=0,
     })
 
+    -- FIX #7: vertical offset 12 → 0. The Controls frame is vertically
+    -- anchored to the middle of PlayerArea; pushing it 12px down made
+    -- the play button overlap the progress hitbox below it.
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,12),
+        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0), -- ← was 0.5,12
         Size=UDim2.new(0,96,0,24), BorderSizePixel=0,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
@@ -4066,10 +4090,15 @@ function Library:CreateSpotifyPlayer()
             or  "rbxassetid://9622475855"
     end
 
+    -- FIX #6: bail out if the ScrollFrame hasn't been laid out yet.
+    -- On the first frame AbsoluteSize.X is 0, which produced a 1px-wide
+    -- label that wrapped into a huge height and forced a giant canvas.
     UpdateQueueCanvas = function()
         local label  = Items["QueueText"]
         local scroll = Items["QueueScroll"]
-        local width  = math.max(scroll.AbsoluteSize.X - 8, 1)
+        local availX = scroll.AbsoluteSize.X
+        if availX <= 0 then return end            -- ← ADD
+        local width  = math.max(availX - 8, 1)
         local height = math.max(label.TextBounds.Y + 4, scroll.AbsoluteSize.Y)
         label.Size = UDim2.new(0, width, 0, height)
         scroll.CanvasSize = UDim2.new(0, 0, 0, height)
