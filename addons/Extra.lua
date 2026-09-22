@@ -4299,19 +4299,42 @@ function Library:CreateSpotifyPlayer()
             CurrentHighlightIndex = activeIndex
             RenderLyrics(activeIndex)
 
-            -- gently scroll so the active line sits near the middle
-            if activeIndex > 3 then
-                local lineHeight = 20
-                local targetY = (activeIndex - 3) * lineHeight
-                local maxScroll = math.max(
-                    (Items["LyricsText"].TextBounds.Y) - Items["LyricsScroll"].AbsoluteSize.Y,
-                    0
-                )
+            -- gently scroll so the active line stays visible. Wait two frames
+            -- so the label re-renders and TextBounds reflects the new text
+            -- before computing the scroll target.
+            task.spawn(function()
+                task.wait()
+                task.wait()
+
+                if CurrentHighlightIndex ~= activeIndex then return end
+                if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
+
+                local scroll    = Items["LyricsScroll"]
+                local label     = Items["LyricsText"]
+                local viewportH = scroll.AbsoluteSize.Y
+                if viewportH <= 0 then return end
+
+                local totalH     = label.TextBounds.Y
+                local totalLines = #CurrentLyrics
+                if totalH <= 0 or totalLines <= 0 then return end
+
+                -- average line height accounts for wrapping automatically
+                local lineHeight = totalH / totalLines
+                local lineCenter = (activeIndex - 0.5) * lineHeight
+
+                -- keep the active line at ~35% down the viewport so upcoming
+                -- lines stay visible beneath it
+                local targetY   = lineCenter - viewportH * 0.35
+                local maxScroll = math.max(totalH - viewportH, 0)
                 targetY = math.clamp(targetY, 0, maxScroll)
-                Tween(Items["LyricsScroll"], {
+
+                -- ignore sub-pixel drift so wrapped lines don't jitter
+                if math.abs(targetY - scroll.CanvasPosition.Y) < 2 then return end
+
+                Tween(scroll, {
                     CanvasPosition = Vector2.new(0, targetY),
-                }, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
-            end
+                }, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+            end)
         end
     end
 
