@@ -3676,7 +3676,6 @@ function Library:CreateSpotifyPlayer()
         ):Play()
     end
 
-    -- token
     local function ReadToken()
         if not isfile(TokenPath) then writefile(TokenPath, "") return "" end
         return (readfile(TokenPath):gsub("^%s*(.-)%s*$", "%1"))
@@ -3726,7 +3725,6 @@ function Library:CreateSpotifyPlayer()
     local TokenConfig = DecodeTokenConfig(ReadToken())
     local Token = TokenConfig.AccessToken
 
-    -- state
     local CollapsedSize = UDim2.new(0, 248, 0, 88)
     local ExpandedSize  = UDim2.new(0, 540, 0, 250)
     local ResultButtons = {}
@@ -3744,7 +3742,6 @@ function Library:CreateSpotifyPlayer()
     local LastKnownPlaying = false
     local CoverSpin = 0
 
-    -- lyrics state
     local LyricsCache           = {}
     local CurrentLyrics         = {}
     local CurrentLyricsSynced   = false
@@ -3752,12 +3749,11 @@ function Library:CreateSpotifyPlayer()
     local CurrentLyricsLoading  = false
     local CurrentHighlightIndex = 0
     local SidebarTab            = "queue"
+    local LyricsRequestId       = 0
 
-    -- context menu state
     local ContextMenuFrame      = nil
     local ContextMenuTrack      = nil
 
-    -- forward decls so context menu can call these before they exist
     local PlayUri
     local AddToQueue
     local RefreshSoon
@@ -3787,9 +3783,6 @@ function Library:CreateSpotifyPlayer()
         Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     end
 
-    -- ============================================================
-    --  ROOT FRAME (matches library window style)
-    -- ============================================================
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
         Position=UDim2.new(0, 30, 0, 240),
@@ -3807,7 +3800,6 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    -- inner backing frame (library uses BackgroundColor inside)
     Items["InnerBacking"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0,1,0,1), Size=UDim2.new(1,-2,1,-2),
@@ -3815,7 +3807,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=0,
     }, { BackgroundColor3='BackgroundColor' })
 
-    -- top accent liner (2px, matches library tab/groupbox highlight)
     Items["AccentLiner"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Size=UDim2.new(1,0,0,2), BorderSizePixel=0,
@@ -3823,7 +3814,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { BackgroundColor3='AccentColor' })
 
-    -- search
     Items["SearchBackground"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -40),
@@ -3925,7 +3915,6 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- sidebar (queue + lyrics)
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -3938,7 +3927,6 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    -- tab row
     Items["QueueTab"] = New("TextButton", {
         Name="\0", Font=Library.Font, TextSize=14,
         Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
@@ -3959,7 +3947,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     })
 
-    -- queue panel
     Items["QueueScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,8,0,24),
@@ -3986,7 +3973,6 @@ function Library:CreateSpotifyPlayer()
         if UpdateQueueCanvas then UpdateQueueCanvas() end
     end)
 
-    -- lyrics panel
     Items["LyricsScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,8,0,24),
@@ -4010,7 +3996,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     })
 
-    -- player area
     Items["PlayerArea"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         BackgroundTransparency=1,
@@ -4020,9 +4005,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     })
 
-    -- ============================================================
-    --  CIRCLE COVER WITH VINYL SPIN
-    -- ============================================================
     Items["CoverFrame"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
         Position=UDim2.new(0,0,0,2),
@@ -4039,7 +4021,6 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    -- mask frame (round clip for the rotating image)
     local CoverMask = New("Frame", {
         Name="\0", Parent=Items["CoverFrame"],
         Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
@@ -4054,12 +4035,12 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0.5,0,0.5,0),
         Image=PlaceholderImage, BackgroundTransparency=1,
         ScaleType=Enum.ScaleType.Crop,
-        Size=UDim2.new(1.4,0,1.4,0), BorderSizePixel=0,
+        Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
         Rotation=0,
         ZIndex=3,
     })
+    New("UICorner", { Name="\0", Parent=Items["Cover"], CornerRadius=UDim.new(0.5,0) })
 
-    -- center hole (vinyl record look)
     local CoverHole = New("Frame", {
         Name="\0", Parent=Items["CoverFrame"],
         AnchorPoint=Vector2.new(0.5,0.5),
@@ -4161,7 +4142,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=4,
     }, { ImageColor3='FontColor' })
 
-    -- context menu
     local function CloseContextMenu()
         if ContextMenuFrame then
             ContextMenuFrame:Destroy()
@@ -4255,11 +4235,13 @@ function Library:CreateSpotifyPlayer()
     end
 
     InputService.InputBegan:Connect(function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local ut = input.UserInputType
+        if ut ~= Enum.UserInputType.MouseButton1
+            and ut ~= Enum.UserInputType.MouseButton2
+            and ut ~= Enum.UserInputType.Touch then return end
         if not ContextMenuFrame or not ContextMenuFrame.Visible then return end
         local mx, my = input.Position.X, input.Position.Y
-        local pos = ContextMenuFrame.AbsolutePosition
+        local pos  = ContextMenuFrame.AbsolutePosition
         local size = ContextMenuFrame.AbsoluteSize
         if mx < pos.X or mx > pos.X + size.X
             or my < pos.Y or my > pos.Y + size.Y then
@@ -4267,7 +4249,6 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    -- logic
     local function FormatTime(ms)
         local total = math.max(math.floor((ms or 0) / 1000), 0)
         return string.format("%d:%02d", math.floor(total/60), total % 60)
@@ -4346,7 +4327,6 @@ function Library:CreateSpotifyPlayer()
         Items["QueueScroll"].CanvasPosition = Vector2.new()
     end
 
-    -- lyrics
     local function ParseLRC(lrcText)
         if not lrcText or lrcText == "" then return {} end
         local lines = {}
@@ -4513,7 +4493,15 @@ function Library:CreateSpotifyPlayer()
     local function SetLyricsEmpty(text)
         Items["LyricsText"].Text = text
         Items["LyricsText"].TextColor3 = ThemeInactiveText
-        Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, 24)
+        local availX = Items["LyricsScroll"].AbsoluteSize.X
+        if availX > 0 then
+            local w = math.max(availX - 8, 1)
+            local h = Items["LyricsText"].TextBounds.Y + 8
+            Items["LyricsText"].Size = UDim2.new(0, w, 0, h)
+            Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
+        else
+            Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, 24)
+        end
     end
 
     local function SetLyricsPlain(plain)
@@ -4533,6 +4521,8 @@ function Library:CreateSpotifyPlayer()
 
         local cached = LyricsCache[track.TrackId]
         if cached then
+            LyricsRequestId = LyricsRequestId + 1
+            CurrentLyricsLoading = false
             if cached.Instrumental then
                 SetLyricsEmpty("Instrumental track — no lyrics.")
                 CurrentLyrics = {}
@@ -4552,7 +4542,8 @@ function Library:CreateSpotifyPlayer()
             return
         end
 
-        if CurrentLyricsLoading then return end
+        LyricsRequestId = LyricsRequestId + 1
+        local myId = LyricsRequestId
         CurrentLyricsLoading = true
         SetLyricsEmpty("Loading lyrics…")
         CurrentLyrics = {}
@@ -4561,6 +4552,7 @@ function Library:CreateSpotifyPlayer()
 
         task.spawn(function()
             local result = GetLyrics(track.Title, track.Artist, track.Album, track.Duration)
+            if myId ~= LyricsRequestId then return end
             CurrentLyricsLoading = false
 
             if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
@@ -4747,11 +4739,6 @@ function Library:CreateSpotifyPlayer()
         return PlaceholderImage
     end
 
-    local function ValidateToken()
-        local d = MakeRequest("me")
-        return d and d.display_name
-    end
-
     local function GetCurrentTrack()
         local d = MakeRequest("me/player")
         if not d or not d.item then return nil end
@@ -4833,6 +4820,7 @@ function Library:CreateSpotifyPlayer()
                 Cover = CacheImage(albumId, coverUrl),
                 IsAlbumTrack = true,
             })
+            if #out >= 7 then break end
         end
         return out
     end
@@ -4895,7 +4883,7 @@ function Library:CreateSpotifyPlayer()
         local now = tick()
         if now - LastEmptyTokenNotification < 1 then return end
         LastEmptyTokenNotification = now
-        Library:Notify("Empty Spotify Token", 3)
+        Library:Notify("Empty Spotify Token :(", 3)
     end
 
     local function ApplyVisibility()
@@ -4989,7 +4977,6 @@ function Library:CreateSpotifyPlayer()
         SetProgress(pos, CurrentTrack.Duration, true)
     end
 
-    -- public api
     function Spotify:SetVisibility(b) IsVisible = b ApplyVisibility() end
     function Spotify:Center()
         task.wait()
@@ -5040,7 +5027,6 @@ function Library:CreateSpotifyPlayer()
         return track ~= nil
     end
 
-    -- events
     for i, btn in ResultButtons do
         btn.Button.MouseButton1Click:Connect(function()
             local r = SearchResults[i]
@@ -5199,7 +5185,6 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    -- vinyl spin
     task.spawn(function()
         while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             if CurrentTrack and LastKnownPlaying then
