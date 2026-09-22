@@ -3644,15 +3644,22 @@ Players.PlayerRemoving:Connect(OnPlayerChange);
 function Library:CreateSpotifyPlayer()
     local Spotify = {}
 
+    -- FIX: InputService was referenced at the bottom but never defined, so
+    -- the seek InputChanged/InputEnded connections silently failed.
+    local InputService      = UserInputService
+    local UserInputService  = UserInputService
+
     local Request = request
         or http_request
         or (syn and syn.request)
         or (getgenv and getgenv().http and getgenv().http.request)
     local GetCustomAsset = getcustomasset or getsynasset
 
-    local SpotifyFolder = (Library.Directory or "niggahack") .. "/Spotify"
+    -- FIX: fallback dir was "niggahack" while the loader sets it to
+    -- "spotifyforRawr". Match them so a missing Directory doesn't scatter folders.
+    local SpotifyFolder = (Library.Directory or "spotifyforRawr") .. "/Spotify"
     local CacheFolder   = SpotifyFolder .. "/Cache"
-    local TokenPath     = (Library.Directory or "niggahack") .. "/token.txt"
+    local TokenPath     = (Library.Directory or "spotifyforRawr") .. "/token.txt"
     local PlaceholderImage = "rbxasset://textures/ui/GuiImagePlaceholder.png"
     local PollInterval  = 1
 
@@ -3752,10 +3759,8 @@ function Library:CreateSpotifyPlayer()
             BackgroundTransparency=1, Text="",
         })
         Items[Key] = btn
-        -- FIX #2: do NOT register icons with the theme system.
-        -- The Shuffle/Repeat/PlayPause icons have their colors and image
-        -- managed manually in SetControlState(); registering them would
-        -- cause a theme refresh to clobber the accent color on active state.
+        -- Icons are NOT registered with the theme system; SetControlState
+        -- manages their ImageColor3 / Image directly.
         Icons[Key] = New("ImageLabel", {
             Name="\0", Parent=btn,
             AnchorPoint=Vector2.new(0.5,0.5),
@@ -3763,13 +3768,11 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(0,IconSize,0,IconSize),
             BorderSizePixel=0, BackgroundTransparency=1,
             Image=Image, ImageColor3=Library.FontColor,
-        })  -- ← no RegProps (was: { ImageColor3='FontColor' })
+        })
     end
 
-    -- FIX #3: If the library ScreenGui uses Global ZIndexBehavior, a child
-    -- with ZIndex=1 would render BEHIND the parent frame's background,
-    -- hiding every child (cover art, text, search bar). Force Sibling
-    -- behavior so the ZIndex=50 on the root works as intended.
+    -- If the library ScreenGui uses Global ZIndexBehavior, a child with
+    -- ZIndex=1 renders BEHIND the parent's background, hiding everything.
     if Library.ScreenGui and Library.ScreenGui.ZIndexBehavior == Enum.ZIndexBehavior.Global then
         Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     end
@@ -3827,16 +3830,15 @@ function Library:CreateSpotifyPlayer()
         ClearTextOnFocus=false, BorderSizePixel=0,
     }, { TextColor3='FontColor' })
 
-    -- FIX #1: Enable automatic canvas sizing + vertical scroll.
-    -- Previously CanvasSize stayed (0,0) so rows past the visible 114px
-    -- (about 3 rows) were clipped and unreachable.
+    -- FIX: automatic canvas sizing so all 8 rows are reachable; height
+    -- bumped from 114 to 128 so ~3 rows fit comfortably instead of 2.5.
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -170),
-        Size=UDim2.new(0, 250, 0, 114),
+        Size=UDim2.new(0, 250, 0, 128),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
-        AutomaticCanvasSize=Enum.AutomaticSize.Y,           -- ← ADD
-        ScrollingDirection=Enum.ScrollingDirection.Y,       -- ← ADD
+        AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        ScrollingDirection=Enum.ScrollingDirection.Y,
         ScrollBarThickness=0,
         BackgroundColor3=Library.BackgroundColor,
     }, { BackgroundColor3='BackgroundColor' })
@@ -3848,16 +3850,16 @@ function Library:CreateSpotifyPlayer()
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.OutlineColor, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
-    -- FIX #5: center rows so the 8px slack from (1,-8) is symmetric.
     New("UIListLayout", { Name="\0", Parent=Items["SearchResults"],
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4),
-        HorizontalAlignment=Enum.HorizontalAlignment.Center })   -- ← ADD
+        HorizontalAlignment=Enum.HorizontalAlignment.Center })
 
     for Index = 1, 8 do
         local Row = {}
+        -- FIX: row height 36 -> 42 so title+album don't touch.
         Row.Frame = New("Frame", {
             Name="\0", Parent=Items["SearchResults"],
-            Size=UDim2.new(1,-8,0,36),
+            Size=UDim2.new(1,-8,0,42),
             BorderSizePixel=0, BackgroundTransparency=1,
             BackgroundColor3=Library.MainColor, Visible=false,
         })
@@ -3868,20 +3870,22 @@ function Library:CreateSpotifyPlayer()
             Size=UDim2.new(1,-22,0,1), BorderSizePixel=0,
             BackgroundColor3=Library.OutlineColor,
         }, { BackgroundColor3='OutlineColor' })
+        -- FIX: cover 30 -> 34 at (4,4) to fill the taller row nicely.
         Row.Cover = New("ImageLabel", {
             Name="\0", Parent=Row.Frame,
             Image=PlaceholderImage, BackgroundTransparency=1,
-            ScaleType=Enum.ScaleType.Crop,                       -- ← ADD (FIX #4)
-            Size=UDim2.new(0,30,0,30),
-            Position=UDim2.new(0,3,0,3), BorderSizePixel=0,
+            ScaleType=Enum.ScaleType.Crop,
+            Size=UDim2.new(0,34,0,34),
+            Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
         })
+        -- FIX: title at (40,4) height 17; album at (40,22) height 16.
         Row.Title = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
             Parent=Row.Frame, TextColor3=Library.FontColor,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,40,0,2),
-            Size=UDim2.new(1,-44,0,15),
+            Position=UDim2.new(0,40,0,4),
+            Size=UDim2.new(1,-44,0,17),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
         }, { TextColor3='FontColor' })
         Row.Album = New("TextLabel", {
@@ -3889,8 +3893,8 @@ function Library:CreateSpotifyPlayer()
             Parent=Row.Frame, TextColor3=ThemeInactiveText,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,40,0,17),
-            Size=UDim2.new(1,-44,0,14),
+            Position=UDim2.new(0,40,0,22),
+            Size=UDim2.new(1,-44,0,16),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
         })
         Row.Button = New("TextButton", {
@@ -3975,37 +3979,40 @@ function Library:CreateSpotifyPlayer()
     Items["Cover"] = New("ImageLabel", {
         Name="\0", Parent=Items["CoverFrame"],
         Image=PlaceholderImage, BackgroundTransparency=1,
-        ScaleType=Enum.ScaleType.Crop,                           -- ← ADD (FIX #4)
+        ScaleType=Enum.ScaleType.Crop,
         Size=UDim2.new(1,0,1,0), BorderSizePixel=0,
     })
 
+    -- FIX: Info frame height 38 -> 53, padding 1 -> 2. Total stacked text
+    -- is 17 + 2 + 16 + 2 + 16 = 53. Before, album was clipped by 4px.
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
         BackgroundTransparency=1,
         Position=UDim2.new(0,60,0,2),
-        Size=UDim2.new(1,-176,0,38),
+        Size=UDim2.new(1,-176,0,53),
         BorderSizePixel=0,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Info"],
-        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,1) })
+        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2) })
 
+    -- FIX: label heights 14/13/13 -> 17/16/16 (matches real TextSize=14 metrics)
     Items["Title"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=Library.FontColor, Text="Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,14), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     }, { TextColor3='FontColor' })
     Items["Artist"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="No track detected", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,13), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     })
     Items["Album"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="Waiting for Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,13), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
     })
 
     Items["ProgressFrame"] = New("Frame", {
@@ -4028,20 +4035,21 @@ function Library:CreateSpotifyPlayer()
         BackgroundTransparency=1, BorderSizePixel=0, Text="",
     })
 
+    -- FIX: moved Time below Info (y=56, height 12) so it no longer
+    -- overlaps the Album row. PlayerArea is 68 tall; 56+12 = 68.
     Items["Time"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["PlayerArea"],
         TextColor3=ThemeInactiveText, Text="0:00 / 0:00", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,60,0,40), Size=UDim2.new(0,90,0,15),
+        Position=UDim2.new(0,60,0,56), Size=UDim2.new(0,90,0,12),
         BorderSizePixel=0,
     })
 
-    -- FIX #7: vertical offset 12 → 0. The Controls frame is vertically
-    -- anchored to the middle of PlayerArea; pushing it 12px down made
-    -- the play button overlap the progress hitbox below it.
+    -- Controls vertically centered; offset 12 -> 0 so play button doesn't
+    -- sit on top of the progress hitbox.
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0), -- ← was 0.5,12
+        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0),
         Size=UDim2.new(0,96,0,24), BorderSizePixel=0,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
@@ -4090,14 +4098,13 @@ function Library:CreateSpotifyPlayer()
             or  "rbxassetid://9622475855"
     end
 
-    -- FIX #6: bail out if the ScrollFrame hasn't been laid out yet.
-    -- On the first frame AbsoluteSize.X is 0, which produced a 1px-wide
-    -- label that wrapped into a huge height and forced a giant canvas.
+    -- FIX: bail if the ScrollFrame hasn't laid out yet; on first frame
+    -- AbsoluteSize.X is 0 which produced a 1px label with huge wrapped height.
     UpdateQueueCanvas = function()
         local label  = Items["QueueText"]
         local scroll = Items["QueueScroll"]
         local availX = scroll.AbsoluteSize.X
-        if availX <= 0 then return end            -- ← ADD
+        if availX <= 0 then return end
         local width  = math.max(availX - 8, 1)
         local height = math.max(label.TextBounds.Y + 4, scroll.AbsoluteSize.Y)
         label.Size = UDim2.new(0, width, 0, height)
@@ -4329,13 +4336,17 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
-    local function Previous() return MakeRequest("me/player/previous", "POST") end
-    local function Next()     return MakeRequest("me/player/next",     "POST") end
-    local function Resume()   return MakeRequest("me/player/play",     "PUT")  end
-    local function Pause()    return MakeRequest("me/player/pause",    "PUT")  end
-    local function Shuffle(e) return MakeRequest("me/player/shuffle?state=" .. tostring(e), "PUT") end
-    local function Repeat(e)  return MakeRequest("me/player/repeat?state=" .. (e and "context" or "off"), "PUT") end
-    local function Seek(ms)   return MakeRequest("me/player/seek?position_ms=" .. math.max(math.floor(ms or 0), 0), "PUT") end
+    -- FIX: every state-changing endpoint now sends an empty JSON body {} and
+    -- retryOnAuth=true. Without a body, several executors send
+    -- Content-Length: 0 which Spotify rejects with a silent no-op, which is
+    -- exactly why Pause/Next/Previous/Shuffle/Repeat/Seek did nothing.
+    local function Previous() return MakeRequest("me/player/previous", "POST", true, {}) end
+    local function Next()     return MakeRequest("me/player/next",     "POST", true, {}) end
+    local function Resume()   return MakeRequest("me/player/play",     "PUT",  true, {}) end
+    local function Pause()    return MakeRequest("me/player/pause",    "PUT",  true, {}) end
+    local function Shuffle(e) return MakeRequest("me/player/shuffle?state=" .. tostring(e), "PUT", true, {}) end
+    local function Repeat(e)  return MakeRequest("me/player/repeat?state=" .. (e and "context" or "off"), "PUT", true, {}) end
+    local function Seek(ms)   return MakeRequest("me/player/seek?position_ms=" .. math.max(math.floor(ms or 0), 0), "PUT", true, {}) end
     local function PlayUri(uri)
         if not uri or uri == "" then return nil end
         return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
@@ -4486,6 +4497,12 @@ function Library:CreateSpotifyPlayer()
         Spotify:Refresh()
     end
 
+    -- FIX: /me/player returns 204 (no body) when nothing is playing, which
+    -- made GetCurrentTrack return nil. The old code called ValidateToken()
+    -- FIRST, and that returns d.display_name, which is nil for some token
+    -- scopes — so it falsely reported "Invalid token" whenever nothing was
+    -- currently playing. Now we fetch the track first, and only hit /me to
+    -- disambiguate if the track came back nil.
     function Spotify:Refresh()
         if not Request then SetDisplay(nil, "Executor request API unavailable") return false end
         if Token == "" and TokenConfig.RefreshToken == "" then
@@ -4497,8 +4514,16 @@ function Library:CreateSpotifyPlayer()
             return false
         end
         if not EnsureAccessToken() then SetDisplay(nil, "Could not refresh Spotify token") return false end
-        if not ValidateToken()    then SetDisplay(nil, "Invalid token in " .. TokenPath) return false end
+
         local track = GetCurrentTrack()
+        if not track then
+            -- Distinguish "nothing playing" from "bad token".
+            local me = MakeRequest("me")
+            if me == nil then
+                SetDisplay(nil, "Invalid token in " .. TokenPath)
+                return false
+            end
+        end
         SetDisplay(track, "Nothing is currently playing")
         SetQueueDisplay(track, GetQueue(), "No upcoming tracks.")
         return track ~= nil
@@ -4550,8 +4575,14 @@ function Library:CreateSpotifyPlayer()
         SetExpanded(not IsExpanded)
     end)
 
+    -- PlayPause button: works correctly now that Refresh() populates
+    -- CurrentTrack properly and Pause/Resume send {} bodies.
     Items["PlayPause"].MouseButton1Click:Connect(function()
-        if CurrentTrack and CurrentTrack.IsPlaying then Pause() else Resume() end
+        if CurrentTrack and CurrentTrack.IsPlaying then
+            Pause()
+        else
+            Resume()
+        end
         RefreshSoon()
     end)
 
@@ -4573,6 +4604,7 @@ function Library:CreateSpotifyPlayer()
         SetSeekingFromInput(input)
     end)
 
+    -- FIX: these were silent no-ops before because InputService was nil.
     InputService.InputChanged:Connect(function(input)
         if not Seeking then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
