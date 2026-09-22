@@ -3647,6 +3647,7 @@ function Library:CreateSpotifyPlayer()
     local InputService      = UserInputService
     local UserInputService  = UserInputService
     local Players           = game:GetService("Players")
+    local RunService        = game:GetService("RunService")
 
     local Request = request
         or http_request
@@ -3758,8 +3759,10 @@ function Library:CreateSpotifyPlayer()
     -- popout state
     local LyricsPoppedOut       = false
     local PopoutPosition        = nil
+    local PopoutGeneration      = 0
     local PopoutScreenGui       = nil
     local ConnectorScreenGui    = nil
+    local ConnectorConnection   = nil
 
     local Items = {}
     local Icons = {}
@@ -3940,25 +3943,39 @@ function Library:CreateSpotifyPlayer()
         Text="Lyrics", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Right,
         Position=UDim2.new(0.5,0,0,5),
-        Size=UDim2.new(0.5,-30,0,16), BorderSizePixel=0,
+        Size=UDim2.new(0.5,-34,0,16), BorderSizePixel=0,
     })
 
-    -- popout button (top-right of sidebar header)
+    -- popout button (bigger, accent background, hover state)
     Items["PopoutButton"] = New("TextButton", {
-        Name="\0", Font=Library.Font, TextSize=14,
-        Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
-        Text="⧉", BackgroundTransparency=1, AutoButtonColor=false,
-        TextXAlignment=Enum.TextXAlignment.Right,
+        Name="\0", Parent=Items["LyricsFrame"],
         AnchorPoint=Vector2.new(1,0),
-        Position=UDim2.new(1,-8,0,5),
-        Size=UDim2.new(0,20,0,16), BorderSizePixel=0,
-    }, { TextColor3='AccentColor' })
+        Position=UDim2.new(1,-6,0,3),
+        Size=UDim2.new(0,26,0,20),
+        BackgroundColor3=Library.AccentColor,
+        BackgroundTransparency=0.7,
+        BorderSizePixel=0, AutoButtonColor=false,
+        Font=Library.Font, TextSize=15,
+        TextColor3=Library.FontColor,
+        Text="⧉",
+    }, { BackgroundColor3='AccentColor', TextColor3='FontColor' })
+    New("UICorner", { Name="\0", Parent=Items["PopoutButton"], CornerRadius=UDim.new(0,5) })
+    New("UIStroke", { Name="\0", Parent=Items["PopoutButton"],
+        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
+        Color=Library.AccentColor }, { Color='AccentColor' })
+
+    Items["PopoutButton"].MouseEnter:Connect(function()
+        Tween(Items["PopoutButton"], { BackgroundTransparency = 0.4 }, TweenInfo.new(0.15))
+    end)
+    Items["PopoutButton"].MouseLeave:Connect(function()
+        Tween(Items["PopoutButton"], { BackgroundTransparency = 0.7 }, TweenInfo.new(0.15))
+    end)
 
     -- queue panel
     Items["QueueScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
-        Position=UDim2.new(0,8,0,24),
-        Size=UDim2.new(1,-16,1,-32),
+        Position=UDim2.new(0,8,0,26),
+        Size=UDim2.new(1,-16,1,-34),
         BorderSizePixel=0, BackgroundTransparency=1,
         CanvasSize=UDim2.new(), ScrollBarThickness=1,
         ScrollBarImageColor3=Library.OutlineColor,
@@ -3982,8 +3999,8 @@ function Library:CreateSpotifyPlayer()
     -- lyrics panel (hidden by default)
     Items["LyricsScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
-        Position=UDim2.new(0,8,0,24),
-        Size=UDim2.new(1,-16,1,-32),
+        Position=UDim2.new(0,8,0,26),
+        Size=UDim2.new(1,-16,1,-34),
         BorderSizePixel=0, BackgroundTransparency=1,
         CanvasSize=UDim2.new(), ScrollBarThickness=1,
         ScrollBarImageColor3=Library.OutlineColor,
@@ -4317,9 +4334,6 @@ function Library:CreateSpotifyPlayer()
             CurrentHighlightIndex = activeIndex
             RenderLyrics(activeIndex)
 
-            -- gently scroll so the active line stays visible. Wait two frames
-            -- so the label re-renders and TextBounds reflects the new text
-            -- before computing the scroll target.
             task.spawn(function()
                 task.wait()
                 task.wait()
@@ -4336,17 +4350,13 @@ function Library:CreateSpotifyPlayer()
                 local totalLines = #CurrentLyrics
                 if totalH <= 0 or totalLines <= 0 then return end
 
-                -- average line height accounts for wrapping automatically
                 local lineHeight = totalH / totalLines
                 local lineCenter = (activeIndex - 0.5) * lineHeight
 
-                -- keep the active line at ~35% down the viewport so upcoming
-                -- lines stay visible beneath it
                 local targetY   = lineCenter - viewportH * 0.35
                 local maxScroll = math.max(totalH - viewportH, 0)
                 targetY = math.clamp(targetY, 0, maxScroll)
 
-                -- ignore sub-pixel drift so wrapped lines don't jitter
                 if math.abs(targetY - scroll.CanvasPosition.Y) < 2 then return end
 
                 Tween(scroll, {
@@ -4785,7 +4795,7 @@ function Library:CreateSpotifyPlayer()
         end
     end
 
-    -- popout
+    -- popout helpers
     local function EnsurePopoutGui()
         if PopoutScreenGui and PopoutScreenGui.Parent then return PopoutScreenGui end
         PopoutScreenGui = Instance.new("ScreenGui")
@@ -4806,7 +4816,7 @@ function Library:CreateSpotifyPlayer()
         ConnectorScreenGui.Name = "RawrHub_SpotifyConnector"
         ConnectorScreenGui.ResetOnSpawn = false
         ConnectorScreenGui.IgnoreGuiInset = true
-        ConnectorScreenGui.DisplayOrder = -1
+        ConnectorScreenGui.DisplayOrder = 0
         ConnectorScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         if syn and syn.protect_gui then
             pcall(function() syn.protect_gui(ConnectorScreenGui) end)
@@ -4822,12 +4832,15 @@ function Library:CreateSpotifyPlayer()
         Items["PopoutLine"].Name = "PopoutLine"
         Items["PopoutLine"].AnchorPoint = Vector2.new(0.5, 0.5)
         Items["PopoutLine"].BackgroundColor3 = Library.AccentColor
-        Items["PopoutLine"].BackgroundTransparency = 0.35
+        Items["PopoutLine"].BackgroundTransparency = 0.4
         Items["PopoutLine"].BorderSizePixel = 0
-        Items["PopoutLine"].Size = UDim2.new(0, 0, 0, 1)
+        Items["PopoutLine"].Size = UDim2.new(0, 0, 0, 2)
         Items["PopoutLine"].Visible = false
         Items["PopoutLine"].ZIndex = 1
         Items["PopoutLine"].Parent = gui
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = Items["PopoutLine"]
         return Items["PopoutLine"]
     end
 
@@ -4848,10 +4861,11 @@ function Library:CreateSpotifyPlayer()
         local popPos     = popout.AbsolutePosition
         local popSize    = popout.AbsoluteSize
 
-        -- nearest edge midpoint on the player toward the popout
-        local fromX, fromY
-        local popCenter = popPos + popSize * 0.5
         local playerCenter = playerPos + playerSize * 0.5
+        local popCenter    = popPos + popSize * 0.5
+
+        -- nearest edge midpoint of player toward popout
+        local fromX, fromY
         if popCenter.X >= playerCenter.X then
             fromX = playerPos.X + playerSize.X
         else
@@ -4859,7 +4873,7 @@ function Library:CreateSpotifyPlayer()
         end
         fromY = playerPos.Y + playerSize.Y * 0.5
 
-        -- nearest edge midpoint on the popout toward the player
+        -- nearest edge midpoint of popout toward player
         local toX, toY
         if playerCenter.X >= popCenter.X then
             toX = popPos.X + popSize.X
@@ -4881,69 +4895,204 @@ function Library:CreateSpotifyPlayer()
         local center = fromVec + delta * 0.5
 
         line.Position = UDim2.new(0, center.X, 0, center.Y)
-        line.Size     = UDim2.new(0, dist, 0, 1)
+        line.Size     = UDim2.new(0, dist, 0, 2)
         line.Rotation = angle
         line.BackgroundColor3 = Library.AccentColor
     end
 
-    local function PopOutLyrics()
-        if LyricsPoppedOut then return end
-        if not IsExpanded then SetExpanded(true, true) end
+    local function StartConnectorUpdater()
+        if ConnectorConnection then return end
+        ConnectorConnection = RunService.RenderStepped:Connect(function()
+            if LyricsPoppedOut then
+                UpdateConnectorLine()
+            end
+        end)
+    end
 
-        -- capture current on-screen position so it lands where it was
-        local frame = Items["LyricsFrame"]
-        local absPos = frame.AbsolutePosition
-        local absSize = frame.AbsoluteSize
+    local function StopConnectorUpdater()
+        if ConnectorConnection then
+            ConnectorConnection:Disconnect()
+            ConnectorConnection = nil
+        end
+    end
 
-        frame.Parent = EnsurePopoutGui()
-        frame.AnchorPoint = Vector2.new(0, 0)
-        frame.Position = UDim2.new(0, absPos.X, 0, absPos.Y)
-        frame.Size = UDim2.new(0, math.max(absSize.X, 260), 0, math.max(absSize.Y, 200))
-        frame.ZIndex = 500
+    local function MakeDraggablePopout(frame)
+        if frame:GetAttribute("_rawr_draggable") then return end
+        frame:SetAttribute("_rawr_draggable", true)
 
-        -- draggable via a dedicated handle area: we reuse the whole frame
-        -- and save position on drag end
-        Library:MakeDraggable(frame)
+        local dragging = false
+        local dragStart, startPos
+        local dragStartTick = 0
 
-        -- expand the frame's drag capture so the whole top row works
-        frame.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+            -- don't drag when the click started on the popout button
+            local mx, my = input.Position.X, input.Position.Y
+            local btn = Items["PopoutButton"]
+            if btn and btn.Parent then
+                local bp = btn.AbsolutePosition
+                local bs = btn.AbsoluteSize
+                if mx >= bp.X and mx <= bp.X + bs.X
+                    and my >= bp.Y and my <= bp.Y + bs.Y then
+                    return
+                end
+            end
+
+            dragging = true
+            dragStart = input.Position
+            startPos = frame.Position
+            dragStartTick = tick()
+        end)
+
+        frame.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement
                 or input.UserInputType == Enum.UserInputType.Touch then
-                local p = frame.Position
-                PopoutPosition = UDim2.new(0, p.X.Offset, 0, p.Y.Offset)
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X,
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
             end
         end)
 
-        -- show connector line
-        local line = EnsureConnectorLine()
-        line.Visible = true
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if not dragging then return end
+            dragging = false
+            -- only persist if the drag was more than a click
+            if tick() - dragStartTick > 0.05 then
+                PopoutPosition = frame.Position
+            end
+        end)
+    end
+
+    local function UpdatePopoutButtonState()
+        if not Items["PopoutButton"] then return end
+        if LyricsPoppedOut then
+            Items["PopoutButton"].Text = "✕"
+            Items["PopoutButton"].TextSize = 16
+        else
+            Items["PopoutButton"].Text = "⧉"
+            Items["PopoutButton"].TextSize = 15
+        end
+    end
+
+    local function PopOutLyrics()
+        if LyricsPoppedOut then return end
+        PopoutGeneration = PopoutGeneration + 1
+        local myGen = PopoutGeneration
+
+        if not IsExpanded then SetExpanded(true, true) end
+
+        -- let the expand layout settle so absolute positions are correct
+        task.wait()
+
+        if myGen ~= PopoutGeneration then return end
+        if LyricsPoppedOut then return end
+
+        local frame = Items["LyricsFrame"]
+        local absPos  = frame.AbsolutePosition
+        local absSize = frame.AbsoluteSize
+
+        -- reparent into the popout gui and keep the same visual spot
+        frame.Parent = EnsurePopoutGui()
+        frame.AnchorPoint = Vector2.new(0, 0)
+        frame.Position = UDim2.new(0, absPos.X, 0, absPos.Y)
+        frame.Size = UDim2.new(0, math.max(absSize.X, 300), 0, math.max(absSize.Y, 220))
+        frame.ZIndex = 500
 
         LyricsPoppedOut = true
-        Items["PopoutButton"].Text = "⧈"
-        Items["PopoutButton"].TextColor3 = Library.AccentColor
+        UpdatePopoutButtonState()
+
+        -- target: saved position if we have one, otherwise nudge to the right
+        local targetPos = PopoutPosition or UDim2.new(0, absPos.X + 30, 0, absPos.Y + 20)
+
+        Tween(frame, {
+            Position = targetPos,
+            Size = UDim2.new(0, 300, 0, 220),
+        }, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+
+        -- connector line fade in
+        local line = EnsureConnectorLine()
+        line.Visible = true
+        line.BackgroundTransparency = 1
+        Tween(line, { BackgroundTransparency = 0.4 }, TweenInfo.new(0.3))
+
+        -- ensure the frame is draggable
+        MakeDraggablePopout(frame)
+        StartConnectorUpdater()
+
+        -- bump the sidebar up a bit so its controls look right at the larger size
+        Items["QueueScroll"].Position = UDim2.new(0, 8, 0, 30)
+        Items["QueueScroll"].Size     = UDim2.new(1, -16, 1, -38)
+        Items["LyricsScroll"].Position = UDim2.new(0, 8, 0, 30)
+        Items["LyricsScroll"].Size     = UDim2.new(1, -16, 1, -38)
     end
 
     local function PopInLyrics()
         if not LyricsPoppedOut then return end
+        PopoutGeneration = PopoutGeneration + 1
+        local myGen = PopoutGeneration
 
-        local frame = Items["LyricsFrame"]
-        frame.Parent = Items["SpotifyPlayer"]
-        frame.AnchorPoint = Vector2.new(0, 0)
-        -- restore collapsed/expanded relative position
+        local frame  = Items["LyricsFrame"]
+        local player = Items["SpotifyPlayer"]
+        if not player or not player.Parent then return end
+
+        local playerAbs = player.AbsolutePosition
+
+        -- where should it land inside the player
+        local targetRelX, targetRelY
         if IsExpanded then
-            frame.Position = UDim2.new(0, 270, 0, 10)
+            targetRelX, targetRelY = 270, 10
         else
-            frame.Position = UDim2.new(1, 10, 0, 10)
+            targetRelX, targetRelY = player.AbsoluteSize.X + 10, 10
         end
-        frame.Size = UDim2.new(0, 260, 0, 146)
-        frame.ZIndex = 1
-
-        if Items["PopoutLine"] then
-            Items["PopoutLine"].Visible = false
-        end
+        local targetAbs = Vector2.new(playerAbs.X + targetRelX, playerAbs.Y + targetRelY)
 
         LyricsPoppedOut = false
-        Items["PopoutButton"].Text = "⧉"
+        UpdatePopoutButtonState()
+
+        -- fade the line out
+        if Items["PopoutLine"] then
+            Tween(Items["PopoutLine"], { BackgroundTransparency = 1 }, TweenInfo.new(0.25))
+        end
+
+        -- tween the frame to where it will land inside the player
+        Tween(frame, {
+            Position = UDim2.new(0, targetAbs.X, 0, targetAbs.Y),
+            Size = UDim2.new(0, 260, 0, 146),
+        }, TweenInfo.new(0.35, Enum.EasingStyle.Quart, Enum.EasingDirection.Out))
+
+        -- restore in-player scroll geometry immediately
+        Items["QueueScroll"].Position = UDim2.new(0, 8, 0, 26)
+        Items["QueueScroll"].Size     = UDim2.new(1, -16, 1, -34)
+        Items["LyricsScroll"].Position = UDim2.new(0, 8, 0, 26)
+        Items["LyricsScroll"].Size     = UDim2.new(1, -16, 1, -34)
+
+        task.delay(0.36, function()
+            if myGen ~= PopoutGeneration then return end
+            if LyricsPoppedOut then return end
+
+            frame.Parent = Items["SpotifyPlayer"]
+            frame.AnchorPoint = Vector2.new(0, 0)
+            if IsExpanded then
+                frame.Position = UDim2.new(0, 270, 0, 10)
+            else
+                frame.Position = UDim2.new(1, 10, 0, 10)
+            end
+            frame.Size = UDim2.new(0, 260, 0, 146)
+            frame.ZIndex = 1
+
+            if Items["PopoutLine"] then
+                Items["PopoutLine"].Visible = false
+            end
+
+            StopConnectorUpdater()
+        end)
     end
 
     local function TogglePopout()
@@ -5186,16 +5335,6 @@ function Library:CreateSpotifyPlayer()
                 end
             end
             task.wait(0.1)
-        end
-    end)
-
-    -- connector line updater (runs only when popped out)
-    task.spawn(function()
-        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
-            if LyricsPoppedOut then
-                UpdateConnectorLine()
-            end
-            task.wait(0.05)
         end
     end)
 
