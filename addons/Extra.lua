@@ -3736,7 +3736,6 @@ function Library:CreateSpotifyPlayer()
     local Seeking = false
     local SearchRequestId = 0
     local SearchDelay = 0.25
-    local UpdateQueueCanvas
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
@@ -3760,6 +3759,7 @@ function Library:CreateSpotifyPlayer()
 
     local Items = {}
     local Icons = {}
+    local QueueRows = {}
 
     local function CreateControlButton(Key, Parent, Image, FrameSize, IconSize, IconOffsetY)
         local btn = New("TextButton", {
@@ -3952,26 +3952,91 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0,8,0,24),
         Size=UDim2.new(1,-16,1,-32),
         BorderSizePixel=0, BackgroundTransparency=1,
-        CanvasSize=UDim2.new(), ScrollBarThickness=1,
+        CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        ScrollingDirection=Enum.ScrollingDirection.Y,
+        ScrollBarThickness=1,
         ScrollBarImageColor3=Library.OutlineColor,
         ZIndex=2,
     }, { ScrollBarImageColor3='OutlineColor' })
 
-    Items["QueueText"] = New("TextLabel", {
+    New("UIListLayout", { Name="\0", Parent=Items["QueueScroll"],
+        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2),
+        HorizontalAlignment=Enum.HorizontalAlignment.Center })
+
+    Items["QueueEmpty"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14,
         Parent=Items["QueueScroll"], TextColor3=ThemeInactiveText,
         Text="Nothing is currently playing.",
         BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         TextYAlignment=Enum.TextYAlignment.Top,
-        Size=UDim2.new(1,-8,0,0),
+        Size=UDim2.new(1,-8,0,20),
         BorderSizePixel=0, TextWrapped=true, RichText=true,
         ZIndex=2,
     })
 
-    Items["QueueScroll"]:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        if UpdateQueueCanvas then UpdateQueueCanvas() end
-    end)
+    for Index = 1, 12 do
+        local Row = {}
+        Row.Frame = New("Frame", {
+            Name="\0", Parent=Items["QueueScroll"],
+            Size=UDim2.new(1,-8,0,38),
+            BorderSizePixel=0, BackgroundTransparency=1,
+            BackgroundColor3=Library.MainColor, Visible=false,
+            ZIndex=2,
+        })
+        Row.Cover = New("ImageLabel", {
+            Name="\0", Parent=Row.Frame,
+            Image=PlaceholderImage, BackgroundTransparency=1,
+            ScaleType=Enum.ScaleType.Crop,
+            Size=UDim2.new(0,30,0,30),
+            Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
+            ZIndex=2,
+        })
+        New("UICorner", { Name="\0", Parent=Row.Cover, CornerRadius=UDim.new(0,3) })
+        Row.Title = New("TextLabel", {
+            Name="\0", Font=Library.Font, TextSize=14,
+            Parent=Row.Frame, TextColor3=Library.FontColor,
+            Text="", BackgroundTransparency=1,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            Position=UDim2.new(0,40,0,2),
+            Size=UDim2.new(1,-44,0,17),
+            BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
+        }, { TextColor3='FontColor' })
+        Row.Artist = New("TextLabel", {
+            Name="\0", Font=Library.Font, TextSize=14,
+            Parent=Row.Frame, TextColor3=ThemeInactiveText,
+            Text="", BackgroundTransparency=1,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            Position=UDim2.new(0,40,0,19),
+            Size=UDim2.new(1,-44,0,16),
+            BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
+        })
+        Row.Button = New("TextButton", {
+            Name="\0", Parent=Row.Frame,
+            Size=UDim2.new(1,0,1,0),
+            BorderSizePixel=0, BackgroundTransparency=1, Text="",
+            ZIndex=3,
+        })
+        Row.Button.MouseEnter:Connect(function()
+            if Row.Frame.Visible then
+                Tween(Row.Frame, { BackgroundTransparency = 0.85, BackgroundColor3 = Library.AccentColor }, TweenInfo.new(0.1))
+            end
+        end)
+        Row.Button.MouseLeave:Connect(function()
+            Tween(Row.Frame, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
+        end)
+        Row.Button.MouseButton1Click:Connect(function()
+            local t = Row.Track
+            if t and t.Uri and t.Uri ~= "" then
+                PlayUri(t.Uri)
+                RefreshSoon()
+            end
+        end)
+        Row.Track = nil
+        QueueRows[Index] = Row
+    end
 
     Items["LyricsScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
@@ -4108,9 +4173,14 @@ function Library:CreateSpotifyPlayer()
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4) })
 
     CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
+    CreateControlButton("Previous",  Items["Controls"], SKIP_ASSET_ID,            16, 16, 0)
     CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 20, 20, 0)
     CreateControlButton("Skip",      Items["Controls"], SKIP_ASSET_ID,            16, 16, 0)
     CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 12, 12, 0)
+
+    if Icons["Previous"] then
+        Icons["Previous"].Rotation = 180
+    end
 
     Items["ExpandButton"] = New("ImageButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -4264,46 +4334,30 @@ function Library:CreateSpotifyPlayer()
             or  "rbxassetid://9622475855"
     end
 
-    UpdateQueueCanvas = function()
-        local label  = Items["QueueText"]
-        local scroll = Items["QueueScroll"]
-        local availX = scroll.AbsoluteSize.X
-        if availX <= 0 then return end
-        local width  = math.max(availX - 8, 1)
-        local height = math.max(label.TextBounds.Y + 4, scroll.AbsoluteSize.Y)
-        label.Size = UDim2.new(0, width, 0, height)
-        scroll.CanvasSize = UDim2.new(0, 0, 0, height)
-    end
-
     local function SetQueueDisplay(current, tracks, emptyText)
-        if not current and (type(tracks) ~= "table" or #tracks == 0) then
-            Items["QueueText"].Text = emptyText or "No upcoming tracks."
-            UpdateQueueCanvas()
-            Items["QueueScroll"].CanvasPosition = Vector2.new()
-            return
+        local count = 0
+        if type(tracks) == "table" then
+            for _, t in ipairs(tracks) do
+                if count >= #QueueRows then break end
+                count = count + 1
+                local row = QueueRows[count]
+                row.Frame.Visible = true
+                row.Cover.Image   = t.Cover or PlaceholderImage
+                row.Title.Text    = t.Title or "Unknown track"
+                row.Artist.Text   = t.Artist or "Unknown artist"
+                row.Track         = t
+            end
         end
-        local buf = {}
-        if current then
-            buf[#buf+1] = string.format(
-                "<font color=\"#%02X%02X%02X\">Now playing</font>\n%s\n%s",
-                math.floor(Library.AccentColor.R*255),
-                math.floor(Library.AccentColor.G*255),
-                math.floor(Library.AccentColor.B*255),
-                current.Title or "Unknown track",
-                current.Artist or "Unknown artist"
-            )
+        for i = count + 1, #QueueRows do
+            QueueRows[i].Frame.Visible = false
+            QueueRows[i].Track = nil
         end
-        if type(tracks) == "table" and #tracks > 0 then
-            if #buf > 0 then buf[#buf+1] = "" end
-            buf[#buf+1] = "Next up"
+        if count == 0 then
+            Items["QueueEmpty"].Visible = true
+            Items["QueueEmpty"].Text = emptyText or "No upcoming tracks."
+        else
+            Items["QueueEmpty"].Visible = false
         end
-        for i, t in tracks or {} do
-            if i > 6 then break end
-            buf[#buf+1] = string.format("%d. %s\n%s", i, t.Title or "Unknown track", t.Artist or "Unknown artist")
-        end
-        Items["QueueText"].Text = table.concat(buf, "\n\n")
-        UpdateQueueCanvas()
-        Items["QueueScroll"].CanvasPosition = Vector2.new()
     end
 
     local function ParseLRC(lrcText)
@@ -4748,9 +4802,15 @@ function Library:CreateSpotifyPlayer()
         for _, t in d.queue do
             local artists = {}
             for _, a in t.artists or {} do table.insert(artists, a.name) end
+            local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
+                or t.album and t.album.images and t.album.images[2] and t.album.images[2].url
             table.insert(out, {
                 Title = t.name or "Unknown track",
                 Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
+                Album = t.album and t.album.name or "Unknown album",
+                AlbumId = t.album and t.album.id or "",
+                Uri = t.uri or "",
+                Cover = CacheImage(t.album and t.album.id or t.id, coverUrl),
             })
         end
         return out
@@ -5085,6 +5145,19 @@ function Library:CreateSpotifyPlayer()
 
     Items["Shuffle"].MouseButton1Click:Connect(function()
         Shuffle(not (CurrentTrack and CurrentTrack.Shuffle))
+        RefreshSoon()
+    end)
+
+    Items["Previous"].MouseButton1Click:Connect(function()
+        Previous()
+        if Icons["Previous"] then
+            Tween(Icons["Previous"], { ImageColor3 = Library.AccentColor }, TweenInfo.new(0.1))
+            task.delay(0.25, function()
+                if Icons["Previous"] then
+                    Tween(Icons["Previous"], { ImageColor3 = Library.FontColor }, TweenInfo.new(0.2))
+                end
+            end)
+        end
         RefreshSoon()
     end)
 
