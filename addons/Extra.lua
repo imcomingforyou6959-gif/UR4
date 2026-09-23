@@ -3740,6 +3740,7 @@ function Library:CreateSpotifyPlayer()
     local CustomPosition
     local LastKnownPlaying = false
     local CoverSpin = 0
+    local SkippingTo = false
 
     local LyricsCache           = {}
     local CurrentLyrics         = {}
@@ -4030,14 +4031,20 @@ function Library:CreateSpotifyPlayer()
         end)
         Row.Button.MouseButton1Click:Connect(function()
             if not Row.Frame.Visible then return end
+            if SkippingTo then return end
             local idx = Row.Index
             if not idx or idx <= 0 then return end
+            SkippingTo = true
             task.spawn(function()
-                for _ = 1, idx do
-                    Next()
-                    task.wait(0.12)
-                end
-                RefreshSoon()
+                local ok, err = pcall(function()
+                    for i = 1, idx do
+                        Next()
+                        if i < idx then task.wait(0.3) end
+                    end
+                    task.wait(0.6)
+                end)
+                SkippingTo = false
+                Spotify:Refresh()
             end)
         end)
         Row.Track = nil
@@ -5041,6 +5048,7 @@ function Library:CreateSpotifyPlayer()
 
     function RefreshSoon()
         task.delay(0.35, function()
+            if SkippingTo then return end
             if Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent then
                 Spotify:Refresh()
             end
@@ -5257,7 +5265,9 @@ function Library:CreateSpotifyPlayer()
 
     task.spawn(function()
         while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
-            Spotify:Refresh()
+            if not SkippingTo then
+                Spotify:Refresh()
+            end
             task.wait(PollInterval)
         end
     end)
