@@ -4476,12 +4476,15 @@ function Library:CreateSpotifyPlayer()
     end
 
     local function ResizeLyricsCanvas()
-        local availX = Items["LyricsScroll"].AbsoluteSize.X
+        local scroll = Items["LyricsScroll"]
+        local label  = Items["LyricsText"]
+        if not scroll or not scroll.Parent or not label or not label.Parent then return end
+        local availX = scroll.AbsoluteSize.X
         if availX <= 0 then return end
         local w = math.max(availX - 8, 1)
-        local h = math.max(Items["LyricsText"].TextBounds.Y + 8, 1)
-        Items["LyricsText"].Size = UDim2.new(0, w, 0, h)
-        Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
+        local h = math.max(label.TextBounds.Y + 8, 1)
+        label.Size = UDim2.new(0, w, 0, h)
+        scroll.CanvasSize = UDim2.new(0, 0, 0, h)
     end
 
     local function RenderLyrics(activeIndex)
@@ -4510,8 +4513,25 @@ function Library:CreateSpotifyPlayer()
 
     local function ScrollToActiveLine(activeIndex, myGen)
         task.spawn(function()
-            task.wait()
-            task.wait()
+            -- Wait for layout: TextBounds and viewport need to be computed.
+            -- This prevents the very first scroll from silently bailing.
+            local attempts = 0
+            while attempts < 30 do
+                if Destroyed then return end
+                if myGen and myGen ~= LyricsRenderGen then return end
+                if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
+                if SidebarTab ~= "lyrics" then return end
+
+                local scroll = Items["LyricsScroll"]
+                local label  = Items["LyricsText"]
+                if not scroll or not scroll.Parent or not label or not label.Parent then return end
+
+                if scroll.AbsoluteSize.Y > 0 and label.TextBounds.Y > 0 then
+                    break
+                end
+                attempts = attempts + 1
+                task.wait()
+            end
 
             if Destroyed then return end
             if myGen and myGen ~= LyricsRenderGen then return end
@@ -4608,6 +4628,7 @@ function Library:CreateSpotifyPlayer()
                 CurrentLyrics = cached.Parsed or {}
                 CurrentLyricsSynced = true
                 CurrentHighlightIndex = 0
+                Items["LyricsText"].TextColor3 = Library.FontColor
                 RenderLyrics(1)
                 local gen = LyricsRenderGen + 1
                 LyricsRenderGen = gen
@@ -4874,7 +4895,8 @@ function Library:CreateSpotifyPlayer()
         local d = MakeRequest("me/player/queue")
         local out = {}
         if not d or type(d.queue) ~= "table" then return out end
-        for _, t in d.queue do
+        for i, t in ipairs(d.queue) do
+            if i > #QueueRows then break end
             local artists = {}
             for _, a in t.artists or {} do table.insert(artists, a.name) end
             local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
@@ -5328,7 +5350,7 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    Connect(Items["QueueScroll"]:GetPropertyChangedSignal("AbsoluteSize"), function()
+    Connect(Items["LyricsScroll"]:GetPropertyChangedSignal("AbsoluteSize"), function()
         if Destroyed then return end
         if Items["LyricsScroll"].Visible then
             ResizeLyricsCanvas()
