@@ -3662,6 +3662,15 @@ function Library:CreateSpotifyPlayer()
     local ThemeInactiveText = Color3.fromRGB(180, 180, 180)
     local SKIP_ASSET_ID = "rbxassetid://9607545497"
 
+    local Connections = {}
+    local Destroyed = false
+
+    local function Connect(signal, callback)
+        local conn = signal:Connect(callback)
+        table.insert(Connections, conn)
+        return conn
+    end
+
     local function New(Class, Props, RegProps, Hud)
         local inst = Library:Create(Class, Props)
         if RegProps then Library:AddToRegistry(inst, RegProps, Hud) end
@@ -3669,6 +3678,7 @@ function Library:CreateSpotifyPlayer()
     end
 
     local function Tween(inst, Props, Info)
+        if not inst or not inst.Parent then return end
         TweenService:Create(
             inst,
             Info or TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
@@ -4021,15 +4031,15 @@ function Library:CreateSpotifyPlayer()
             BorderSizePixel=0, BackgroundTransparency=1, Text="",
             ZIndex=3,
         })
-        Row.Button.MouseEnter:Connect(function()
+        Connect(Row.Button.MouseEnter, function()
             if Row.Frame.Visible then
                 Tween(Row.Frame, { BackgroundTransparency = 0.85, BackgroundColor3 = Library.AccentColor }, TweenInfo.new(0.1))
             end
         end)
-        Row.Button.MouseLeave:Connect(function()
+        Connect(Row.Button.MouseLeave, function()
             Tween(Row.Frame, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
         end)
-        Row.Button.MouseButton1Click:Connect(function()
+        Connect(Row.Button.MouseButton1Click, function()
             if not Row.Frame.Visible then return end
             if SkippingTo then return end
             local t = Row.Track
@@ -4265,14 +4275,14 @@ function Library:CreateSpotifyPlayer()
         })
         New("UIPadding", { Name="\0", Parent=btn, PaddingLeft=UDim.new(0,10) })
 
-        btn.MouseEnter:Connect(function()
+        Connect(btn.MouseEnter, function()
             Tween(btn, { BackgroundTransparency = 0.7, BackgroundColor3 = Library.AccentColor }, TweenInfo.new(0.1))
         end)
-        btn.MouseLeave:Connect(function()
+        Connect(btn.MouseLeave, function()
             Tween(btn, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
         end)
 
-        btn.MouseButton1Click:Connect(function()
+        Connect(btn.MouseButton1Click, function()
             local track = ContextMenuTrack
             CloseContextMenu()
             if callback and track then callback(track) end
@@ -4307,7 +4317,7 @@ function Library:CreateSpotifyPlayer()
         ContextMenuFrame.Position = UDim2.new(0, x, 0, y)
     end
 
-    InputService.InputBegan:Connect(function(input)
+    Connect(InputService.InputBegan, function(input)
         local ut = input.UserInputType
         if ut ~= Enum.UserInputType.MouseButton1
             and ut ~= Enum.UserInputType.MouseButton2
@@ -4503,12 +4513,15 @@ function Library:CreateSpotifyPlayer()
             task.wait()
             task.wait()
 
+            if Destroyed then return end
             if myGen and myGen ~= LyricsRenderGen then return end
             if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
             if SidebarTab ~= "lyrics" then return end
 
             local scroll    = Items["LyricsScroll"]
             local label     = Items["LyricsText"]
+            if not scroll or not scroll.Parent or not label or not label.Parent then return end
+
             local viewportH = scroll.AbsoluteSize.Y
             if viewportH <= 0 then return end
 
@@ -4624,6 +4637,7 @@ function Library:CreateSpotifyPlayer()
             if myId ~= LyricsRequestId then return end
             CurrentLyricsLoading = false
 
+            if Destroyed then return end
             if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
 
             if not result then
@@ -4791,6 +4805,7 @@ function Library:CreateSpotifyPlayer()
     end
 
     local function MakeRequest(url, method, retryOnAuth, body)
+        if Destroyed then return nil end
         if not Request or not EnsureAccessToken() or Token == "" then return nil end
         local reqBody = body
         if type(body) == "table" then
@@ -4818,6 +4833,7 @@ function Library:CreateSpotifyPlayer()
     end
 
     local function CacheImage(id, url)
+        if Destroyed then return PlaceholderImage end
         if not GetCustomAsset or not id or not url or url == "" then return PlaceholderImage end
         local safe = tostring(id):gsub("[^%w_%-]", "_")
         local path = CacheFolder .. "/" .. safe .. ".png"
@@ -5051,6 +5067,7 @@ function Library:CreateSpotifyPlayer()
         SearchRequestId = SearchRequestId + 1
         local id = SearchRequestId
         task.delay(SearchDelay, function()
+            if Destroyed then return end
             if id ~= SearchRequestId then return end
             RunSearch(query)
         end)
@@ -5058,6 +5075,7 @@ function Library:CreateSpotifyPlayer()
 
     function RefreshSoon()
         task.delay(0.35, function()
+            if Destroyed then return end
             if SkippingTo then return end
             if Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent then
                 Spotify:Refresh()
@@ -5076,9 +5094,40 @@ function Library:CreateSpotifyPlayer()
         SetProgress(pos, CurrentTrack.Duration, true)
     end
 
+    local function Cleanup()
+        if Destroyed then return end
+        Destroyed = true
+        SkippingTo = false
+
+        for _, conn in ipairs(Connections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        Connections = {}
+
+        if ContextMenuFrame then
+            pcall(function() ContextMenuFrame:Destroy() end)
+            ContextMenuFrame = nil
+        end
+
+        if Items["SpotifyPlayer"] then
+            pcall(function() Items["SpotifyPlayer"]:Destroy() end)
+        end
+
+        CurrentTrack = nil
+        CurrentLyrics = {}
+        CurrentLyricsSynced = false
+        SearchResults = {}
+        SearchTrackResults = {}
+        QueueRows = {}
+        ResultButtons = {}
+        Items = {}
+        Icons = {}
+    end
+
     function Spotify:SetVisibility(b) IsVisible = b ApplyVisibility() end
     function Spotify:Center()
         task.wait()
+        if Destroyed then return end
         if CustomPosition then
             Items["SpotifyPlayer"].AnchorPoint = Vector2.new(0, 0)
             Items["SpotifyPlayer"].Position = CustomPosition
@@ -5100,8 +5149,12 @@ function Library:CreateSpotifyPlayer()
         WriteToken(TokenConfig)
         Spotify:Refresh()
     end
+    function Spotify:Destroy()
+        Cleanup()
+    end
 
     function Spotify:Refresh()
+        if Destroyed then return false end
         if not Request then SetDisplay(nil, "Executor request API unavailable") return false end
         if Token == "" and TokenConfig.RefreshToken == "" then
             SetDisplay(nil, "Add a token or refresh config to " .. TokenPath)
@@ -5127,7 +5180,7 @@ function Library:CreateSpotifyPlayer()
     end
 
     for i, btn in ResultButtons do
-        btn.Button.MouseButton1Click:Connect(function()
+        Connect(btn.Button.MouseButton1Click, function()
             local r = SearchResults[i]
             if not r then return end
             if r.IsBack then
@@ -5154,7 +5207,7 @@ function Library:CreateSpotifyPlayer()
             UpdateResults()
         end)
 
-        btn.Button.MouseButton2Click:Connect(function()
+        Connect(btn.Button.MouseButton2Click, function()
             local r = SearchResults[i]
             if not r then return end
             if r.IsBack then return end
@@ -5163,29 +5216,29 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
-    Items["SearchInput"].FocusLost:Connect(function(enter)
+    Connect(Items["SearchInput"].FocusLost, function(enter)
         if enter then
             SearchRequestId = SearchRequestId + 1
             RunSearch(Items["SearchInput"].Text)
         end
     end)
-    Items["SearchInput"]:GetPropertyChangedSignal("Text"):Connect(function()
+    Connect(Items["SearchInput"]:GetPropertyChangedSignal("Text"), function()
         QueueSearch(Items["SearchInput"].Text)
     end)
 
-    Items["QueueTab"].MouseButton1Click:Connect(function()
+    Connect(Items["QueueTab"].MouseButton1Click, function()
         SetSidebarTab("queue")
     end)
 
-    Items["LyricsTab"].MouseButton1Click:Connect(function()
+    Connect(Items["LyricsTab"].MouseButton1Click, function()
         SetSidebarTab("lyrics")
     end)
 
-    Items["ExpandButton"].MouseButton1Click:Connect(function()
+    Connect(Items["ExpandButton"].MouseButton1Click, function()
         SetExpanded(not IsExpanded)
     end)
 
-    Items["PlayPause"].MouseButton1Click:Connect(function()
+    Connect(Items["PlayPause"].MouseButton1Click, function()
         if LastKnownPlaying then
             LastKnownPlaying = false
             if CurrentTrack then CurrentTrack.IsPlaying = false end
@@ -5203,16 +5256,17 @@ function Library:CreateSpotifyPlayer()
         RefreshSoon()
     end)
 
-    Items["Shuffle"].MouseButton1Click:Connect(function()
+    Connect(Items["Shuffle"].MouseButton1Click, function()
         Shuffle(not (CurrentTrack and CurrentTrack.Shuffle))
         RefreshSoon()
     end)
 
-    Items["Previous"].MouseButton1Click:Connect(function()
+    Connect(Items["Previous"].MouseButton1Click, function()
         Previous()
         if Icons["Previous"] then
             Tween(Icons["Previous"], { ImageColor3 = Library.AccentColor }, TweenInfo.new(0.1))
             task.delay(0.25, function()
+                if Destroyed then return end
                 if Icons["Previous"] then
                     Tween(Icons["Previous"], { ImageColor3 = Library.FontColor }, TweenInfo.new(0.2))
                 end
@@ -5221,11 +5275,12 @@ function Library:CreateSpotifyPlayer()
         RefreshSoon()
     end)
 
-    Items["Skip"].MouseButton1Click:Connect(function()
+    Connect(Items["Skip"].MouseButton1Click, function()
         Next()
         if Icons["Skip"] then
             Tween(Icons["Skip"], { ImageColor3 = Library.AccentColor }, TweenInfo.new(0.1))
             task.delay(0.25, function()
+                if Destroyed then return end
                 if Icons["Skip"] then
                     Tween(Icons["Skip"], { ImageColor3 = Library.FontColor }, TweenInfo.new(0.2))
                 end
@@ -5234,20 +5289,20 @@ function Library:CreateSpotifyPlayer()
         RefreshSoon()
     end)
 
-    Items["Repeat"].MouseButton1Click:Connect(function()
+    Connect(Items["Repeat"].MouseButton1Click, function()
         local on = CurrentTrack and CurrentTrack.RepeatState and CurrentTrack.RepeatState ~= "off"
         Repeat(not on)
         RefreshSoon()
     end)
 
-    Items["ProgressHitbox"].InputBegan:Connect(function(input)
+    Connect(Items["ProgressHitbox"].InputBegan, function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
         Seeking = true
         SetSeekingFromInput(input)
     end)
 
-    InputService.InputChanged:Connect(function(input)
+    Connect(InputService.InputChanged, function(input)
         if not Seeking then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch then
@@ -5255,7 +5310,7 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    InputService.InputEnded:Connect(function(input)
+    Connect(InputService.InputEnded, function(input)
         if not Seeking then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
@@ -5266,15 +5321,22 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    Items["SpotifyPlayer"].InputEnded:Connect(function(input)
+    Connect(Items["SpotifyPlayer"].InputEnded, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             CustomPosition = Items["SpotifyPlayer"].Position
         end
     end)
 
+    Connect(Items["QueueScroll"]:GetPropertyChangedSignal("AbsoluteSize"), function()
+        if Destroyed then return end
+        if Items["LyricsScroll"].Visible then
+            ResizeLyricsCanvas()
+        end
+    end)
+
     task.spawn(function()
-        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+        while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             if not SkippingTo then
                 Spotify:Refresh()
             end
@@ -5283,7 +5345,7 @@ function Library:CreateSpotifyPlayer()
     end)
 
     task.spawn(function()
-        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+        while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             if Seeking and CurrentTrack then
                 SetSeekingFromInput({ Position = UserInputService:GetMouseLocation() })
             end
@@ -5300,7 +5362,7 @@ function Library:CreateSpotifyPlayer()
     end)
 
     task.spawn(function()
-        while Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+        while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             if CurrentTrack and LastKnownPlaying then
                 CoverSpin = (CoverSpin + 0.8) % 360
                 if Items["Cover"] and Items["Cover"].Parent then
@@ -5310,6 +5372,23 @@ function Library:CreateSpotifyPlayer()
             task.wait(0.03)
         end
     end)
+
+    task.spawn(function()
+        while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
+            task.wait(1)
+        end
+        if not Destroyed then
+            Cleanup()
+        end
+    end)
+
+    if Library.ScreenGui then
+        Connect(Library.ScreenGui.Destroying, Cleanup)
+    end
+
+    if typeof(game.BindToClose) == "function" then
+        pcall(function() game:BindToClose(Cleanup) end)
+    end
 
     UpdateResults()
     SetSidebarTab("queue")
