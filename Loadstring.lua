@@ -3158,7 +3158,7 @@ local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
 
 ImageESP_Objects = {}
 ImageESP_Enabled = false
-ImageESP_FilePath = "woodie/image/kitagawa.webp"
+ImageESP_FilePath = "woodie\assets\images\kitagawa.webp"
 ImageESP_Config = {
     Size = 3.7,
     HeightScale = 0.9,
