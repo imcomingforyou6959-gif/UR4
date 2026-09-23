@@ -4007,7 +4007,7 @@ function Library:CreateSpotifyPlayer()
 
     Items["CoverFrame"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
-        Position=UDim2.new(0,0,0,-3),
+        Position=UDim2.new(0,0,0,5),
         Size=UDim2.new(0,60,0,60),
         BorderSizePixel=0,
         BackgroundTransparency=1,
@@ -4098,7 +4098,7 @@ function Library:CreateSpotifyPlayer()
 
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-18,0.5,0),
+        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-6,0.5,0),
         Size=UDim2.new(0,132,0,24), BorderSizePixel=0,
         ZIndex=3,
     })
