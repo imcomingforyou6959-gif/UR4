@@ -4032,17 +4032,27 @@ function Library:CreateSpotifyPlayer()
         Row.Button.MouseButton1Click:Connect(function()
             if not Row.Frame.Visible then return end
             if SkippingTo then return end
-            local idx = Row.Index
-            if not idx or idx <= 0 then return end
+            local t = Row.Track
+            if not t or not t.Uri or t.Uri == "" then return end
             SkippingTo = true
             task.spawn(function()
-                local ok, err = pcall(function()
-                    for i = 1, idx do
-                        Next()
-                        if i < idx then task.wait(0.3) end
+                pcall(function()
+                    local d = MakeRequest("me/player")
+                    local contextUri = nil
+                    if type(d) == "table" and type(d.context) == "table" then
+                        contextUri = d.context.uri
                     end
-                    task.wait(0.6)
+                    if contextUri and contextUri ~= "" then
+                        MakeRequest("me/player/play", "PUT", true, {
+                            context_uri = contextUri,
+                            offset = { uri = t.Uri },
+                            position_ms = 0,
+                        })
+                    else
+                        PlayUri(t.Uri)
+                    end
                 end)
+                task.wait(0.7)
                 SkippingTo = false
                 Spotify:Refresh()
             end)
