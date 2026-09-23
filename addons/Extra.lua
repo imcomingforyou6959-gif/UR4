@@ -3749,6 +3749,7 @@ function Library:CreateSpotifyPlayer()
     local CurrentHighlightIndex = 0
     local SidebarTab            = "queue"
     local LyricsRequestId       = 0
+    local LyricsRenderGen       = 0
 
     local ContextMenuFrame      = nil
     local ContextMenuTrack      = nil
@@ -4028,13 +4029,19 @@ function Library:CreateSpotifyPlayer()
             Tween(Row.Frame, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
         end)
         Row.Button.MouseButton1Click:Connect(function()
-            local t = Row.Track
-            if t and t.Uri and t.Uri ~= "" then
-                PlayUri(t.Uri)
+            if not Row.Frame.Visible then return end
+            local idx = Row.Index
+            if not idx or idx <= 0 then return end
+            task.spawn(function()
+                for _ = 1, idx do
+                    Next()
+                    task.wait(0.12)
+                end
                 RefreshSoon()
-            end
+            end)
         end)
         Row.Track = nil
+        Row.Index = Index
         QueueRows[Index] = Row
     end
 
@@ -4441,6 +4448,15 @@ function Library:CreateSpotifyPlayer()
         }
     end
 
+    local function ResizeLyricsCanvas()
+        local availX = Items["LyricsScroll"].AbsoluteSize.X
+        if availX <= 0 then return end
+        local w = math.max(availX - 8, 1)
+        local h = math.max(Items["LyricsText"].TextBounds.Y + 8, 1)
+        Items["LyricsText"].Size = UDim2.new(0, w, 0, h)
+        Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
+    end
+
     local function RenderLyrics(activeIndex)
         if not CurrentLyrics or #CurrentLyrics == 0 then return end
 
@@ -4462,14 +4478,7 @@ function Library:CreateSpotifyPlayer()
             end
         end
         Items["LyricsText"].Text = table.concat(buf, "\n")
-
-        local availX = Items["LyricsScroll"].AbsoluteSize.X
-        if availX > 0 then
-            local width = math.max(availX - 8, 1)
-            local h = Items["LyricsText"].TextBounds.Y + 8
-            Items["LyricsText"].Size = UDim2.new(0, width, 0, h)
-            Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
-        end
+        ResizeLyricsCanvas()
     end
 
     local function ScrollToActiveLine(activeIndex, myGen)
@@ -4477,8 +4486,9 @@ function Library:CreateSpotifyPlayer()
             task.wait()
             task.wait()
 
-            if myGen and myGen ~= CurrentHighlightIndex then return end
+            if myGen and myGen ~= LyricsRenderGen then return end
             if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
+            if SidebarTab ~= "lyrics" then return end
 
             local scroll    = Items["LyricsScroll"]
             local label     = Items["LyricsText"]
@@ -4518,35 +4528,39 @@ function Library:CreateSpotifyPlayer()
 
         if activeIndex ~= CurrentHighlightIndex then
             CurrentHighlightIndex = activeIndex
+            LyricsRenderGen = LyricsRenderGen + 1
+            local myGen = LyricsRenderGen
             RenderLyrics(activeIndex)
-            ScrollToActiveLine(activeIndex, activeIndex)
+            ScrollToActiveLine(activeIndex, myGen)
         end
     end
 
     local function SetLyricsEmpty(text)
+        CurrentLyrics = {}
+        CurrentLyricsSynced = false
+        CurrentHighlightIndex = 0
         Items["LyricsText"].Text = text
         Items["LyricsText"].TextColor3 = ThemeInactiveText
         local availX = Items["LyricsScroll"].AbsoluteSize.X
         if availX > 0 then
             local w = math.max(availX - 8, 1)
-            local h = Items["LyricsText"].TextBounds.Y + 8
+            local h = math.max(Items["LyricsText"].TextBounds.Y + 8, 1)
             Items["LyricsText"].Size = UDim2.new(0, w, 0, h)
             Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
         else
             Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, 24)
         end
+        Items["LyricsScroll"].CanvasPosition = Vector2.new()
     end
 
     local function SetLyricsPlain(plain)
+        CurrentLyrics = {}
+        CurrentLyricsSynced = false
+        CurrentHighlightIndex = 0
         Items["LyricsText"].Text = plain
         Items["LyricsText"].TextColor3 = ThemeInactiveText
-        local availX = Items["LyricsScroll"].AbsoluteSize.X
-        if availX > 0 then
-            local w = math.max(availX - 8, 1)
-            local h = Items["LyricsText"].TextBounds.Y + 8
-            Items["LyricsText"].Size = UDim2.new(0, w, 0, h)
-            Items["LyricsScroll"].CanvasSize = UDim2.new(0, 0, 0, h)
-        end
+        ResizeLyricsCanvas()
+        Items["LyricsScroll"].CanvasPosition = Vector2.new()
     end
 
     local function LoadLyricsForTrack(track)
@@ -4558,17 +4572,25 @@ function Library:CreateSpotifyPlayer()
             CurrentLyricsLoading = false
             if cached.Instrumental then
                 SetLyricsEmpty("Instrumental track — no lyrics.")
-                CurrentLyrics = {}
-                CurrentLyricsSynced = false
-                CurrentHighlightIndex = 0
                 return
             end
-            CurrentLyrics = cached.Parsed or {}
-            CurrentLyricsSynced = cached.HasSynced
-            CurrentHighlightIndex = 0
             if cached.HasSynced then
+                CurrentLyrics = cached.Parsed or {}
+                CurrentLyricsSynced = true
+                CurrentHighlightIndex = 0
                 RenderLyrics(1)
-                if track.Progress then UpdateLyricsHighlight(track.Progress) end
+                local gen = LyricsRenderGen + 1
+                LyricsRenderGen = gen
+                if track.Progress then
+                    local ms = track.Progress
+                    local idx = 1
+                    for i, line in ipairs(CurrentLyrics) do
+                        if line.Time <= ms then idx = i else break end
+                    end
+                    CurrentHighlightIndex = idx
+                    RenderLyrics(idx)
+                    ScrollToActiveLine(idx, gen)
+                end
             else
                 SetLyricsPlain(cached.Plain ~= "" and cached.Plain or "No lyrics available.")
             end
@@ -4579,9 +4601,6 @@ function Library:CreateSpotifyPlayer()
         local myId = LyricsRequestId
         CurrentLyricsLoading = true
         SetLyricsEmpty("Loading lyrics…")
-        CurrentLyrics = {}
-        CurrentLyricsSynced = false
-        CurrentHighlightIndex = 0
 
         task.spawn(function()
             local result = GetLyrics(track.Title, track.Artist, track.Album, track.Duration)
@@ -4611,14 +4630,23 @@ function Library:CreateSpotifyPlayer()
                 Instrumental = false,
             }
 
-            CurrentLyrics = parsed
-            CurrentLyricsSynced = result.HasSynced
-            CurrentHighlightIndex = 0
-
             if result.HasSynced then
+                CurrentLyrics = parsed
+                CurrentLyricsSynced = true
+                CurrentHighlightIndex = 0
+                Items["LyricsText"].TextColor3 = Library.FontColor
                 RenderLyrics(1)
+                local gen = LyricsRenderGen + 1
+                LyricsRenderGen = gen
                 if CurrentTrack and CurrentTrack.Progress then
-                    UpdateLyricsHighlight(CurrentTrack.Progress)
+                    local ms = CurrentTrack.Progress
+                    local idx = 1
+                    for i, line in ipairs(CurrentLyrics) do
+                        if line.Time <= ms then idx = i else break end
+                    end
+                    CurrentHighlightIndex = idx
+                    RenderLyrics(idx)
+                    ScrollToActiveLine(idx, gen)
                 end
             else
                 SetLyricsPlain(result.Plain ~= "" and result.Plain or "No lyrics available.")
@@ -4635,9 +4663,23 @@ function Library:CreateSpotifyPlayer()
         Items["LyricsScroll"].Visible = not isQueue
 
         if not isQueue then
-            if CurrentTrack and not CurrentLyricsLoading
-                and CurrentLyricsTrackId == CurrentTrack.TrackId and #CurrentLyrics == 0 then
-                LoadLyricsForTrack(CurrentTrack)
+            if CurrentTrack and not CurrentLyricsLoading then
+                if CurrentLyricsTrackId ~= CurrentTrack.TrackId or #CurrentLyrics == 0 then
+                    LoadLyricsForTrack(CurrentTrack)
+                elseif CurrentLyricsSynced then
+                    local gen = LyricsRenderGen + 1
+                    LyricsRenderGen = gen
+                    if CurrentTrack.Progress then
+                        local ms = CurrentTrack.Progress
+                        local idx = 1
+                        for i, line in ipairs(CurrentLyrics) do
+                            if line.Time <= ms then idx = i else break end
+                        end
+                        CurrentHighlightIndex = idx
+                        RenderLyrics(idx)
+                        ScrollToActiveLine(idx, gen)
+                    end
+                end
             end
         end
     end
@@ -5229,7 +5271,7 @@ function Library:CreateSpotifyPlayer()
                 local p = math.min(CurrentTrack.Progress + ((tick() - CurrentTrack.UpdatedAt) * 1000),
                                    CurrentTrack.Duration)
                 SetProgress(p, CurrentTrack.Duration, true)
-                if SidebarTab == "lyrics" and CurrentLyricsSynced then
+                if SidebarTab == "lyrics" and CurrentLyricsSynced and #CurrentLyrics > 0 then
                     UpdateLyricsHighlight(p)
                 end
             end
