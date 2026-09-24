@@ -3918,10 +3918,9 @@ function Library:CreateSpotifyPlayer()
     })
     New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
 
-    -- ============ Search results (left column) ============
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0, 10, 0, -170),
+        Position=UDim2.new(0, 10, 0, -210),
         Size=UDim2.new(0, 250, 0, 178),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
@@ -3993,7 +3992,6 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- ============ Queue / Lyrics panel (right column, below profile row) ============
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -5171,13 +5169,29 @@ function Library:CreateSpotifyPlayer()
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
-        local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -50)
-        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 5, 0, -170)
+        local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -60)
+        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 10, 0, -220)
         local lyricsPos     = bool and UDim2.new(0, 270, 0, 42)  or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
 
         Items["ProfileFrame"].Visible = bool
         Items["LyricsFrame"].Visible  = bool
+
+        if bool then
+            Items["SearchBackground"].Visible = true
+            Items["SearchResults"].Visible    = true
+        else
+            if instant then
+                Items["SearchBackground"].Visible = false
+                Items["SearchResults"].Visible    = false
+            else
+                task.delay(0.3, function()
+                    if Destroyed or IsExpanded then return end
+                    Items["SearchBackground"].Visible = false
+                    Items["SearchResults"].Visible    = false
+                end)
+            end
+        end
 
         if instant then
             player.Size = bool and ExpandedSize or CollapsedSize
