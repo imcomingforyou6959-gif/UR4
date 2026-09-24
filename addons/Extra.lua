@@ -5680,8 +5680,8 @@ function Library:CreateSpotifyPlayer()
         QueueSearch(Items["SearchInput"].Text)
     end)
 
-    local FilterOrder  = { "track", "album", "artist" }
-    local FilterLabels = { track = "Tracks", album = "Albums", artist = "Artists" }
+    local FilterOrder  = { "track", "artist" }
+    local FilterLabels = { track = "Tracks", artist = "Artists" }
     Connect(Items["FilterButton"].MouseButton1Click, function()
         local idx = table.find(FilterOrder, SearchFilter) or 1
         SearchFilter = FilterOrder[idx % #FilterOrder + 1]
