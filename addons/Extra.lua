@@ -3746,6 +3746,13 @@ function Library:CreateSpotifyPlayer()
     local SearchRequestId = 0
     local SearchDelay = 0.25
     local SearchFilter = "track"
+    local SearchPageSize    = 10
+    local SearchMaxResults  = 50
+    local SearchOffset      = 0
+    local SearchHasMore     = false
+    local SearchLoadingMore = false
+    local SearchActiveQuery = ""
+    local SearchGen         = 0
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
@@ -3957,7 +3964,7 @@ function Library:CreateSpotifyPlayer()
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4),
         HorizontalAlignment=Enum.HorizontalAlignment.Center })
 
-    for Index = 1, 8 do
+    for Index = 1, 60 do
         local Row = {}
         Row.Frame = New("Frame", {
             Name="\0", Parent=Items["SearchResults"],
@@ -5286,8 +5293,8 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
-    local function SearchTracks(q)
-        local d = MakeRequest("search?type=track&limit=8&q=" .. HttpService:UrlEncode(q))
+    local function SearchTracks(q, offset)
+        local d = MakeRequest("search?type=track&limit=" .. SearchPageSize .. "&offset=" .. (offset or 0) .. "&q=" .. HttpService:UrlEncode(q))
         local out = {}
         if not d or not d.tracks or not d.tracks.items then return out end
         for _, t in d.tracks.items do
@@ -5307,8 +5314,8 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
-    local function SearchAlbums(q)
-        local d = MakeRequest("search?type=album&limit=8&q=" .. HttpService:UrlEncode(q))
+    local function SearchAlbums(q, offset)
+        local d = MakeRequest("search?type=album&limit=" .. SearchPageSize .. "&offset=" .. (offset or 0) .. "&q=" .. HttpService:UrlEncode(q))
         local out = {}
         if not d or not d.albums or not d.albums.items then return out end
         for _, a in d.albums.items do
@@ -5329,8 +5336,8 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
-    local function SearchArtists(q)
-        local d = MakeRequest("search?type=artist&limit=8&q=" .. HttpService:UrlEncode(q))
+    local function SearchArtists(q, offset)
+        local d = MakeRequest("search?type=artist&limit=" .. SearchPageSize .. "&offset=" .. (offset or 0) .. "&q=" .. HttpService:UrlEncode(q))
         local out = {}
         if not d or not d.artists or not d.artists.items then return out end
         for _, a in d.artists.items do
@@ -5349,10 +5356,10 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
-    local function SearchByFilter(q)
-        if SearchFilter == "album" then return SearchAlbums(q) end
-        if SearchFilter == "artist" then return SearchArtists(q) end
-        return SearchTracks(q)
+    local function SearchByFilter(q, offset)
+        if SearchFilter == "album" then return SearchAlbums(q, offset) end
+        if SearchFilter == "artist" then return SearchArtists(q, offset) end
+        return SearchTracks(q, offset)
     end
 
     local function GetAlbumTracks(albumId)
@@ -5377,7 +5384,7 @@ function Library:CreateSpotifyPlayer()
                 Cover = CacheImage(albumId, coverUrl),
                 IsAlbumTrack = true,
             })
-            if #out >= 7 then break end
+            if #out >= 50 then break end
         end
         return out
     end
@@ -5527,19 +5534,56 @@ function Library:CreateSpotifyPlayer()
             end
         end
     end
-
+    
     local function RunSearch(query)
         local trimmed = (query or ""):gsub("^%s*(.-)%s*$", "%1")
         SearchAlbumBrowse = nil
+        SearchGen = SearchGen + 1
+        local myGen = SearchGen
+        SearchOffset = 0
+        SearchHasMore = false
+        SearchActiveQuery = trimmed
         if trimmed == "" then
             SearchTrackResults = {}
             SearchResults = {}
             UpdateResults()
             return
         end
-        SearchTrackResults = SearchByFilter(trimmed)
+        local results = SearchByFilter(trimmed, 0)
+        if Destroyed or myGen ~= SearchGen then return end
+        SearchTrackResults = results
         SearchResults = SearchTrackResults
+        SearchOffset = SearchPageSize
+        SearchHasMore = #results >= SearchPageSize
+        if Items["SearchResults"] then
+            Items["SearchResults"].CanvasPosition = Vector2.new()
+        end
         UpdateResults()
+    end
+
+    local function LoadMoreResults()
+        if SearchLoadingMore or not SearchHasMore then return end
+        if SearchResults ~= SearchTrackResults then return end
+        if #SearchTrackResults >= SearchMaxResults then
+            SearchHasMore = false
+            return
+        end
+        SearchLoadingMore = true
+        local myGen = SearchGen
+        task.spawn(function()
+            local more = SearchByFilter(SearchActiveQuery, SearchOffset)
+            SearchLoadingMore = false
+            if Destroyed or myGen ~= SearchGen then return end
+            for _, r in ipairs(more) do
+                if #SearchTrackResults >= SearchMaxResults then break end
+                table.insert(SearchTrackResults, r)
+            end
+            SearchOffset = SearchOffset + SearchPageSize
+            SearchHasMore = #more >= SearchPageSize and #SearchTrackResults < SearchMaxResults
+            if SearchResults == SearchTrackResults then
+                UpdateResults()
+            end
+        end)
     end
 
     local function QueueSearch(query)
@@ -5680,7 +5724,12 @@ function Library:CreateSpotifyPlayer()
                 return
             end
             if r.IsArtist then
-                local tracks = SearchTracks('artist:"' .. r.Title .. '"')
+                local tracks = {}
+                for page = 0, 2 do
+                    local chunk = SearchTracks('artist:"' .. r.Title .. '"', page * SearchPageSize)
+                    for _, tr in ipairs(chunk) do table.insert(tracks, tr) end
+                    if #chunk < SearchPageSize then break end
+                end
                 if #tracks == 0 then return end
                 for _, tr in ipairs(tracks) do tr.IsAlbumTrack = true end
                 table.insert(tracks, 1, {
@@ -5690,6 +5739,7 @@ function Library:CreateSpotifyPlayer()
                     IsBack = true,
                 })
                 SearchResults = tracks
+                Items["SearchResults"].CanvasPosition = Vector2.new()
                 UpdateResults()
                 return
             end
@@ -5703,6 +5753,7 @@ function Library:CreateSpotifyPlayer()
                     IsBack = true,
                 })
             end
+            Items["SearchResults"].CanvasPosition = Vector2.new()
             UpdateResults()
         end)
 
@@ -5723,6 +5774,13 @@ function Library:CreateSpotifyPlayer()
     end)
     Connect(Items["SearchInput"]:GetPropertyChangedSignal("Text"), function()
         QueueSearch(Items["SearchInput"].Text)
+    end)
+
+    Connect(Items["SearchResults"]:GetPropertyChangedSignal("CanvasPosition"), function()
+        local sf = Items["SearchResults"]
+        if sf.CanvasPosition.Y + sf.AbsoluteWindowSize.Y >= sf.AbsoluteCanvasSize.Y - 40 then
+            LoadMoreResults()
+        end
     end)
 
     local FilterOrder  = { "track", "artist" }
