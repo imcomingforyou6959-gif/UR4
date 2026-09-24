@@ -2795,26 +2795,30 @@ end
 
 function AM_getMaskItem()
     if AM_isDisabled() then return nil end
-    local shop = workspace.Ignored:FindFirstChild("Shop")
+
+    local ignored = workspace:FindFirstChild("Ignored")
+    if not ignored then return nil end
+
+    local shop = ignored:FindFirstChild("Shop")
     if not shop then return nil end
-    
+
     local maskItem = shop:FindFirstChild("[Surgeon Mask] - $27")
     if maskItem and maskItem:FindFirstChild("ClickDetector") then
         return maskItem
     end
-    
+
     for _, item in ipairs(shop:GetChildren()) do
         if item.Name:find("Surgeon Mask") and item:FindFirstChild("ClickDetector") then
             return item
         end
     end
-    
+
     for _, item in ipairs(shop:GetChildren()) do
         if item.Name:lower():find("mask") and item:FindFirstChild("ClickDetector") then
             return item
         end
     end
-    
+
     return nil
 end
 
@@ -3161,10 +3165,10 @@ local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
     Title = 'Skeleton Color',
     Transparency = 0
 })
-
+-- Marin ESP
 ImageESP_Objects = {}
 ImageESP_Enabled = false
-ImageESP_FilePath = "woodie\assets\images\kitagawa.webp"
+ImageESP_FilePath = "woodie/assets/images/kitagawa.webp"
 ImageESP_Config = {
     Size = 3.7,
     HeightScale = 0.9,
@@ -3173,79 +3177,95 @@ ImageESP_Config = {
     AspectRatio = Vector2.new(1.5, 1),
 }
 
+ImageESP_Cached = nil
+
 function ImageESP_LoadAsset(path)
+    if ImageESP_Cached then return ImageESP_Cached end
     local success, result = pcall(function() return getcustomasset(path) end)
-    return success and result or nil
+    if success and result then
+        ImageESP_Cached = result
+        return result
+    end
+    return nil
 end
 
 function ImageESP_Create(plr, img)
-    pcall(function()
-        local torso = plr.Character and (plr.Character:FindFirstChild("LowerTorso") or plr.Character:FindFirstChild("HumanoidRootPart"))
-        if not torso then return end
-        
-        local hipHeight = plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.HipHeight or 2
-        local size = ImageESP_Config.Size * hipHeight * ImageESP_Config.HeightScale
-        local width = size * ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y
-        
-        local part = Instance.new("Part")
-        part.Name = "ESP_" .. plr.UserId
-        part.Size = Vector3.new(width, size, size)
-        part.Transparency = 1
-        part.CanCollide = false
-        part.Anchored = true
-        part.Parent = plr.Character
-        
-        for _, face in pairs({Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right, Enum.NormalId.Top, Enum.NormalId.Bottom}) do
-            local surface = Instance.new("SurfaceGui")
-            surface.Face = face
-            surface.CanvasSize = Vector2.new(100 * (ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y), 100)
-            surface.AlwaysOnTop = true
-            surface.ZIndexBehavior = Enum.ZIndexBehavior.Global
-            surface.Parent = part
-            
-            local imgLabel = Instance.new("ImageLabel")
-            imgLabel.Size = UDim2.new(1, 0, 1, 0)
-            imgLabel.BackgroundTransparency = 1
-            imgLabel.Image = img
-            imgLabel.ScaleType = Enum.ScaleType.Fit
-            imgLabel.Parent = surface
-        end
-        
-        ImageESP_Objects[plr.UserId] = {part = part, torso = torso, player = plr}
-    end)
+    if not plr.Character then return end
+    if ImageESP_Objects[plr.UserId] then return end
+
+    local torso = plr.Character:FindFirstChild("LowerTorso") or plr.Character:FindFirstChild("HumanoidRootPart")
+    if not torso then return end
+
+    local hum = plr.Character:FindFirstChild("Humanoid")
+    local hipHeight = hum and hum.HipHeight or 2
+    local size = ImageESP_Config.Size * hipHeight * ImageESP_Config.HeightScale
+    local width = size * ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y
+
+    local part = Instance.new("Part")
+    part.Name = "ESP_" .. plr.UserId
+    part.Size = Vector3.new(width, size, size)
+    part.Transparency = 1
+    part.CanCollide = false
+    part.Anchored = true
+    part.CanQuery = false
+    part.CanTouch = false
+    part.Massless = true
+    part.Parent = workspace
+
+    for _, face in pairs({Enum.NormalId.Front, Enum.NormalId.Back, Enum.NormalId.Left, Enum.NormalId.Right, Enum.NormalId.Top, Enum.NormalId.Bottom}) do
+        local surface = Instance.new("SurfaceGui")
+        surface.Face = face
+        surface.CanvasSize = Vector2.new(100 * (ImageESP_Config.AspectRatio.X / ImageESP_Config.AspectRatio.Y), 100)
+        surface.AlwaysOnTop = true
+        surface.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        surface.Parent = part
+
+        local imgLabel = Instance.new("ImageLabel")
+        imgLabel.Size = UDim2.new(1, 0, 1, 0)
+        imgLabel.BackgroundTransparency = 1
+        imgLabel.Image = img
+        imgLabel.ScaleType = Enum.ScaleType.Fit
+        imgLabel.Parent = surface
+    end
+
+    ImageESP_Objects[plr.UserId] = { part = part, torso = torso, player = plr }
 end
 
 function ImageESP_UpdatePositions()
-    pcall(function()
-        local cam = workspace.CurrentCamera
-        if not cam then return end
-        
-        for _, data in pairs(ImageESP_Objects) do
-            if data.part and data.part.Parent and data.torso and data.torso.Parent then
-                data.part.CFrame = CFrame.new(data.torso.Position + ImageESP_Config.Offset, cam.CFrame.Position)
-            end
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+
+    for _, data in pairs(ImageESP_Objects) do
+        if data.part and data.part.Parent and data.torso and data.torso.Parent then
+            data.part.CFrame = CFrame.new(data.torso.Position + ImageESP_Config.Offset, cam.CFrame.Position)
         end
-    end)
+    end
+end
+
+function ImageESP_Remove(player)
+    local data = ImageESP_Objects[player.UserId]
+    if data and data.part then
+        data.part:Destroy()
+    end
+    ImageESP_Objects[player.UserId] = nil
 end
 
 function ImageESP_Refresh()
-    pcall(function()
-        for _, data in pairs(ImageESP_Objects) do
-            if data.part then data.part:Destroy() end
+    for _, data in pairs(ImageESP_Objects) do
+        if data.part then data.part:Destroy() end
+    end
+    table.clear(ImageESP_Objects)
+
+    if not ImageESP_Enabled then return end
+
+    local img = ImageESP_LoadAsset(ImageESP_FilePath)
+    if not img then return end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            ImageESP_Create(plr, img)
         end
-        table.clear(ImageESP_Objects)
-        
-        if not ImageESP_Enabled then return end
-        
-        local img = ImageESP_LoadAsset(ImageESP_FilePath)
-        if not img then return end
-        
-        for _, plr in pairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                ImageESP_Create(plr, img)
-            end
-        end
-    end)
+    end
 end
 
 _78:AddToggle('MarinESP', {
@@ -3257,11 +3277,6 @@ _78:AddToggle('MarinESP', {
     end,
 })
 
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.51)
-    if ImageESP_Enabled then ImageESP_Refresh() end
-end)
-
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         task.wait(0.5)
@@ -3271,26 +3286,24 @@ Players.PlayerAdded:Connect(function(plr)
         end
     end)
     plr.CharacterRemoving:Connect(function()
-        local data = ImageESP_Objects[plr.UserId]
-        if data and data.part then
-            data.part:Destroy()
-            ImageESP_Objects[plr.UserId] = nil
-        end
+        ImageESP_Remove(plr)
     end)
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
-    local data = ImageESP_Objects[plr.UserId]
-    if data and data.part then
-        data.part:Destroy()
-        ImageESP_Objects[plr.UserId] = nil
-    end
+    ImageESP_Remove(plr)
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    if ImageESP_Enabled then ImageESP_Refresh() end
 end)
 
 task.spawn(function()
-    while true do
-        if ImageESP_Enabled then ImageESP_UpdatePositions() end
-        task.wait()
+    while task.wait() do
+        if ImageESP_Enabled then
+            ImageESP_UpdatePositions()
+        end
     end
 end)
 
@@ -3299,6 +3312,7 @@ _48:OnUnload(function()
         if data.part then data.part:Destroy() end
     end
     table.clear(ImageESP_Objects)
+    ImageESP_Cached = nil
 end)
 
 -- China hat core
