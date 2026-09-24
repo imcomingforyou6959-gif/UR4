@@ -3638,7 +3638,6 @@ Players.PlayerRemoving:Connect(OnPlayerChange);
 
 function Library:CreateSpotifyPlayer()
     local Spotify = {}
-
     local InputService      = UserInputService
     local UserInputService  = UserInputService
     local Players           = game:GetService("Players")
@@ -3806,25 +3805,22 @@ function Library:CreateSpotifyPlayer()
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
         Position=UDim2.new(0, 30, 0, 250),
-        Size=CollapsedSize, BorderSizePixel=0,
+        Size=CollapsedSize,
         BackgroundColor3=Library.MainColor,
-        BorderColor3=Library.OutlineColor,
-        BorderMode=Enum.BorderMode.Inset,
+        BorderColor3=Color3.new(0, 0, 0),
         ClipsDescendants=true,
         ZIndex = 50,
-    }, { BackgroundColor3='MainColor'; BorderColor3='OutlineColor' })
+    }, { BackgroundColor3='MainColor'; BorderColor3='Black' })
     Library:MakeDraggable(Items["SpotifyPlayer"])
-
-    New("UIStroke", { Name="\0", Parent=Items["SpotifyPlayer"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.Black, Thickness=1 }, { Color='Black' })
 
     Items["InnerBacking"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0,1,0,1), Size=UDim2.new(1,-2,1,-2),
-        BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        Position=UDim2.new(0,0,0,0), Size=UDim2.new(1,0,1,0),
+        BackgroundColor3=Library.MainColor,
+        BorderColor3=Library.OutlineColor,
+        BorderMode=Enum.BorderMode.Inset,
         ZIndex=0,
-    }, { BackgroundColor3='BackgroundColor' })
+    }, { BackgroundColor3='MainColor'; BorderColor3='OutlineColor' })
 
     Items["AccentLiner"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -3935,7 +3931,6 @@ function Library:CreateSpotifyPlayer()
     })
     New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
 
-    -- ============ Search results (left column) ============
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -220),
