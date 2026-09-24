@@ -3736,7 +3736,7 @@ function Library:CreateSpotifyPlayer()
     local Token = TokenConfig.AccessToken
 
     local CollapsedSize = UDim2.new(0, 248, 0, 90)
-    local ExpandedSize  = UDim2.new(0, 540, 0, 280)
+    local ExpandedSize  = UDim2.new(0, 540, 0, 300)
     local ResultButtons = {}
     local SearchResults = {}
     local SearchTrackResults = {}
