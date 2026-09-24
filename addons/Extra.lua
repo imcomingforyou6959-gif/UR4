@@ -3746,10 +3746,12 @@ function Library:CreateSpotifyPlayer()
     local Seeking = false
     local SearchRequestId = 0
     local SearchDelay = 0.25
+    local SearchFilter = "track"
     local IsVisible = true
     local CustomPosition
     local LastKnownPlaying = false
     local CoverSpin = 0
+    local CoverSpeed = 0
     local SkippingTo = false
 
     local LyricsCache           = {}
@@ -3768,6 +3770,8 @@ function Library:CreateSpotifyPlayer()
     local PlayUri
     local AddToQueue
     local RefreshSoon
+    local MakeRequest
+    local LoadRecent
 
     local Items = {}
     local Icons = {}
@@ -3832,9 +3836,10 @@ function Library:CreateSpotifyPlayer()
 
     Items["SearchBackground"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0, 10, 0, -40),
+        Position=UDim2.new(0, 10, 0, -60),
         Size=UDim2.new(0, 250, 0, 24),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
+        Visible=false,
         ZIndex=1,
     }, { BackgroundColor3='BackgroundColor' })
 
@@ -3847,8 +3852,8 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["SearchBackground"],
         AnchorPoint=Vector2.new(0,0.5),
         PlaceholderColor3=ThemeInactiveText,
-        PlaceholderText="search songs, artists, albums",
-        Size=UDim2.new(1,-12,0,15),
+        PlaceholderText="search spotify",
+        Size=UDim2.new(1,-66,0,15),
         TextColor3=Library.FontColor, Text="",
         BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
@@ -3856,6 +3861,19 @@ function Library:CreateSpotifyPlayer()
         ClearTextOnFocus=false, BorderSizePixel=0,
         ZIndex=2,
     }, { TextColor3='FontColor' })
+
+    Items["FilterButton"] = New("TextButton", {
+        Name="\0", Font=Library.Font, TextSize=13,
+        Parent=Items["SearchBackground"],
+        AnchorPoint=Vector2.new(1,0.5),
+        Position=UDim2.new(1,-4,0.5,0),
+        Size=UDim2.new(0,54,0,18),
+        BackgroundTransparency=1, AutoButtonColor=false,
+        TextColor3=Library.AccentColor, Text="Tracks",
+        TextXAlignment=Enum.TextXAlignment.Right,
+        BorderSizePixel=0,
+        ZIndex=2,
+    }, { TextColor3='AccentColor' })
 
     Items["ProfileFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -3918,15 +3936,17 @@ function Library:CreateSpotifyPlayer()
     })
     New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
 
+    -- ============ Search results (left column) ============
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0, 10, 0, -210),
+        Position=UDim2.new(0, 10, 0, -220),
         Size=UDim2.new(0, 250, 0, 178),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
         ScrollBarThickness=0,
         BackgroundColor3=Library.MainColor,
+        Visible=false,
         ZIndex=1,
     }, { BackgroundColor3='MainColor' })
 
@@ -3992,6 +4012,7 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
+    -- ============ Queue / Recent / Lyrics panel (right column) ============
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -4011,17 +4032,27 @@ function Library:CreateSpotifyPlayer()
         Text="Queue", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Left,
         Position=UDim2.new(0,8,0,6),
-        Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        Size=UDim2.new(0.34,-8,0,14), BorderSizePixel=0,
         ZIndex=2,
     }, { TextColor3='AccentColor' })
+
+    Items["RecentTab"] = New("TextButton", {
+        Name="\0", Font=Library.Font, TextSize=14,
+        Parent=Items["LyricsFrame"], TextColor3=ThemeInactiveText,
+        Text="Recent", BackgroundTransparency=1, AutoButtonColor=false,
+        TextXAlignment=Enum.TextXAlignment.Center,
+        Position=UDim2.new(0.33,0,0,6),
+        Size=UDim2.new(0.34,0,0,14), BorderSizePixel=0,
+        ZIndex=2,
+    })
 
     Items["LyricsTab"] = New("TextButton", {
         Name="\0", Font=Library.Font, TextSize=14,
         Parent=Items["LyricsFrame"], TextColor3=ThemeInactiveText,
         Text="Lyrics", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Right,
-        Position=UDim2.new(0.5,0,0,6),
-        Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        Position=UDim2.new(0.66,0,0,6),
+        Size=UDim2.new(0.34,-8,0,14), BorderSizePixel=0,
         ZIndex=2,
     })
 
@@ -4368,13 +4399,16 @@ function Library:CreateSpotifyPlayer()
                 RefreshSoon()
             end
         end)
-        AddContextOption("Add to queue", function(t)
-            if t.Uri and t.Uri ~= "" then
-                AddToQueue(t.Uri)
-                Library:Notify("Added to queue", 2)
-                RefreshSoon()
-            end
-        end)
+
+        if track.Uri and track.Uri:find("^spotify:track:") then
+            AddContextOption("Add to queue", function(t)
+                if t.Uri and t.Uri ~= "" then
+                    AddToQueue(t.Uri)
+                    Library:Notify("Added to queue", 2)
+                    RefreshSoon()
+                end
+            end)
+        end
 
         local viewport = workspace.CurrentCamera.ViewportSize
         local menuSize = ContextMenuFrame.AbsoluteSize
@@ -4397,6 +4431,127 @@ function Library:CreateSpotifyPlayer()
             CloseContextMenu()
         end
     end)
+
+    -- ============ Recent tab list ============
+    Items["RecentScroll"] = New("ScrollingFrame", {
+        Name="\0", Parent=Items["LyricsFrame"],
+        Position=UDim2.new(0,8,0,24),
+        Size=UDim2.new(1,-16,1,-32),
+        BorderSizePixel=0, BackgroundTransparency=1,
+        CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y,
+        ScrollingDirection=Enum.ScrollingDirection.Y,
+        ScrollBarThickness=1,
+        ScrollBarImageColor3=Library.OutlineColor,
+        Visible=false,
+        ZIndex=2,
+    }, { ScrollBarImageColor3='OutlineColor' })
+
+    New("UIListLayout", { Name="\0", Parent=Items["RecentScroll"],
+        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2),
+        HorizontalAlignment=Enum.HorizontalAlignment.Center })
+
+    Items["RecentEmpty"] = New("TextLabel", {
+        Name="\0", Font=Library.Font, TextSize=14,
+        Parent=Items["RecentScroll"], TextColor3=ThemeInactiveText,
+        Text="Loading recent tracks…",
+        BackgroundTransparency=1,
+        TextXAlignment=Enum.TextXAlignment.Left,
+        TextYAlignment=Enum.TextYAlignment.Top,
+        Size=UDim2.new(1,-8,0,20),
+        BorderSizePixel=0, TextWrapped=true,
+        ZIndex=2,
+    })
+
+    local RecentRows = {}
+    for Index = 1, 12 do
+        local Row = {}
+        Row.Frame = New("Frame", {
+            Name="\0", Parent=Items["RecentScroll"],
+            Size=UDim2.new(1,-8,0,38),
+            BorderSizePixel=0, BackgroundTransparency=1,
+            BackgroundColor3=Library.MainColor, Visible=false,
+            ZIndex=2,
+        })
+        Row.Cover = New("ImageLabel", {
+            Name="\0", Parent=Row.Frame,
+            Image=PlaceholderImage, BackgroundTransparency=1,
+            ScaleType=Enum.ScaleType.Crop,
+            Size=UDim2.new(0,30,0,30),
+            Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
+            ZIndex=2,
+        })
+        New("UICorner", { Name="\0", Parent=Row.Cover, CornerRadius=UDim.new(0,3) })
+        Row.Title = New("TextLabel", {
+            Name="\0", Font=Library.Font, TextSize=14,
+            Parent=Row.Frame, TextColor3=Library.FontColor,
+            Text="", BackgroundTransparency=1,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            Position=UDim2.new(0,40,0,2),
+            Size=UDim2.new(1,-44,0,17),
+            BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
+        }, { TextColor3='FontColor' })
+        Row.Artist = New("TextLabel", {
+            Name="\0", Font=Library.Font, TextSize=14,
+            Parent=Row.Frame, TextColor3=ThemeInactiveText,
+            Text="", BackgroundTransparency=1,
+            TextXAlignment=Enum.TextXAlignment.Left,
+            Position=UDim2.new(0,40,0,19),
+            Size=UDim2.new(1,-44,0,16),
+            BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+            ZIndex=2,
+        })
+        Row.Button = New("TextButton", {
+            Name="\0", Parent=Row.Frame,
+            Size=UDim2.new(1,0,1,0),
+            BorderSizePixel=0, BackgroundTransparency=1, Text="",
+            ZIndex=3,
+        })
+        Connect(Row.Button.MouseEnter, function()
+            if Row.Frame.Visible then
+                Tween(Row.Frame, { BackgroundTransparency = 0.85, BackgroundColor3 = Library.AccentColor }, TweenInfo.new(0.1))
+            end
+        end)
+        Connect(Row.Button.MouseLeave, function()
+            Tween(Row.Frame, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
+        end)
+        Connect(Row.Button.MouseButton1Click, function()
+            if not Row.Frame.Visible or not Row.Track then return end
+            PlayUri(Row.Track.Uri)
+            RefreshSoon()
+        end)
+        Connect(Row.Button.MouseButton2Click, function()
+            if not Row.Frame.Visible or not Row.Track then return end
+            local mouse = UserInputService:GetMouseLocation()
+            ShowContextMenu(Row.Track, mouse.X, mouse.Y)
+        end)
+        Row.Track = nil
+        RecentRows[Index] = Row
+    end
+
+    local function SetRecentDisplay(tracks, emptyText)
+        local count = 0
+        if type(tracks) == "table" then
+            for _, t in ipairs(tracks) do
+                if count >= #RecentRows then break end
+                count = count + 1
+                local row = RecentRows[count]
+                row.Frame.Visible = true
+                row.Cover.Image   = t.Cover or PlaceholderImage
+                row.Title.Text    = t.Title or "Unknown track"
+                row.Artist.Text   = t.Artist or "Unknown artist"
+                row.Track         = t
+            end
+        end
+        for i = count + 1, #RecentRows do
+            RecentRows[i].Frame.Visible = false
+            RecentRows[i].Track = nil
+        end
+        Items["RecentEmpty"].Visible = (count == 0)
+        if count == 0 then
+            Items["RecentEmpty"].Text = emptyText or "No recent tracks."
+        end
+    end
 
     local function FormatTime(ms)
         local total = math.max(math.floor((ms or 0) / 1000), 0)
@@ -4772,13 +4927,21 @@ function Library:CreateSpotifyPlayer()
 
     local function SetSidebarTab(name)
         SidebarTab = name
-        local isQueue = name == "queue"
-        Items["QueueTab"].TextColor3  = isQueue and Library.AccentColor or ThemeInactiveText
-        Items["LyricsTab"].TextColor3 = (not isQueue) and Library.AccentColor or ThemeInactiveText
+        local isQueue  = name == "queue"
+        local isRecent = name == "recent"
+        local isLyrics = name == "lyrics"
+        Items["QueueTab"].TextColor3  = isQueue  and Library.AccentColor or ThemeInactiveText
+        Items["RecentTab"].TextColor3 = isRecent and Library.AccentColor or ThemeInactiveText
+        Items["LyricsTab"].TextColor3 = isLyrics and Library.AccentColor or ThemeInactiveText
         Items["QueueScroll"].Visible  = isQueue
-        Items["LyricsScroll"].Visible = not isQueue
+        Items["RecentScroll"].Visible = isRecent
+        Items["LyricsScroll"].Visible = isLyrics
 
-        if not isQueue then
+        if isRecent then
+            LoadRecent()
+        end
+
+        if isLyrics then
             if CurrentTrack and not CurrentLyricsLoading then
                 if CurrentLyricsTrackId ~= CurrentTrack.TrackId or #CurrentLyrics == 0 then
                     LoadLyricsForTrack(CurrentTrack)
@@ -4846,6 +5009,9 @@ function Library:CreateSpotifyPlayer()
             if SidebarTab == "lyrics" then
                 LoadLyricsForTrack(data)
             end
+            if SidebarTab == "recent" then
+                LoadRecent()
+            end
         end
     end
 
@@ -4889,7 +5055,7 @@ function Library:CreateSpotifyPlayer()
         return RefreshAccessToken()
     end
 
-    local function MakeRequest(url, method, retryOnAuth, body)
+    function MakeRequest(url, method, retryOnAuth, body)
         if Destroyed then return nil end
         if not Request or not EnsureAccessToken() or Token == "" then return nil end
         local reqBody = body
@@ -4977,6 +5143,44 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
+    local RecentLoading = false
+    function LoadRecent()
+        if RecentLoading or Destroyed then return end
+        RecentLoading = true
+        task.spawn(function()
+            local d = MakeRequest("me/player/recently-played?limit=20")
+            RecentLoading = false
+            if Destroyed then return end
+
+            if type(d) ~= "table" or type(d.items) ~= "table" then
+                SetRecentDisplay(nil, "Couldn't load recent tracks. Your token may need the user-read-recently-played scope.")
+                return
+            end
+
+            local out, seen = {}, {}
+            for _, entry in ipairs(d.items) do
+                local t = entry.track
+                if t and t.id and not seen[t.id] then
+                    seen[t.id] = true
+                    local artists = {}
+                    for _, a in t.artists or {} do table.insert(artists, a.name) end
+                    local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
+                        or t.album and t.album.images and t.album.images[2] and t.album.images[2].url
+                    table.insert(out, {
+                        Title = t.name or "Unknown track",
+                        Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
+                        Album = t.album and t.album.name or "Unknown album",
+                        AlbumId = t.album and t.album.id or "",
+                        Uri = t.uri or "",
+                        Cover = CacheImage(t.album and t.album.id or t.id, coverUrl),
+                    })
+                    if #out >= #RecentRows then break end
+                end
+            end
+            SetRecentDisplay(out, "No recent tracks.")
+        end)
+    end
+
     local function GetUserProfile()
         if UserProfile then return UserProfile end
         if ProfileLoading then return nil end
@@ -5062,6 +5266,54 @@ function Library:CreateSpotifyPlayer()
         return out
     end
 
+    local function SearchAlbums(q)
+        local d = MakeRequest("search?type=album&limit=8&q=" .. HttpService:UrlEncode(q))
+        local out = {}
+        if not d or not d.albums or not d.albums.items then return out end
+        for _, a in d.albums.items do
+            local artists = {}
+            for _, ar in a.artists or {} do table.insert(artists, ar.name) end
+            local coverUrl = a.images and a.images[3] and a.images[3].url
+                or a.images and a.images[2] and a.images[2].url
+                or a.images and a.images[1] and a.images[1].url
+            table.insert(out, {
+                Title = a.name or "Unknown album",
+                Album = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
+                Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
+                AlbumId = a.id or "",
+                Uri = a.uri or "",
+                Cover = CacheImage(a.id, coverUrl),
+            })
+        end
+        return out
+    end
+
+    local function SearchArtists(q)
+        local d = MakeRequest("search?type=artist&limit=8&q=" .. HttpService:UrlEncode(q))
+        local out = {}
+        if not d or not d.artists or not d.artists.items then return out end
+        for _, a in d.artists.items do
+            local coverUrl = a.images and a.images[3] and a.images[3].url
+                or a.images and a.images[2] and a.images[2].url
+                or a.images and a.images[1] and a.images[1].url
+            table.insert(out, {
+                Title = a.name or "Unknown artist",
+                Album = "Artist",
+                Artist = a.name or "Unknown artist",
+                Uri = a.uri or "",
+                Cover = CacheImage("artist_" .. tostring(a.id or a.name), coverUrl),
+                IsArtist = true,
+            })
+        end
+        return out
+    end
+
+    local function SearchByFilter(q)
+        if SearchFilter == "album" then return SearchAlbums(q) end
+        if SearchFilter == "artist" then return SearchArtists(q) end
+        return SearchTracks(q)
+    end
+
     local function GetAlbumTracks(albumId)
         local out = {}
         if not albumId or albumId == "" then return out end
@@ -5107,7 +5359,10 @@ function Library:CreateSpotifyPlayer()
 
     function PlayUri(uri)
         if not uri or uri == "" then return nil end
-        return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
+        if uri:find("^spotify:track:") then
+            return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
+        end
+        return MakeRequest("me/player/play", "PUT", true, { context_uri = uri })
     end
 
     function AddToQueue(uri)
@@ -5237,7 +5492,7 @@ function Library:CreateSpotifyPlayer()
             UpdateResults()
             return
         end
-        SearchTrackResults = SearchTracks(trimmed)
+        SearchTrackResults = SearchByFilter(trimmed)
         SearchResults = SearchTrackResults
         UpdateResults()
     end
@@ -5298,6 +5553,7 @@ function Library:CreateSpotifyPlayer()
         SearchResults = {}
         SearchTrackResults = {}
         QueueRows = {}
+        RecentRows = {}
         ResultButtons = {}
         Items = {}
         Icons = {}
@@ -5378,6 +5634,20 @@ function Library:CreateSpotifyPlayer()
                 RefreshSoon()
                 return
             end
+            if r.IsArtist then
+                local tracks = SearchTracks('artist:"' .. r.Title .. '"')
+                if #tracks == 0 then return end
+                for _, tr in ipairs(tracks) do tr.IsAlbumTrack = true end
+                table.insert(tracks, 1, {
+                    Title = "< Back",
+                    Album = r.Title,
+                    Cover = r.Cover,
+                    IsBack = true,
+                })
+                SearchResults = tracks
+                UpdateResults()
+                return
+            end
             SearchAlbumBrowse = r.AlbumId
             SearchResults = GetAlbumTracks(r.AlbumId)
             if #SearchResults > 0 then
@@ -5410,8 +5680,22 @@ function Library:CreateSpotifyPlayer()
         QueueSearch(Items["SearchInput"].Text)
     end)
 
+    local FilterOrder  = { "track", "album", "artist" }
+    local FilterLabels = { track = "Tracks", album = "Albums", artist = "Artists" }
+    Connect(Items["FilterButton"].MouseButton1Click, function()
+        local idx = table.find(FilterOrder, SearchFilter) or 1
+        SearchFilter = FilterOrder[idx % #FilterOrder + 1]
+        Items["FilterButton"].Text = FilterLabels[SearchFilter]
+        SearchRequestId = SearchRequestId + 1
+        RunSearch(Items["SearchInput"].Text)
+    end)
+
     Connect(Items["QueueTab"].MouseButton1Click, function()
         SetSidebarTab("queue")
+    end)
+
+    Connect(Items["RecentTab"].MouseButton1Click, function()
+        SetSidebarTab("recent")
     end)
 
     Connect(Items["LyricsTab"].MouseButton1Click, function()
@@ -5545,10 +5829,14 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
+    -- cover spin: eases up to speed when playing, glides to a stop when paused
     task.spawn(function()
         while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
-            if CurrentTrack and LastKnownPlaying then
-                CoverSpin = (CoverSpin + 0.8) % 360
+            local target = (CurrentTrack and LastKnownPlaying) and 0.8 or 0
+            CoverSpeed = CoverSpeed + (target - CoverSpeed) * 0.06
+            if target == 0 and CoverSpeed < 0.005 then CoverSpeed = 0 end
+            if CoverSpeed > 0 then
+                CoverSpin = (CoverSpin + CoverSpeed) % 360
                 if Items["Cover"] and Items["Cover"].Parent then
                     Items["Cover"].Rotation = CoverSpin
                 end
