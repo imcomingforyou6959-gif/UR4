@@ -4316,7 +4316,6 @@ function Library:CreateSpotifyPlayer()
         Icons["Previous"].Rotation = 180
     end
 
-    -- ============ Volume (vertical, on the right edge) ============
     Items["VolumeBar"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         AnchorPoint=Vector2.new(1,0),
@@ -4334,6 +4333,9 @@ function Library:CreateSpotifyPlayer()
         BackgroundColor3=Library.AccentColor,
         ZIndex=6,
     }, { BackgroundColor3='AccentColor' })
+
+    New("UICorner", { Name="\0", Parent=Items["VolumeBar"],  CornerRadius=UDim.new(0.5, 0) })
+    New("UICorner", { Name="\0", Parent=Items["VolumeFill"], CornerRadius=UDim.new(0.5, 0) })
 
     Items["VolumeHitbox"] = New("TextButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
