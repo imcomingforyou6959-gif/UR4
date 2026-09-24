@@ -354,16 +354,6 @@ function Library:RemoveFromRegistry(Instance)
 end;
 
 function Library:UpdateColorsUsingRegistry()
-    -- TODO: Could have an 'active' list of objects
-    -- where the active list only contains Visible objects.
-
-    -- IMPL: Could setup .Changed events on the AddToRegistry function
-    -- that listens for the 'Visible' propert being changed.
-    -- Visible: true => Add to active list, and call UpdateColors function
-    -- Visible: false => Remove from active list.
-
-    -- The above would be especially efficient for a rainbow menu color or live color-changing.
-
     for Idx, Object in next, Library.Registry do
         for Property, ColorIdx in next, Object.Properties do
             if type(ColorIdx) == 'string' then
@@ -376,18 +366,15 @@ function Library:UpdateColorsUsingRegistry()
 end;
 
 function Library:GiveSignal(Signal)
-    -- Only used for signals not attached to library instances, as those should be cleaned up on object destruction by Roblox
     table.insert(Library.Signals, Signal)
 end
 
 function Library:Unload()
-    -- Unload all of the signals
     for Idx = #Library.Signals, 1, -1 do
         local Connection = table.remove(Library.Signals, Idx)
         Connection:Disconnect()
     end
 
-     -- Call our unload callback, maybe to undo some hooks etc
     if Library.OnUnload then
         Library.OnUnload()
     end
@@ -412,7 +399,6 @@ do
 
     function Funcs:AddColorPicker(Idx, Info)
         local ToggleLabel = self.TextLabel;
-        -- local Container = self.Container;
 
         assert(Info.Default, 'AddColorPicker: Missing default value.');
 
@@ -443,7 +429,6 @@ do
             Parent = ToggleLabel;
         });
 
-        -- Transparency image taken from https://github.com/matas3535/SplixPrivateDrawingLibrary/blob/main/Library.lua cus i'm lazy
         local CheckerFrame = Library:Create('ImageLabel', {
             BorderSizePixel = 0;
             Size = UDim2.new(0, 27, 0, 13);
@@ -655,12 +640,11 @@ do
             Position = UDim2.fromOffset(5, 5);
             TextXAlignment = Enum.TextXAlignment.Left;
             TextSize = 14;
-            Text = ColorPicker.Title,--Info.Default;
+            Text = ColorPicker.Title;
             TextWrapped = false;
             ZIndex = 16;
             Parent = PickerFrameInner;
         });
-
 
         local ContextMenu = {}
         do
@@ -776,7 +760,6 @@ do
                 ColorPicker:SetValueRGB(Library.ColorClipboard)
             end)
 
-
             ContextMenu:AddOption('Copy HEX', function()
                 pcall(setclipboard, ColorPicker.Value:ToHex())
                 Library:Notify('Copied hex code to clipboard!', 2)
@@ -786,7 +769,6 @@ do
                 pcall(setclipboard, table.concat({ math.floor(ColorPicker.Value.R * 255), math.floor(ColorPicker.Value.G * 255), math.floor(ColorPicker.Value.B * 255) }, ', '))
                 Library:Notify('Copied RGB values to clipboard!', 2)
             end)
-
         end
 
         Library:AddToRegistry(PickerFrameInner, { BackgroundColor3 = 'BackgroundColor'; BorderColor3 = 'OutlineColor'; });
@@ -1006,7 +988,7 @@ do
         local KeyPicker = {
             Value = Info.Default;
             Toggled = false;
-            Mode = Info.Mode or 'Toggle'; -- Always, Toggle, Hold
+            Mode = Info.Mode or 'Toggle';
             Type = 'KeyPicker';
             Callback = Info.Callback or function(Value) end;
             ChangedCallback = Info.ChangedCallback or function(New) end;
@@ -1131,7 +1113,7 @@ do
                 if Input.UserInputType == Enum.UserInputType.MouseButton1 then
                     ModeButton:Select();
                     Library:AttemptSave();
-                end;
+                end
             end);
 
             if Mode == KeyPicker.Mode then
@@ -1284,7 +1266,7 @@ do
             end;
         end);
 
-                Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+        Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
             if (not Picking) then
                 if KeyPicker.Mode == 'Toggle' then
                     local Key = KeyPicker.Value;
@@ -1408,7 +1390,6 @@ do
     end;
 
     function Funcs:AddButton(...)
-        -- TODO: Eventually redo this
         local Button = {};
         local function ProcessButtonParams(Class, Obj, ...)
             local Props = select(1, ...)
@@ -1554,7 +1535,6 @@ do
             end
             return self
         end
-
 
         function Button:AddButton(...)
             local SubButton = {}
@@ -1763,28 +1743,20 @@ do
             end);
         end
 
-        -- https://devforum.roblox.com/t/how-to-make-textboxes-follow-current-cursor-position/1368429/6
-        -- thank you nicemike40 :)
-
         local function Update()
             local PADDING = 2
             local reveal = Container.AbsoluteSize.X
 
             if not Box:IsFocused() or Box.TextBounds.X <= reveal - 2 * PADDING then
-                -- we aren't focused, or we fit so be normal
                 Box.Position = UDim2.new(0, PADDING, 0, 0)
             else
-                -- we are focused and don't fit, so adjust position
                 local cursor = Box.CursorPosition
                 if cursor ~= -1 then
-                    -- calculate pixel width of text from start to cursor
                     local subtext = string.sub(Box.Text, 1, cursor-1)
                     local width = TextService:GetTextSize(subtext, Box.TextSize, Box.Font, Vector2.new(math.huge, math.huge)).X
 
-                    -- check if we're inside the box with the cursor
                     local currentCursorPos = Box.Position.X.Offset + width
 
-                    -- adjust if necessary
                     if currentCursorPos < PADDING then
                         Box.Position = UDim2.fromOffset(PADDING-width, 0)
                     elseif currentCursorPos > reveal - PADDING - 1 then
@@ -1930,7 +1902,7 @@ do
 
         ToggleRegion.InputBegan:Connect(function(Input)
             if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                Toggle:SetValue(not Toggle.Value) -- Why was it not like this from the start?
+                Toggle:SetValue(not Toggle.Value)
                 Library:AttemptSave();
             end;
         end);
@@ -2091,7 +2063,6 @@ do
                 return math.floor(Value);
             end;
 
-
             return tonumber(string.format('%.' .. Slider.Rounding .. 'f', Value))
         end;
 
@@ -2173,7 +2144,7 @@ do
             Value = Info.Multi and {};
             Multi = Info.Multi;
             Type = 'Dropdown';
-            SpecialType = Info.SpecialType; -- can be either 'Player' or 'Team'
+            SpecialType = Info.SpecialType;
             Callback = Info.Callback or function(Value) end;
         };
 
@@ -2682,7 +2653,6 @@ do
     end;
 end;
 
--- < Create other UI elements >
 do
     Library.NotificationArea = Library:Create('Frame', {
         BackgroundTransparency = 1;
@@ -2760,8 +2730,6 @@ do
     Library.Watermark = WatermarkOuter;
     Library.WatermarkText = WatermarkLabel;
     Library:MakeDraggable(Library.Watermark);
-
-
 
     local KeybindOuter = Library:Create('Frame', {
         AnchorPoint = Vector2.new(0, 0.5);
@@ -3206,7 +3174,6 @@ function Library:CreateWindow(...)
             local BoxInner = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Color3.new(0, 0, 0);
-                -- BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, -2, 1, -2);
                 Position = UDim2.new(0, 1, 0, 1);
                 ZIndex = 4;
@@ -3306,7 +3273,6 @@ function Library:CreateWindow(...)
             local BoxInner = Library:Create('Frame', {
                 BackgroundColor3 = Library.BackgroundColor;
                 BorderColor3 = Color3.new(0, 0, 0);
-                -- BorderMode = Enum.BorderMode.Inset;
                 Size = UDim2.new(1, -2, 1, -2);
                 Position = UDim2.new(0, 1, 0, 1);
                 ZIndex = 4;
@@ -3462,7 +3428,6 @@ function Library:CreateWindow(...)
                 Tab:AddBlank(3);
                 Tab:Resize();
 
-                -- Show first tab (number is 2 cus of the UIListLayout that also sits in that instance)
                 if #TabboxButtons:GetChildren() == 2 then
                     Tab:Show();
                 end;
@@ -3489,7 +3454,6 @@ function Library:CreateWindow(...)
             end;
         end);
 
-        -- This was the first tab added, so we show it by default.
         if #TabContainer:GetChildren() == 1 then
             Tab:ShowTab();
         end;
@@ -3522,11 +3486,9 @@ function Library:CreateWindow(...)
         ModalElement.Modal = Toggled;
 
         if Toggled then
-            -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
 
             task.spawn(function()
-                -- TODO: add cursor fade?
                 local State = InputService.MouseIconEnabled;
 
                 local Cursor = Drawing.new('Triangle');
@@ -3751,6 +3713,7 @@ function Library:CreateSpotifyPlayer()
     local LastKnownPlaying = false
     local CoverSpin = 0
     local SkippingTo = false
+    local CurrentContextUri = nil
 
     local LyricsCache           = {}
     local CurrentLyrics         = {}
@@ -3843,7 +3806,7 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["SearchBackground"],
         AnchorPoint=Vector2.new(0,0.5),
         PlaceholderColor3=ThemeInactiveText,
-        PlaceholderText="Search songs, artists, albums",
+        PlaceholderText="Search songs, artists, albums, playlists",
         Size=UDim2.new(1,-12,0,15),
         TextColor3=Library.FontColor, Text="",
         BackgroundTransparency=1,
@@ -4046,23 +4009,16 @@ function Library:CreateSpotifyPlayer()
             if not t or not t.Uri or t.Uri == "" then return end
             SkippingTo = true
             task.spawn(function()
-                pcall(function()
-                    local d = MakeRequest("me/player")
-                    local contextUri = nil
-                    if type(d) == "table" and type(d.context) == "table" then
-                        contextUri = d.context.uri
-                    end
-                    if contextUri and contextUri ~= "" then
-                        MakeRequest("me/player/play", "PUT", true, {
-                            context_uri = contextUri,
-                            offset = { uri = t.Uri },
-                            position_ms = 0,
-                        })
-                    else
-                        PlayUri(t.Uri)
-                    end
-                end)
-                task.wait(0.7)
+                if CurrentContextUri and CurrentContextUri ~= "" then
+                    MakeRequest("me/player/play", "PUT", true, {
+                        context_uri = CurrentContextUri,
+                        offset = { uri = t.Uri },
+                        position_ms = 0,
+                    })
+                else
+                    PlayUri(t.Uri)
+                end
+                task.wait(0.4)
                 SkippingTo = false
                 Spotify:Refresh()
             end)
@@ -4298,6 +4254,7 @@ function Library:CreateSpotifyPlayer()
 
         AddContextOption("Play now", function(t)
             if t.Uri and t.Uri ~= "" then
+                CurrentContextUri = nil
                 PlayUri(t.Uri)
                 RefreshSoon()
             end
@@ -4309,6 +4266,19 @@ function Library:CreateSpotifyPlayer()
                 RefreshSoon()
             end
         end)
+        if track and track.ContextUri then
+            AddContextOption("Play in context", function(t)
+                if t.Uri and t.Uri ~= "" and t.ContextUri then
+                    CurrentContextUri = t.ContextUri
+                    MakeRequest("me/player/play", "PUT", true, {
+                        context_uri = t.ContextUri,
+                        offset = { uri = t.Uri },
+                        position_ms = 0,
+                    })
+                    RefreshSoon()
+                end
+            end)
+        end
 
         local viewport = workspace.CurrentCamera.ViewportSize
         local menuSize = ContextMenuFrame.AbsoluteSize
@@ -4513,8 +4483,6 @@ function Library:CreateSpotifyPlayer()
 
     local function ScrollToActiveLine(activeIndex, myGen)
         task.spawn(function()
-            -- Wait for layout: TextBounds and viewport need to be computed.
-            -- This prevents the very first scroll from silently bailing.
             local attempts = 0
             while attempts < 30 do
                 if Destroyed then return end
@@ -4922,14 +4890,41 @@ function Library:CreateSpotifyPlayer()
             local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
                 or t.album and t.album.images and t.album.images[2] and t.album.images[2].url
             for _, a in t.artists or {} do table.insert(artists, a.name) end
+            local albumId = t.album and t.album.id or ""
             table.insert(out, {
                 Title = t.name or "Unknown track",
                 Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
                 Album = t.album and t.album.name or "Unknown album",
-                AlbumId = t.album and t.album.id or "",
+                AlbumId = albumId,
                 Uri = t.uri or "",
-                Cover = CacheImage(t.album and t.album.id or t.id, coverUrl),
+                ContextUri = albumId ~= "" and ("spotify:album:" .. albumId) or nil,
+                Cover = CacheImage(albumId ~= "" and albumId or t.id, coverUrl),
             })
+        end
+        return out
+    end
+
+    local function SearchPlaylists(q)
+        local d = MakeRequest("search?type=playlist&limit=4&q=" .. HttpService:UrlEncode(q))
+        local out = {}
+        if not d or not d.playlists or not d.playlists.items then return out end
+        for _, p in ipairs(d.playlists.items) do
+            if p and p.id and p.name then
+                local coverUrl = p.images and p.images[2] and p.images[2].url
+                    or p.images and p.images[1] and p.images[1].url
+                local owner = p.owner and p.owner.display_name or "Unknown"
+                local total = p.tracks and p.tracks.total or 0
+                table.insert(out, {
+                    Title = p.name,
+                    Artist = owner .. " · " .. tostring(total) .. " tracks",
+                    Album = "Playlist",
+                    PlaylistId = p.id,
+                    ContextUri = "spotify:playlist:" .. p.id,
+                    Uri = p.uri or ("spotify:playlist:" .. p.id),
+                    Cover = CacheImage("pl_" .. p.id, coverUrl),
+                    IsPlaylist = true,
+                })
+            end
         end
         return out
     end
@@ -4944,6 +4939,7 @@ function Library:CreateSpotifyPlayer()
         local coverUrl = d.images and d.images[3] and d.images[3].url
             or d.images and d.images[2] and d.images[2].url
             or d.images and d.images[1] and d.images[1].url
+        local contextUri = "spotify:album:" .. albumId
         for _, t in d.tracks.items do
             local artists = {}
             for _, a in t.artists or {} do table.insert(artists, a.name) end
@@ -4953,10 +4949,41 @@ function Library:CreateSpotifyPlayer()
                 Album = d.name or "Unknown album",
                 AlbumId = albumId,
                 Uri = t.uri or "",
+                ContextUri = contextUri,
                 Cover = CacheImage(albumId, coverUrl),
                 IsAlbumTrack = true,
             })
             if #out >= 7 then break end
+        end
+        return out
+    end
+
+    local function GetPlaylistTracks(playlistId)
+        local out = {}
+        if not playlistId or playlistId == "" then return out end
+        local d = MakeRequest("playlists/" .. playlistId .. "/tracks?limit=50")
+        if not d or type(d) ~= "table" or type(d.items) ~= "table" then return out end
+        local contextUri = "spotify:playlist:" .. playlistId
+        for _, item in ipairs(d.items) do
+            local t = item and item.track
+            if t and t.uri then
+                local artists = {}
+                for _, a in t.artists or {} do table.insert(artists, a.name) end
+                local coverUrl = t.album and t.album.images and t.album.images[3] and t.album.images[3].url
+                    or t.album and t.album.images and t.album.images[2] and t.album.images[2].url
+                local albumId = t.album and t.album.id or ""
+                table.insert(out, {
+                    Title = t.name or "Unknown track",
+                    Artist = #artists > 0 and table.concat(artists, ", ") or "Unknown artist",
+                    Album = t.album and t.album.name or "Unknown album",
+                    AlbumId = albumId,
+                    Uri = t.uri,
+                    ContextUri = contextUri,
+                    Cover = CacheImage(albumId ~= "" and albumId or t.id, coverUrl),
+                    IsPlaylistTrack = true,
+                })
+                if #out >= 7 then break end
+            end
         end
         return out
     end
@@ -4982,6 +5009,17 @@ function Library:CreateSpotifyPlayer()
         return MakeRequest("me/player/play", "PUT", true, { uris = { uri } })
     end
 
+    local function PlayInContext(contextUri, trackUri)
+        if not contextUri or contextUri == "" then
+            return PlayUri(trackUri)
+        end
+        return MakeRequest("me/player/play", "PUT", true, {
+            context_uri = contextUri,
+            offset = { uri = trackUri },
+            position_ms = 0,
+        })
+    end
+
     function AddToQueue(uri)
         if not uri or uri == "" then return nil end
         return MakeRequest(
@@ -4999,6 +5037,10 @@ function Library:CreateSpotifyPlayer()
                 btn.Title.Text        = r.Title
                 if r.IsBack then
                     btn.Album.Text = r.Album or "Return to search results"
+                elseif r.IsPlaylist then
+                    btn.Album.Text = "Playlist · " .. (r.Artist or "")
+                elseif r.IsPlaylistTrack then
+                    btn.Album.Text = r.Artist
                 elseif r.IsAlbumTrack then
                     btn.Album.Text = r.Artist
                 else
@@ -5080,8 +5122,13 @@ function Library:CreateSpotifyPlayer()
             UpdateResults()
             return
         end
-        SearchTrackResults = SearchTracks(trimmed)
-        SearchResults = SearchTrackResults
+        local tracks = SearchTracks(trimmed)
+        local playlists = SearchPlaylists(trimmed)
+        local combined = {}
+        for _, p in ipairs(playlists) do table.insert(combined, p) end
+        for _, t in ipairs(tracks) do table.insert(combined, t) end
+        SearchTrackResults = combined
+        SearchResults = combined
         UpdateResults()
     end
 
@@ -5211,8 +5258,29 @@ function Library:CreateSpotifyPlayer()
                 UpdateResults()
                 return
             end
-            if r.IsAlbumTrack then
-                PlayUri(r.Uri)
+            if r.IsPlaylist then
+                SearchAlbumBrowse = r.PlaylistId
+                local tracks = GetPlaylistTracks(r.PlaylistId)
+                if #tracks > 0 then
+                    table.insert(tracks, 1, {
+                        Title = "< Back",
+                        Album = r.Title or "Back to results",
+                        Cover = r.Cover,
+                        IsBack = true,
+                    })
+                end
+                SearchResults = tracks
+                UpdateResults()
+                return
+            end
+            if r.IsAlbumTrack or r.IsPlaylistTrack then
+                if r.ContextUri and r.ContextUri ~= "" then
+                    CurrentContextUri = r.ContextUri
+                    PlayInContext(r.ContextUri, r.Uri)
+                else
+                    CurrentContextUri = nil
+                    PlayUri(r.Uri)
+                end
                 RefreshSoon()
                 return
             end
