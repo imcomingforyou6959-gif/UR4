@@ -5172,7 +5172,7 @@ function Library:CreateSpotifyPlayer()
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
         local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -50)
-        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 5, 0, -0)
+        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 5, 0, -170)
         local lyricsPos     = bool and UDim2.new(0, 270, 0, 42)  or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
 
