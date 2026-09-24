@@ -4012,7 +4012,6 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- ============ Queue / Recent / Lyrics panel (right column) ============
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -4432,7 +4431,7 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
-    -- ============ Recent tab list ============
+-- recents tab
     Items["RecentScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
         Position=UDim2.new(0,8,0,24),
@@ -4457,7 +4456,8 @@ function Library:CreateSpotifyPlayer()
         BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         TextYAlignment=Enum.TextYAlignment.Top,
-        Size=UDim2.new(1,-8,0,20),
+        Size=UDim2.new(1,-8,0,0),
+        AutomaticSize=Enum.AutomaticSize.Y,
         BorderSizePixel=0, TextWrapped=true,
         ZIndex=2,
     })
