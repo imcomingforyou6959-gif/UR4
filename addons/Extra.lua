@@ -5496,3 +5496,7 @@ function Library:CreateSpotifyPlayer()
     Spotify:Center()
     return Spotify
 end
+
+Library.Directory = "spotifyforRawr"
+getgenv().Library = Library
+return Library
