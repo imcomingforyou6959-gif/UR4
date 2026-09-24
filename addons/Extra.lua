@@ -3734,8 +3734,8 @@ function Library:CreateSpotifyPlayer()
     local TokenConfig = DecodeTokenConfig(ReadToken())
     local Token = TokenConfig.AccessToken
 
-    local CollapsedSize = UDim2.new(0, 248, 0, 108)
-    local ExpandedSize  = UDim2.new(0, 540, 0, 330)
+    local CollapsedSize = UDim2.new(0, 248, 0, 100)
+    local ExpandedSize  = UDim2.new(0, 540, 0, 310)
     local ResultButtons = {}
     local SearchResults = {}
     local SearchTrackResults = {}
@@ -3816,7 +3816,7 @@ function Library:CreateSpotifyPlayer()
         ClipsDescendants=true,
         ZIndex = 50,
     }, { BackgroundColor3='MainColor'; BorderColor3='Black' })
-    Library:MakeDraggable(Items["SpotifyPlayer"])
+    Library:MakeDraggable(Items["SpotifyPlayer"], 24)
 
     Items["InnerBacking"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -4192,7 +4192,7 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Parent=Items["SpotifyPlayer"],
         BackgroundTransparency=1,
         Position=UDim2.new(0,10,0,10),
-        Size=UDim2.new(1,-20,0,92),
+        Size=UDim2.new(1,-20,0,68),
         BorderSizePixel=0,
         ZIndex=2,
     })
@@ -4229,7 +4229,7 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Parent=Items["PlayerArea"],
         BackgroundTransparency=1,
         Position=UDim2.new(0,68,0,2),
-        Size=UDim2.new(1,-88,0,35),
+        Size=UDim2.new(1,-186,0,53),
         BorderSizePixel=0,
         ZIndex=3,
     })
@@ -4255,7 +4255,6 @@ function Library:CreateSpotifyPlayer()
         TextColor3=ThemeInactiveText, Text="Waiting for Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
         Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
-        Visible=true,
         ZIndex=3,
     })
 
@@ -4284,22 +4283,20 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["PlayerArea"],
         TextColor3=ThemeInactiveText, Text="0:00 / 0:00", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,68,0,38), Size=UDim2.new(0,140,0,14),
+        Position=UDim2.new(0,68,0,58), Size=UDim2.new(0,90,0,12),
         BorderSizePixel=0,
-        Visible=false,
         ZIndex=3,
     })
 
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        Position=UDim2.new(0,0,0,66),
-        Size=UDim2.new(0,100,0,24), BorderSizePixel=0,
+        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-6,0.5,0),
+        Size=UDim2.new(0,132,0,24), BorderSizePixel=0,
         ZIndex=3,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
         FillDirection=Enum.FillDirection.Horizontal,
         HorizontalAlignment=Enum.HorizontalAlignment.Center,
-        VerticalAlignment=Enum.VerticalAlignment.Center,
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4) })
 
     CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
@@ -4312,52 +4309,39 @@ function Library:CreateSpotifyPlayer()
         Icons["Previous"].Rotation = 180
     end
 
-    Items["VolumeFrame"] = New("Frame", {
-        Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        Position=UDim2.new(0,108,0,66),
-        Size=UDim2.new(0,120,0,24), BorderSizePixel=0,
-        ZIndex=3,
-    })
-
-    Items["VolumeButton"] = New("TextButton", {
-        Name="\0", Font=Library.Font, TextSize=13, Parent=Items["VolumeFrame"],
-        Position=UDim2.new(0,0,0,0), Size=UDim2.new(0,32,1,0),
-        BackgroundTransparency=1, AutoButtonColor=false, BorderSizePixel=0,
-        TextColor3=ThemeInactiveText, Text="vol",
-        TextXAlignment=Enum.TextXAlignment.Left,
-        ZIndex=4,
-    })
-
+    -- ============ Volume (vertical, on the right edge) ============
     Items["VolumeBar"] = New("Frame", {
-        Name="\0", Parent=Items["VolumeFrame"],
-        AnchorPoint=Vector2.new(0,0.5),
-        Position=UDim2.new(0,36,0.5,0), Size=UDim2.new(1,-40,0,4),
+        Name="\0", Parent=Items["SpotifyPlayer"],
+        AnchorPoint=Vector2.new(1,0),
+        Position=UDim2.new(1,-5,0,28),
+        Size=UDim2.new(0,4,1,-44),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
-        ZIndex=3,
+        ZIndex=6,
     }, { BackgroundColor3='BackgroundColor' })
 
     Items["VolumeFill"] = New("Frame", {
         Name="\0", Parent=Items["VolumeBar"],
-        Size=UDim2.new(0.5,0,1,0), BorderSizePixel=0,
+        AnchorPoint=Vector2.new(0,1),
+        Position=UDim2.new(0,0,1,0),
+        Size=UDim2.new(1,0,0.5,0), BorderSizePixel=0,
         BackgroundColor3=Library.AccentColor,
-        ZIndex=3,
+        ZIndex=6,
     }, { BackgroundColor3='AccentColor' })
 
     Items["VolumeHitbox"] = New("TextButton", {
-        Name="\0", Parent=Items["VolumeFrame"],
-        Position=UDim2.new(0,36,0,0), Size=UDim2.new(1,-36,1,0),
+        Name="\0", Parent=Items["SpotifyPlayer"],
+        AnchorPoint=Vector2.new(1,0),
+        Position=UDim2.new(1,-1,0,24),
+        Size=UDim2.new(0,10,1,-36),
         BackgroundTransparency=1, BorderSizePixel=0, Text="",
-        ZIndex=5,
+        ZIndex=7,
     })
 
     local function SetVolumeUI(v)
         if not Items["VolumeFill"] then return end
         v = math.clamp(math.floor((tonumber(v) or 0) + 0.5), 0, 100)
         Volume = v
-        if v > 0 then PreMuteVolume = v end
-        Items["VolumeFill"].Size = UDim2.new(v / 100, 0, 1, 0)
-        Items["VolumeButton"].Text = v == 0 and "mute" or "vol"
-        Items["VolumeButton"].TextColor3 = v == 0 and Library.AccentColor or ThemeInactiveText
+        Items["VolumeFill"].Size = UDim2.new(1, 0, v / 100, 0)
     end
     SetVolumeUI(50)
 
@@ -5029,8 +5013,6 @@ function Library:CreateSpotifyPlayer()
             Items["Album"].Text   = emptyText or "Nothing is currently playing"
             Items["Cover"].Image  = PlaceholderImage
             Items["Cover"].Rotation = 0
-            Items["Album"].Visible = true
-            Items["Time"].Visible  = false
             SetLyricsEmpty("Nothing is currently playing.")
             SetControlState(nil)
             SetQueueDisplay(nil, nil, "Nothing is currently playing.")
@@ -5044,8 +5026,6 @@ function Library:CreateSpotifyPlayer()
         Items["Title"].Text  = data.Title
         Items["Artist"].Text = data.Artist
         Items["Album"].Text  = data.Album
-        Items["Album"].Visible = false
-        Items["Time"].Visible  = true
         if data.Volume and not VolumeDragging and tick() >= VolumeLockUntil then
             SetVolumeUI(data.Volume)
         end
@@ -5488,7 +5468,7 @@ function Library:CreateSpotifyPlayer()
         IsExpanded = bool
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-        local playerAreaPos = bool and UDim2.new(0, 10, 1, -102) or UDim2.new(0, 10, 0, 10)
+        local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
         local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -60)
         local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 10, 0, -220)
         local lyricsPos     = bool and UDim2.new(0, 270, 0, 42)  or UDim2.new(1, 10, 0, 10)
@@ -5828,15 +5808,10 @@ function Library:CreateSpotifyPlayer()
         RefreshSoon()
     end)
 
-        local function VolumeFromInput(input)
+    local function ApplyVolumeFromMouse()
         local bar = Items["VolumeBar"]
-        local x = input.Position and input.Position.X or UserInputService:GetMouseLocation().X
-        local alpha = math.clamp((x - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
-        return math.floor(alpha * 100 + 0.5)
-    end
-
-    local function ApplyVolumeFromInput(input)
-        local v = VolumeFromInput(input)
+        local alpha = 1 - math.clamp((Mouse.Y - bar.AbsolutePosition.Y) / math.max(bar.AbsoluteSize.Y, 1), 0, 1)
+        local v = math.floor(alpha * 100 + 0.5)
         SetVolumeUI(v)
         local now = tick()
         if now - LastVolumeSent > 0.2 then
@@ -5846,37 +5821,22 @@ function Library:CreateSpotifyPlayer()
     end
 
     Connect(Items["VolumeHitbox"].InputBegan, function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
         VolumeDragging = true
-        ApplyVolumeFromInput(input)
+        ApplyVolumeFromMouse()
     end)
 
     Connect(InputService.InputChanged, function(input)
-        if not VolumeDragging then return end
-        if input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch then
-            ApplyVolumeFromInput(input)
+        if VolumeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            ApplyVolumeFromMouse()
         end
     end)
 
     Connect(InputService.InputEnded, function(input)
         if not VolumeDragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
         VolumeDragging = false
         SendVolume(Volume)
-    end)
-
-    Connect(Items["VolumeButton"].MouseButton1Click, function()
-        if Volume > 0 then
-            SetVolumeUI(0)
-            task.spawn(SendVolume, 0)
-        else
-            local v = PreMuteVolume > 0 and PreMuteVolume or 50
-            SetVolumeUI(v)
-            task.spawn(SendVolume, v)
-        end
     end)
 
     Connect(Items["ProgressHitbox"].InputBegan, function(input)
