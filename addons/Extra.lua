@@ -3808,17 +3808,16 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(0, 30, 0, 250),
         Size=CollapsedSize, BorderSizePixel=0,
         BackgroundColor3=Library.MainColor,
+        BorderColor3=Library.OutlineColor,
+        BorderMode=Enum.BorderMode.Inset,
         ClipsDescendants=true,
         ZIndex = 50,
-    }, { BackgroundColor3='MainColor' })
+    }, { BackgroundColor3='MainColor'; BorderColor3='OutlineColor' })
     Library:MakeDraggable(Items["SpotifyPlayer"])
 
     New("UIStroke", { Name="\0", Parent=Items["SpotifyPlayer"],
         ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
         Color=Library.Black, Thickness=1 }, { Color='Black' })
-    New("UIStroke", { Name="\0", Parent=Items["SpotifyPlayer"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
 
     Items["InnerBacking"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
@@ -4017,13 +4016,11 @@ function Library:CreateSpotifyPlayer()
         Position=UDim2.new(1,10,0,10),
         Size=UDim2.new(0,260,0,178),
         BorderSizePixel=0, BackgroundColor3=Library.MainColor,
+        BorderColor3=Library.OutlineColor,
+        BorderMode=Enum.BorderMode.Inset,
         Visible=false,
         ZIndex=1,
-    }, { BackgroundColor3='MainColor' })
-
-    New("UIStroke", { Name="\0", Parent=Items["LyricsFrame"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
+    }, { BackgroundColor3='MainColor'; BorderColor3='OutlineColor' })
 
     Items["QueueTab"] = New("TextButton", {
         Name="\0", Font=Library.Font, TextSize=14,
