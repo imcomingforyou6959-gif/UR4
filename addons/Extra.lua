@@ -3635,7 +3635,6 @@ end;
 
 Players.PlayerAdded:Connect(OnPlayerChange);
 Players.PlayerRemoving:Connect(OnPlayerChange);
-
 function Library:CreateSpotifyPlayer()
     local Spotify = {}
 
@@ -3830,6 +3829,66 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { BackgroundColor3='AccentColor' })
 
+    -- Profile (top right, transparent, no bar)
+    Items["ProfileFrame"] = New("Frame", {
+        Name="\0", Parent=Items["SpotifyPlayer"],
+        Position=UDim2.new(1, -10, 0, 10),
+        Size=UDim2.new(0, 200, 0, 36),
+        BackgroundTransparency=1,
+        BorderSizePixel=0,
+        Visible=false,
+        ZIndex=5,
+    })
+
+    Items["ProfileAvatarFrame"] = New("Frame", {
+        Name="\0", Parent=Items["ProfileFrame"],
+        AnchorPoint=Vector2.new(1, 0),
+        Position=UDim2.new(1, 0, 0, 0),
+        Size=UDim2.new(0, 36, 0, 36),
+        BackgroundColor3=Library.BackgroundColor,
+        BorderSizePixel=0,
+        ClipsDescendants=true,
+        ZIndex=5,
+    }, { BackgroundColor3='BackgroundColor' })
+    New("UICorner", { Name="\0", Parent=Items["ProfileAvatarFrame"], CornerRadius=UDim.new(0.5, 0) })
+
+    Items["ProfileAvatar"] = New("ImageLabel", {
+        Name="\0", Parent=Items["ProfileAvatarFrame"],
+        Size=UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency=1,
+        Image=PlaceholderImage,
+        ScaleType=Enum.ScaleType.Crop,
+        ZIndex=5,
+    })
+    New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
+
+    Items["ProfileName"] = New("TextLabel", {
+        Name="\0", Font=Library.Font, TextSize=15,
+        Parent=Items["ProfileFrame"],
+        TextColor3=Library.FontColor,
+        Text="Loading...",
+        BackgroundTransparency=1,
+        TextXAlignment=Enum.TextXAlignment.Right,
+        Position=UDim2.new(0, 0, 0, 0),
+        Size=UDim2.new(1, -42, 0, 18),
+        BorderSizePixel=0,
+        TextTruncate=Enum.TextTruncate.AtEnd,
+        ZIndex=5,
+    }, { TextColor3='FontColor' })
+
+    Items["ProfileSub"] = New("TextLabel", {
+        Name="\0", Font=Library.Font, TextSize=12,
+        Parent=Items["ProfileFrame"],
+        TextColor3=ThemeInactiveText,
+        Text="",
+        BackgroundTransparency=1,
+        TextXAlignment=Enum.TextXAlignment.Right,
+        Position=UDim2.new(0, 0, 0, 18),
+        Size=UDim2.new(1, -42, 0, 14),
+        BorderSizePixel=0,
+        ZIndex=5,
+    })
+
     Items["SearchBackground"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -40),
@@ -3860,7 +3919,7 @@ function Library:CreateSpotifyPlayer()
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -170),
-        Size=UDim2.new(0, 250, 0, 128),
+        Size=UDim2.new(0, 250, 0, 186),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -3931,83 +3990,10 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- Profile bar (only visible when expanded)
-    Items["ProfileBar"] = New("Frame", {
-        Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0, 10, 0, -60),
-        Size=UDim2.new(1, -20, 0, 48),
-        BorderSizePixel=0, BackgroundColor3=Library.MainColor,
-        Visible=false,
-        ZIndex=1,
-    }, { BackgroundColor3='MainColor' })
-
-    New("UIStroke", { Name="\0", Parent=Items["ProfileBar"],
-        ApplyStrokeMode=Enum.ApplyStrokeMode.Border, LineJoinMode=Enum.LineJoinMode.Miter,
-        Color=Library.OutlineColor, Thickness=1, BorderOffset=UDim.new(0,1) }, { Color='OutlineColor' })
-
-    Items["ProfileAvatarFrame"] = New("Frame", {
-        Name="\0", Parent=Items["ProfileBar"],
-        Position=UDim2.new(0, 6, 0, 5),
-        Size=UDim2.new(0, 38, 0, 38),
-        BackgroundColor3=Library.BackgroundColor,
-        BorderSizePixel=0,
-        ClipsDescendants=true,
-        ZIndex=3,
-    }, { BackgroundColor3='BackgroundColor' })
-    New("UICorner", { Name="\0", Parent=Items["ProfileAvatarFrame"], CornerRadius=UDim.new(0.5, 0) })
-
-    Items["ProfileAvatar"] = New("ImageLabel", {
-        Name="\0", Parent=Items["ProfileAvatarFrame"],
-        Size=UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency=1,
-        Image=PlaceholderImage,
-        ScaleType=Enum.ScaleType.Crop,
-        ZIndex=3,
-    })
-    New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
-
-    Items["ProfileName"] = New("TextLabel", {
-        Name="\0", Font=Library.Font, TextSize=16,
-        Parent=Items["ProfileBar"],
-        TextColor3=Library.FontColor,
-        Text="Loading...",
-        BackgroundTransparency=1,
-        TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0, 52, 0, 7),
-        Size=UDim2.new(1, -60, 0, 20),
-        BorderSizePixel=0,
-        TextTruncate=Enum.TextTruncate.AtEnd,
-        ZIndex=3,
-    }, { TextColor3='FontColor' })
-
-    Items["ProfileSub"] = New("TextLabel", {
-        Name="\0", Font=Library.Font, TextSize=12,
-        Parent=Items["ProfileBar"],
-        TextColor3=ThemeInactiveText,
-        Text="",
-        BackgroundTransparency=1,
-        TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0, 52, 0, 26),
-        Size=UDim2.new(1, -60, 0, 14),
-        BorderSizePixel=0,
-        ZIndex=3,
-    })
-
-    Items["ProfileStatusDot"] = New("Frame", {
-        Name="\0", Parent=Items["ProfileBar"],
-        AnchorPoint=Vector2.new(1,0),
-        Position=UDim2.new(1,-8,0,8),
-        Size=UDim2.new(0, 8, 0, 8),
-        BorderSizePixel=0,
-        BackgroundColor3=ThemeInactiveText,
-        ZIndex=3,
-    })
-    New("UICorner", { Name="\0", Parent=Items["ProfileStatusDot"], CornerRadius=UDim.new(0.5, 0) })
-
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
-        Size=UDim2.new(0,260,0,146),
+        Size=UDim2.new(0,260,0,178),
         BorderSizePixel=0, BackgroundColor3=Library.MainColor,
         ZIndex=1,
     }, { BackgroundColor3='MainColor' })
@@ -5027,10 +5013,8 @@ function Library:CreateSpotifyPlayer()
         Items["ProfileSub"].Text = isPremium and "Premium" or "Free"
         if isPremium then
             Items["ProfileSub"].TextColor3 = Library.AccentColor
-            Items["ProfileStatusDot"].BackgroundColor3 = Library.AccentColor
         else
             Items["ProfileSub"].TextColor3 = ThemeInactiveText
-            Items["ProfileStatusDot"].BackgroundColor3 = ThemeInactiveText
         end
     end
 
@@ -5185,18 +5169,16 @@ function Library:CreateSpotifyPlayer()
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
-        local profilePos    = bool and UDim2.new(0, 10, 0, 10)  or UDim2.new(0, 10, 0, -60)
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
-        local searchPos     = bool and UDim2.new(0, 10, 0, 66)  or UDim2.new(0, 10, 0, -40)
-        local resultsPos    = bool and UDim2.new(0, 10, 0, 98)  or UDim2.new(0, 10, 0, -170)
-        local lyricsPos     = bool and UDim2.new(0, 270, 0, 66) or UDim2.new(1, 10, 0, 10)
+        local searchPos     = bool and UDim2.new(0, 10, 0, 10)  or UDim2.new(0, 10, 0, -40)
+        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)  or UDim2.new(0, 10, 0, -170)
+        local lyricsPos     = bool and UDim2.new(0, 270, 0, 50) or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
 
-        Items["ProfileBar"].Visible = bool
+        Items["ProfileFrame"].Visible = bool
 
         if instant then
             player.Size = bool and ExpandedSize or CollapsedSize
-            Items["ProfileBar"].Position        = profilePos
             Items["PlayerArea"].Position        = playerAreaPos
             Items["SearchBackground"].Position  = searchPos
             Items["SearchResults"].Position     = resultsPos
@@ -5204,7 +5186,6 @@ function Library:CreateSpotifyPlayer()
             Items["ExpandButton"].Rotation      = expandRot
         else
             Tween(player,                    { Size = bool and ExpandedSize or CollapsedSize }, info)
-            Tween(Items["ProfileBar"],       { Position = profilePos },   info)
             Tween(Items["PlayerArea"],       { Position = playerAreaPos },info)
             Tween(Items["SearchBackground"], { Position = searchPos },    info)
             Tween(Items["SearchResults"],    { Position = resultsPos },   info)
