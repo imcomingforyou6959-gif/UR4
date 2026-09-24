@@ -3773,13 +3773,6 @@ function Library:CreateSpotifyPlayer()
     local Icons = {}
     local QueueRows = {}
 
-    local CurrentBpm = 120
-    local BpmCache = {}
-    local VisualizerBars = {}
-    local VisualizerFrame = nil
-    local VisualizerPhase = 0
-    local VisualizerRunning = false
-
     local function CreateControlButton(Key, Parent, Image, FrameSize, IconSize, IconOffsetY)
         local btn = New("TextButton", {
             Name="\0", Parent=Parent,
@@ -4223,28 +4216,6 @@ function Library:CreateSpotifyPlayer()
         Icons["Previous"].Rotation = 180
     end
 
-    VisualizerFrame = New("Frame", {
-        Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0, 10, 1, -52),
-        Size=UDim2.new(1, -20, 0, 14),
-        BackgroundTransparency=1,
-        Visible=false,
-        ZIndex=4,
-    })
-
-    for i = 1, 24 do
-        local bar = New("Frame", {
-            Name="\0", Parent=VisualizerFrame,
-            Position=UDim2.new((i-1)/24, 0, 1, 0),
-            AnchorPoint=Vector2.new(0, 1),
-            Size=UDim2.new(1/24 - 0.005, 0, 0, 2),
-            BorderSizePixel=0,
-            BackgroundColor3=Library.AccentColor,
-            ZIndex=4,
-        }, { BackgroundColor3='AccentColor' })
-        VisualizerBars[i] = bar
-    end
-
     Items["ExpandButton"] = New("ImageButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-8,0,8),
@@ -4504,60 +4475,6 @@ function Library:CreateSpotifyPlayer()
         }
     end
 
-    local function GetDeezerBpm(trackName, artistName)
-        if not Request or not trackName or not artistName then return nil end
-        if trackName == "Unknown track" or artistName == "Unknown artist" then return nil end
-
-        local cacheKey = tostring(trackName) .. "|" .. tostring(artistName)
-        if BpmCache[cacheKey] then
-            return BpmCache[cacheKey]
-        end
-
-        local primaryArtist = artistName:match("^([^,]+)") or artistName
-        primaryArtist = primaryArtist:gsub("^%s*(.-)%s*$", "%1")
-
-        local query = HttpService:UrlEncode(trackName .. " " .. primaryArtist)
-        local ok, resp = pcall(Request, {
-            Url = "https://api.deezer.com/search?q=" .. query .. "&limit=5",
-            Method = "GET",
-            Headers = { ["Accept"] = "application/json" },
-        })
-        if not ok or not resp or resp.StatusCode ~= 200 or not resp.Body or resp.Body == "" then
-            return nil
-        end
-
-        local dok, decoded = pcall(HttpService.JSONDecode, HttpService, resp.Body)
-        if not dok or type(decoded) ~= "table" or type(decoded.data) ~= "table" then
-            return nil
-        end
-
-        local targetTitle = trackName:lower()
-        local targetArtist = primaryArtist:lower()
-
-        for _, item in ipairs(decoded.data) do
-            local itemTitle = tostring(item.title or ""):lower()
-            local itemArtist = tostring(item.artist and item.artist.name or ""):lower()
-            if itemTitle:find(targetTitle, 1, true) or targetTitle:find(itemTitle, 1, true) then
-                if itemArtist:find(targetArtist, 1, true) or targetArtist:find(itemArtist, 1, true) then
-                    local ok2, detail = pcall(Request, {
-                        Url = "https://api.deezer.com/track/" .. tostring(item.id),
-                        Method = "GET",
-                        Headers = { ["Accept"] = "application/json" },
-                    })
-                    if ok2 and detail and detail.StatusCode == 200 and detail.Body and detail.Body ~= "" then
-                        local dok2, decoded2 = pcall(HttpService.JSONDecode, HttpService, detail.Body)
-                        if dok2 and type(decoded2) == "table" and tonumber(decoded2.bpm) and tonumber(decoded2.bpm) > 0 then
-                            local bpm = math.floor(tonumber(decoded2.bpm) + 0.5)
-                            BpmCache[cacheKey] = bpm
-                            return bpm
-                        end
-                    end
-                end
-            end
-        end
-        return nil
-    end
-
     local function ResizeLyricsCanvas()
         local scroll = Items["LyricsScroll"]
         local label  = Items["LyricsText"]
@@ -4596,6 +4513,8 @@ function Library:CreateSpotifyPlayer()
 
     local function ScrollToActiveLine(activeIndex, myGen)
         task.spawn(function()
+            -- Wait for layout: TextBounds and viewport need to be computed.
+            -- This prevents the very first scroll from silently bailing.
             local attempts = 0
             while attempts < 30 do
                 if Destroyed then return end
@@ -4787,30 +4706,6 @@ function Library:CreateSpotifyPlayer()
         end)
     end
 
-    local function LoadBpmForTrack(track)
-        if not track then CurrentBpm = 120 return end
-
-        local cached = BpmCache[track.TrackId]
-        if cached then CurrentBpm = cached return end
-
-        CurrentBpm = 120
-
-        if not Request or not track.Title or not track.Artist then return end
-        if track.Title == "Unknown track" or track.Artist == "Unknown artist" then return end
-
-        task.spawn(function()
-            local bpm = GetDeezerBpm(track.Title, track.Artist)
-            if Destroyed then return end
-            if not CurrentTrack or CurrentTrack.TrackId ~= track.TrackId then return end
-            if bpm and bpm > 0 then
-                BpmCache[track.TrackId] = bpm
-                CurrentBpm = bpm
-            else
-                BpmCache[track.TrackId] = 120
-            end
-        end)
-    end
-
     local function SetSidebarTab(name)
         SidebarTab = name
         local isQueue = name == "queue"
@@ -4849,7 +4744,6 @@ function Library:CreateSpotifyPlayer()
             CurrentLyricsSynced = false
             CurrentLyricsTrackId = nil
             CurrentHighlightIndex = 0
-            CurrentBpm = 120
             Items["Title"].Text   = "Spotify"
             Items["Artist"].Text  = "No track detected"
             Items["Album"].Text   = emptyText or "Nothing is currently playing"
@@ -4888,7 +4782,6 @@ function Library:CreateSpotifyPlayer()
             if SidebarTab == "lyrics" then
                 LoadLyricsForTrack(data)
             end
-            LoadBpmForTrack(data)
         end
     end
 
@@ -5161,7 +5054,6 @@ function Library:CreateSpotifyPlayer()
             Items["SearchResults"].Position = resultsPos
             Items["LyricsFrame"].Position = lyricsPos
             Items["ExpandButton"].Rotation = expandRot
-            VisualizerFrame.Visible = bool
         else
             Tween(player, { Size = bool and ExpandedSize or CollapsedSize }, info)
             Tween(Items["PlayerArea"],      { Position = playerAreaPos }, info)
@@ -5169,7 +5061,6 @@ function Library:CreateSpotifyPlayer()
             Tween(Items["SearchResults"],   { Position = resultsPos },   info)
             Tween(Items["LyricsFrame"],     { Position = lyricsPos },    info)
             Tween(Items["ExpandButton"],    { Rotation = expandRot },    info)
-            VisualizerFrame.Visible = bool
         end
         Spotify:Center()
 
@@ -5229,7 +5120,6 @@ function Library:CreateSpotifyPlayer()
         if Destroyed then return end
         Destroyed = true
         SkippingTo = false
-        VisualizerRunning = false
 
         for _, conn in ipairs(Connections) do
             pcall(function() conn:Disconnect() end)
@@ -5252,7 +5142,6 @@ function Library:CreateSpotifyPlayer()
         SearchTrackResults = {}
         QueueRows = {}
         ResultButtons = {}
-        VisualizerBars = {}
         Items = {}
         Icons = {}
     end
@@ -5503,34 +5392,6 @@ function Library:CreateSpotifyPlayer()
                 end
             end
             task.wait(0.03)
-        end
-    end)
-
-    task.spawn(function()
-        while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
-            if CurrentTrack and LastKnownPlaying and IsExpanded and VisualizerFrame and VisualizerFrame.Visible then
-                local beatInterval = 60 / math.max(CurrentBpm, 40)
-                local elapsed = ((CurrentTrack.Progress or 0) + (tick() - (CurrentTrack.UpdatedAt or tick())) * 1000) / 1000
-                local beatPhase = (elapsed % beatInterval) / beatInterval
-                VisualizerPhase = beatPhase
-
-                for i, bar in ipairs(VisualizerBars) do
-                    local barOffset = (i - 1) / #VisualizerBars
-                    local phase = (beatPhase + barOffset * 0.7) % 1
-                    local env = 1 - phase
-                    env = env * env
-                    local wobble = 0.7 + 0.3 * math.sin(VisualizerPhase * math.pi * 4 + i * 0.8)
-                    local height = math.max(2, math.floor(env * wobble * 12 + 2))
-                    bar.Size = UDim2.new(1 / #VisualizerBars - 0.005, 0, 0, height)
-                end
-            elseif VisualizerFrame then
-                for i, bar in ipairs(VisualizerBars) do
-                    if bar and bar.Parent then
-                        bar.Size = UDim2.new(1 / #VisualizerBars - 0.005, 0, 0, 2)
-                    end
-                end
-            end
-            task.wait(1 / 30)
         end
     end)
 
