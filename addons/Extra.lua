@@ -3697,8 +3697,10 @@ function Library:CreateSpotifyPlayer()
     local TokenConfig = DecodeTokenConfig(ReadToken())
     local Token = TokenConfig.AccessToken
 
-    local CollapsedSize = UDim2.new(0, 248, 0, 88)
-    local ExpandedSize  = UDim2.new(0, 540, 0, 250)
+    -- FIX: wider/taller dimensions to prevent cramping
+    local CollapsedSize = UDim2.new(0, 320, 0, 94)
+    local ExpandedSize  = UDim2.new(0, 600, 0, 320)
+
     local ResultButtons = {}
     local SearchResults = {}
     local SearchTrackResults = {}
@@ -3739,7 +3741,7 @@ function Library:CreateSpotifyPlayer()
     local function CreateControlButton(Key, Parent, Image, FrameSize, IconSize, IconOffsetY)
         local btn = New("TextButton", {
             Name="\0", Parent=Parent,
-            Size=UDim2.new(0, FrameSize, 0, 20),
+            Size=UDim2.new(0, FrameSize, 0, 24),
             BorderSizePixel=0, AutoButtonColor=false,
             BackgroundTransparency=1, Text="",
         })
@@ -3789,10 +3791,11 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { BackgroundColor3='AccentColor' })
 
+    -- FIX: search box is a touch taller and wider
     Items["SearchBackground"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -40),
-        Size=UDim2.new(0, 250, 0, 24),
+        Size=UDim2.new(0, 260, 0, 26),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
         ZIndex=1,
     }, { BackgroundColor3='BackgroundColor' })
@@ -3807,19 +3810,20 @@ function Library:CreateSpotifyPlayer()
         AnchorPoint=Vector2.new(0,0.5),
         PlaceholderColor3=ThemeInactiveText,
         PlaceholderText="Search songs, artists, albums, playlists",
-        Size=UDim2.new(1,-12,0,15),
+        Size=UDim2.new(1,-14,0,16),
         TextColor3=Library.FontColor, Text="",
         BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,6,0.5,-1),
+        Position=UDim2.new(0,7,0.5,0),
         ClearTextOnFocus=false, BorderSizePixel=0,
         ZIndex=2,
     }, { TextColor3='FontColor' })
 
+    -- FIX: taller search results pane
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -170),
-        Size=UDim2.new(0, 250, 0, 128),
+        Size=UDim2.new(0, 260, 0, 200),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -3840,7 +3844,7 @@ function Library:CreateSpotifyPlayer()
         local Row = {}
         Row.Frame = New("Frame", {
             Name="\0", Parent=Items["SearchResults"],
-            Size=UDim2.new(1,-8,0,42),
+            Size=UDim2.new(1,-8,0,44),
             BorderSizePixel=0, BackgroundTransparency=1,
             BackgroundColor3=Library.MainColor, Visible=false,
             ZIndex=2,
@@ -3857,17 +3861,18 @@ function Library:CreateSpotifyPlayer()
             Name="\0", Parent=Row.Frame,
             Image=PlaceholderImage, BackgroundTransparency=1,
             ScaleType=Enum.ScaleType.Crop,
-            Size=UDim2.new(0,34,0,34),
+            Size=UDim2.new(0,36,0,36),
             Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
             ZIndex=2,
         })
+        New("UICorner", { Name="\0", Parent=Row.Cover, CornerRadius=UDim.new(0,3) })
         Row.Title = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
             Parent=Row.Frame, TextColor3=Library.FontColor,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,44,0,4),
-            Size=UDim2.new(1,-48,0,17),
+            Position=UDim2.new(0,46,0,5),
+            Size=UDim2.new(1,-50,0,17),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
             ZIndex=2,
         }, { TextColor3='FontColor' })
@@ -3876,8 +3881,8 @@ function Library:CreateSpotifyPlayer()
             Parent=Row.Frame, TextColor3=ThemeInactiveText,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,44,0,22),
-            Size=UDim2.new(1,-48,0,16),
+            Position=UDim2.new(0,46,0,23),
+            Size=UDim2.new(1,-50,0,16),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
             ZIndex=2,
         })
@@ -3890,10 +3895,11 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
+    -- FIX: bigger sidebar so the queue has room to breathe
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
-        Size=UDim2.new(0,260,0,146),
+        Size=UDim2.new(0, 310, 0, 234),
         BorderSizePixel=0, BackgroundColor3=Library.MainColor,
         ZIndex=1,
     }, { BackgroundColor3='MainColor' })
@@ -3907,8 +3913,8 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["LyricsFrame"], TextColor3=Library.AccentColor,
         Text="Queue", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,8,0,6),
-        Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        Position=UDim2.new(0,8,0,8),
+        Size=UDim2.new(0.5,-8,0,16), BorderSizePixel=0,
         ZIndex=2,
     }, { TextColor3='AccentColor' })
 
@@ -3917,25 +3923,25 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["LyricsFrame"], TextColor3=ThemeInactiveText,
         Text="Lyrics", BackgroundTransparency=1, AutoButtonColor=false,
         TextXAlignment=Enum.TextXAlignment.Right,
-        Position=UDim2.new(0.5,0,0,6),
-        Size=UDim2.new(0.5,-8,0,14), BorderSizePixel=0,
+        Position=UDim2.new(0.5,0,0,8),
+        Size=UDim2.new(0.5,-8,0,16), BorderSizePixel=0,
         ZIndex=2,
     })
 
     Items["QueueScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
-        Position=UDim2.new(0,8,0,24),
-        Size=UDim2.new(1,-16,1,-32),
+        Position=UDim2.new(0,8,0,30),
+        Size=UDim2.new(1,-16,1,-38),
         BorderSizePixel=0, BackgroundTransparency=1,
         CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
-        ScrollBarThickness=1,
+        ScrollBarThickness=2,
         ScrollBarImageColor3=Library.OutlineColor,
         ZIndex=2,
     }, { ScrollBarImageColor3='OutlineColor' })
 
     New("UIListLayout", { Name="\0", Parent=Items["QueueScroll"],
-        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,2),
+        SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4),
         HorizontalAlignment=Enum.HorizontalAlignment.Center })
 
     Items["QueueEmpty"] = New("TextLabel", {
@@ -3950,11 +3956,12 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     })
 
+    -- FIX: taller, roomier queue rows
     for Index = 1, 12 do
         local Row = {}
         Row.Frame = New("Frame", {
             Name="\0", Parent=Items["QueueScroll"],
-            Size=UDim2.new(1,-8,0,38),
+            Size=UDim2.new(1,-8,0,46),
             BorderSizePixel=0, BackgroundTransparency=1,
             BackgroundColor3=Library.MainColor, Visible=false,
             ZIndex=2,
@@ -3963,18 +3970,18 @@ function Library:CreateSpotifyPlayer()
             Name="\0", Parent=Row.Frame,
             Image=PlaceholderImage, BackgroundTransparency=1,
             ScaleType=Enum.ScaleType.Crop,
-            Size=UDim2.new(0,30,0,30),
-            Position=UDim2.new(0,4,0,4), BorderSizePixel=0,
+            Size=UDim2.new(0,38,0,38),
+            Position=UDim2.new(0,5,0,4), BorderSizePixel=0,
             ZIndex=2,
         })
-        New("UICorner", { Name="\0", Parent=Row.Cover, CornerRadius=UDim.new(0,3) })
+        New("UICorner", { Name="\0", Parent=Row.Cover, CornerRadius=UDim.new(0,4) })
         Row.Title = New("TextLabel", {
             Name="\0", Font=Library.Font, TextSize=14,
             Parent=Row.Frame, TextColor3=Library.FontColor,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,40,0,2),
-            Size=UDim2.new(1,-44,0,17),
+            Position=UDim2.new(0,50,0,5),
+            Size=UDim2.new(1,-54,0,18),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
             ZIndex=2,
         }, { TextColor3='FontColor' })
@@ -3983,8 +3990,8 @@ function Library:CreateSpotifyPlayer()
             Parent=Row.Frame, TextColor3=ThemeInactiveText,
             Text="", BackgroundTransparency=1,
             TextXAlignment=Enum.TextXAlignment.Left,
-            Position=UDim2.new(0,40,0,19),
-            Size=UDim2.new(1,-44,0,16),
+            Position=UDim2.new(0,50,0,24),
+            Size=UDim2.new(1,-54,0,17),
             BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
             ZIndex=2,
         })
@@ -4030,10 +4037,10 @@ function Library:CreateSpotifyPlayer()
 
     Items["LyricsScroll"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["LyricsFrame"],
-        Position=UDim2.new(0,8,0,24),
-        Size=UDim2.new(1,-16,1,-32),
+        Position=UDim2.new(0,8,0,30),
+        Size=UDim2.new(1,-16,1,-38),
         BorderSizePixel=0, BackgroundTransparency=1,
-        CanvasSize=UDim2.new(), ScrollBarThickness=1,
+        CanvasSize=UDim2.new(), ScrollBarThickness=2,
         ScrollBarImageColor3=Library.OutlineColor,
         Visible=false,
         ZIndex=2,
@@ -4055,14 +4062,14 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Parent=Items["SpotifyPlayer"],
         BackgroundTransparency=1,
         Position=UDim2.new(0,10,0,10),
-        Size=UDim2.new(1,-20,0,68),
+        Size=UDim2.new(1,-20,0,72),
         BorderSizePixel=0,
         ZIndex=2,
     })
 
     Items["CoverFrame"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
-        Position=UDim2.new(0,0,0,5),
+        Position=UDim2.new(0,0,0,6),
         Size=UDim2.new(0,60,0,60),
         BorderSizePixel=0,
         BackgroundTransparency=1,
@@ -4088,11 +4095,12 @@ function Library:CreateSpotifyPlayer()
     })
     New("UICorner", { Name="\0", Parent=Items["Cover"], CornerRadius=UDim.new(0.5,0) })
 
+    -- FIX: Info frame no longer gets crushed by the controls
     Items["Info"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"],
         BackgroundTransparency=1,
-        Position=UDim2.new(0,68,0,2),
-        Size=UDim2.new(1,-186,0,53),
+        Position=UDim2.new(0,68,0,4),
+        Size=UDim2.new(1,-206,0,60),
         BorderSizePixel=0,
         ZIndex=3,
     })
@@ -4103,27 +4111,27 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=Library.FontColor, Text="Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,18), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
         ZIndex=3,
     }, { TextColor3='FontColor' })
     Items["Artist"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="No track detected", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
         ZIndex=3,
     })
     Items["Album"] = New("TextLabel", {
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["Info"],
         TextColor3=ThemeInactiveText, Text="Waiting for Spotify", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Size=UDim2.new(1,0,0,16), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
+        Size=UDim2.new(1,0,0,17), BorderSizePixel=0, TextTruncate=Enum.TextTruncate.AtEnd,
         ZIndex=3,
     })
 
     Items["ProgressFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0,0,1,-3), Size=UDim2.new(1,0,0,3),
+        Position=UDim2.new(0,0,1,-4), Size=UDim2.new(1,0,0,4),
         BorderSizePixel=0, BackgroundColor3=Library.BackgroundColor,
         ZIndex=3,
     }, { BackgroundColor3='BackgroundColor' })
@@ -4137,7 +4145,7 @@ function Library:CreateSpotifyPlayer()
 
     Items["ProgressHitbox"] = New("TextButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        Position=UDim2.new(0,0,1,-14), Size=UDim2.new(1,0,0,14),
+        Position=UDim2.new(0,0,1,-16), Size=UDim2.new(1,0,0,16),
         BackgroundTransparency=1, BorderSizePixel=0, Text="",
         ZIndex=4,
     })
@@ -4146,27 +4154,28 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Font=Library.Font, TextSize=14, Parent=Items["PlayerArea"],
         TextColor3=ThemeInactiveText, Text="0:00 / 0:00", BackgroundTransparency=1,
         TextXAlignment=Enum.TextXAlignment.Left,
-        Position=UDim2.new(0,68,0,58), Size=UDim2.new(0,90,0,12),
+        Position=UDim2.new(0,68,0,58), Size=UDim2.new(0,90,0,14),
         BorderSizePixel=0,
         ZIndex=3,
     })
 
     Items["Controls"] = New("Frame", {
         Name="\0", Parent=Items["PlayerArea"], BackgroundTransparency=1,
-        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-6,0.5,0),
-        Size=UDim2.new(0,132,0,24), BorderSizePixel=0,
+        AnchorPoint=Vector2.new(1,0.5), Position=UDim2.new(1,-4,0.5,0),
+        Size=UDim2.new(0,132,0,26), BorderSizePixel=0,
         ZIndex=3,
     })
     New("UIListLayout", { Name="\0", Parent=Items["Controls"],
         FillDirection=Enum.FillDirection.Horizontal,
-        HorizontalAlignment=Enum.HorizontalAlignment.Center,
+        HorizontalAlignment=Enum.HorizontalAlignment.Right,
+        VerticalAlignment=Enum.VerticalAlignment.Center,
         SortOrder=Enum.SortOrder.LayoutOrder, Padding=UDim.new(0,4) })
 
-    CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 12, 12, 0)
-    CreateControlButton("Previous",  Items["Controls"], SKIP_ASSET_ID,            16, 16, 0)
-    CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 20, 20, 0)
-    CreateControlButton("Skip",      Items["Controls"], SKIP_ASSET_ID,            16, 16, 0)
-    CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 12, 12, 0)
+    CreateControlButton("Shuffle",   Items["Controls"], "rbxassetid://9607545176", 14, 14, 0)
+    CreateControlButton("Previous",  Items["Controls"], SKIP_ASSET_ID,            18, 18, 0)
+    CreateControlButton("PlayPause", Items["Controls"], "rbxassetid://9622475855", 22, 22, 0)
+    CreateControlButton("Skip",      Items["Controls"], SKIP_ASSET_ID,            18, 18, 0)
+    CreateControlButton("Repeat",    Items["Controls"], "rbxassetid://9607545605", 14, 14, 0)
 
     if Icons["Previous"] then
         Icons["Previous"].Rotation = 180
@@ -4174,7 +4183,7 @@ function Library:CreateSpotifyPlayer()
 
     Items["ExpandButton"] = New("ImageButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
-        AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-8,0,8),
+        AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-8,0,10),
         Size=UDim2.new(0,14,0,14), BorderSizePixel=0, AutoButtonColor=false,
         Image="rbxassetid://9607545497", Rotation=0,
         ImageColor3=Library.FontColor, BackgroundTransparency=1,
@@ -5078,6 +5087,7 @@ function Library:CreateSpotifyPlayer()
         Items["SpotifyPlayer"].Position = UDim2.new(0, kp.X, 0, kp.Y - sh - 5)
     end
 
+    -- FIX: expanded positions updated for new 600x320 canvas
     local function SetExpanded(bool, instant)
         IsExpanded = bool
         local player = Items["SpotifyPlayer"]
@@ -5085,8 +5095,8 @@ function Library:CreateSpotifyPlayer()
 
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
         local searchPos     = bool and UDim2.new(0, 10, 0, 10)  or UDim2.new(0, 10, 0, -40)
-        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)  or UDim2.new(0, 10, 0, -170)
-        local lyricsPos     = bool and UDim2.new(0, 270, 0, 10) or UDim2.new(1, 10, 0, 10)
+        local resultsPos    = bool and UDim2.new(0, 10, 0, 44)  or UDim2.new(0, 10, 0, -170)
+        local lyricsPos     = bool and UDim2.new(0, 280, 0, 10) or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
 
         if instant then
@@ -5486,7 +5496,3 @@ function Library:CreateSpotifyPlayer()
     Spotify:Center()
     return Spotify
 end
-
-Library.Directory = "spotifyforRawr"
-getgenv().Library = Library
-return Library
