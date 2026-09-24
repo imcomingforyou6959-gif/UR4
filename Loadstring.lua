@@ -342,6 +342,7 @@ local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
 local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
 local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
+local Spotify = loadstring(game:HttpGet(_47 .. 'addons/Spotify.lua'))()
 
 Library:Notify('Thanks for using rawr <3')
 Library:Notify('I LOVE U')
@@ -1872,6 +1873,11 @@ BehaviorB:AddDropdown('OBS', {
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
+_48.Directory = "spotifyforRawr"
+
+Spotify:SetLibrary(_48)
+Spotify:SetFolder('spotifyforrawr/Spotify')
+Spotify:BuildSpotifySection(_60['UI Settings'])
 
 shared.hitman = {
     silent = {
