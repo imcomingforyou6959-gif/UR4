@@ -5100,7 +5100,7 @@ function Library:CreateSpotifyPlayer()
 
     local function GetCurrentTrack()
         local d = MakeRequest("me/player")
-        if not d or not d.item then return nil end
+        if type(d) ~= "table" or not d.item then return nil end
         local artists = {}
         for _, a in d.item.artists or {} do table.insert(artists, a.name) end
         local coverUrl = d.item.album and d.item.album.images and d.item.album.images[2] and d.item.album.images[2].url
@@ -5124,7 +5124,7 @@ function Library:CreateSpotifyPlayer()
     local function GetQueue()
         local d = MakeRequest("me/player/queue")
         local out = {}
-        if not d or type(d.queue) ~= "table" then return out end
+        if type(d) ~= "table" or type(d.queue) ~= "table" then return out end
         for i, t in ipairs(d.queue) do
             if i > #QueueRows then break end
             local artists = {}
@@ -5806,7 +5806,12 @@ function Library:CreateSpotifyPlayer()
     task.spawn(function()
         while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             if not SkippingTo then
-                Spotify:Refresh()
+                local ok, err = pcall(function()
+                    Spotify:Refresh()
+                end)
+                if not ok then
+                    warn("refresh error: " .. tostring(err))
+                end
             end
             task.wait(PollInterval)
         end
