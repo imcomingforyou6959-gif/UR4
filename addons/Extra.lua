@@ -3801,7 +3801,7 @@ function Library:CreateSpotifyPlayer()
 
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
-        Position=UDim2.new(0, 30, 0, 240),
+        Position=UDim2.new(0, 30, 0, 250),
         Size=CollapsedSize, BorderSizePixel=0,
         BackgroundColor3=Library.MainColor,
         ClipsDescendants=true,
@@ -3830,7 +3830,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { BackgroundColor3='AccentColor' })
 
-    -- ============ Search bar (top-left) ============
     Items["SearchBackground"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -40),
@@ -3858,7 +3857,6 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { TextColor3='FontColor' })
 
-    -- ============ Profile (top-right, transparent, inline with search bar) ============
     Items["ProfileFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         AnchorPoint=Vector2.new(1, 0),
