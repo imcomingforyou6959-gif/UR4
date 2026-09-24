@@ -3736,7 +3736,7 @@ function Library:CreateSpotifyPlayer()
     local Token = TokenConfig.AccessToken
 
     local CollapsedSize = UDim2.new(0, 248, 0, 88)
-    local ExpandedSize  = UDim2.new(0, 540, 0, 250)
+    local ExpandedSize  = UDim2.new(0, 540, 0, 340)
     local ResultButtons = {}
     local SearchResults = {}
     local SearchTrackResults = {}
@@ -3858,12 +3858,12 @@ function Library:CreateSpotifyPlayer()
         ZIndex=2,
     }, { TextColor3='FontColor' })
 
-    -- ============ Profile (top-right, transparent, no bar) ============
+    -- ============ Profile (top-right, transparent, inline with search bar) ============
     Items["ProfileFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         AnchorPoint=Vector2.new(1, 0),
-        Position=UDim2.new(1, -10, 0, 10),
-        Size=UDim2.new(0, 220, 0, 24),
+        Position=UDim2.new(1, -28, 0, 10),
+        Size=UDim2.new(0, 240, 0, 24),
         BackgroundTransparency=1,
         BorderSizePixel=0,
         Visible=false,
@@ -3872,10 +3872,10 @@ function Library:CreateSpotifyPlayer()
     })
 
     Items["ProfileName"] = New("TextLabel", {
-        Name="\0", Font=Library.Font, TextSize=14,
+        Name="\0", Font=Library.Font, TextSize=13,
         Parent=Items["ProfileFrame"],
         Position=UDim2.new(0, 0, 0, 0),
-        Size=UDim2.new(1, -30, 0, 14),
+        Size=UDim2.new(1, -30, 0, 13),
         TextColor3=Library.FontColor,
         Text="Loading...",
         BackgroundTransparency=1,
@@ -3889,7 +3889,7 @@ function Library:CreateSpotifyPlayer()
         Name="\0", Font=Library.Font, TextSize=11,
         Parent=Items["ProfileFrame"],
         Position=UDim2.new(0, 0, 0, 13),
-        Size=UDim2.new(1, -30, 0, 12),
+        Size=UDim2.new(1, -30, 0, 11),
         TextColor3=ThemeInactiveText,
         Text="",
         BackgroundTransparency=1,
@@ -3999,8 +3999,9 @@ function Library:CreateSpotifyPlayer()
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
-        Size=UDim2.new(0,260,0,146),
+        Size=UDim2.new(0,260,0,178),
         BorderSizePixel=0, BackgroundColor3=Library.MainColor,
+        Visible=false,
         ZIndex=1,
     }, { BackgroundColor3='MainColor' })
 
@@ -4291,7 +4292,7 @@ function Library:CreateSpotifyPlayer()
         Size=UDim2.new(0,14,0,14), BorderSizePixel=0, AutoButtonColor=false,
         Image="rbxassetid://9607545497", Rotation=0,
         ImageColor3=Library.FontColor, BackgroundTransparency=1,
-        ZIndex=4,
+        ZIndex=6,
     }, { ImageColor3='FontColor' })
 
     local function CloseContextMenu()
@@ -5172,8 +5173,9 @@ function Library:CreateSpotifyPlayer()
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
-        -- Profile row sits on the SAME line as the search bar (top row).
-        -- Below that line: SearchResults on the left, LyricsFrame on the right.
+        -- Row 1 (y=10, h=24): search bar (left) + profile (right)
+        -- Row 2 (y=42, h=178): search results (left) + queue/lyrics (right)
+        -- Row 3 (bottom): player area
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
         local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -40)
         local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 10, 0, -170)
@@ -5181,6 +5183,7 @@ function Library:CreateSpotifyPlayer()
         local expandRot     = bool and 90 or 0
 
         Items["ProfileFrame"].Visible = bool
+        Items["LyricsFrame"].Visible  = bool
 
         if instant then
             player.Size = bool and ExpandedSize or CollapsedSize
