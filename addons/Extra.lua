@@ -3847,7 +3847,7 @@ function Library:CreateSpotifyPlayer()
         Parent=Items["SearchBackground"],
         AnchorPoint=Vector2.new(0,0.5),
         PlaceholderColor3=ThemeInactiveText,
-        PlaceholderText="Search songs, artists, albums",
+        PlaceholderText="search songs, artists, albums",
         Size=UDim2.new(1,-12,0,15),
         TextColor3=Library.FontColor, Text="",
         BackgroundTransparency=1,
@@ -5170,12 +5170,8 @@ function Library:CreateSpotifyPlayer()
         IsExpanded = bool
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-
-        -- Row 1 (y=10, h=24): search bar (left) + profile (right)
-        -- Row 2 (y=42, h=178): search results (left) + queue/lyrics (right)
-        -- Row 3 (bottom): player area
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
-        local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -40)
+        local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -50)
         local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 10, 0, -170)
         local lyricsPos     = bool and UDim2.new(0, 270, 0, 42)  or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
