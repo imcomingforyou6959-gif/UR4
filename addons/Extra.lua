@@ -3862,7 +3862,7 @@ function Library:CreateSpotifyPlayer()
     Items["ProfileFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         AnchorPoint=Vector2.new(1, 0),
-        Position=UDim2.new(1, -30, 0, 10),
+        Position=UDim2.new(1, -10, 0, 10),
         Size=UDim2.new(0, 220, 0, 24),
         BackgroundTransparency=1,
         BorderSizePixel=0,
@@ -3920,11 +3920,11 @@ function Library:CreateSpotifyPlayer()
     })
     New("UICorner", { Name="\0", Parent=Items["ProfileAvatar"], CornerRadius=UDim.new(0.5, 0) })
 
-    -- ============ Search results (left) ============
+    -- ============ Search results (left column) ============
     Items["SearchResults"] = New("ScrollingFrame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(0, 10, 0, -170),
-        Size=UDim2.new(0, 250, 0, 128),
+        Size=UDim2.new(0, 250, 0, 178),
         BorderSizePixel=0, CanvasSize=UDim2.new(),
         AutomaticCanvasSize=Enum.AutomaticSize.Y,
         ScrollingDirection=Enum.ScrollingDirection.Y,
@@ -3995,7 +3995,7 @@ function Library:CreateSpotifyPlayer()
         ResultButtons[Index] = Row
     end
 
-    -- ============ Queue / Lyrics panel (right, below profile row) ============
+    -- ============ Queue / Lyrics panel (right column, below profile row) ============
     Items["LyricsFrame"] = New("Frame", {
         Name="\0", Parent=Items["SpotifyPlayer"],
         Position=UDim2.new(1,10,0,10),
@@ -5172,12 +5172,12 @@ function Library:CreateSpotifyPlayer()
         local player = Items["SpotifyPlayer"]
         local info = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 
-        -- NOTE: profile shares the top row with the search bar.
-        -- Lyrics/Queue panel starts BELOW the profile row, aligned with the search results.
+        -- Profile row sits on the SAME line as the search bar (top row).
+        -- Below that line: SearchResults on the left, LyricsFrame on the right.
         local playerAreaPos = bool and UDim2.new(0, 10, 1, -78) or UDim2.new(0, 10, 0, 10)
-        local searchPos     = bool and UDim2.new(0, 10, 0, 10)  or UDim2.new(0, 10, 0, -40)
-        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)  or UDim2.new(0, 10, 0, -170)
-        local lyricsPos     = bool and UDim2.new(1, 10, 0, 42)  or UDim2.new(1, 10, 0, 10)
+        local searchPos     = bool and UDim2.new(0, 10, 0, 10)   or UDim2.new(0, 10, 0, -40)
+        local resultsPos    = bool and UDim2.new(0, 10, 0, 42)   or UDim2.new(0, 10, 0, -170)
+        local lyricsPos     = bool and UDim2.new(0, 270, 0, 42)  or UDim2.new(1, 10, 0, 10)
         local expandRot     = bool and 90 or 0
 
         Items["ProfileFrame"].Visible = bool
