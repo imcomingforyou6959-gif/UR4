@@ -6509,7 +6509,7 @@ AFKToggle:OnChanged(function(value)
         afkThread = task.spawn(function()
             while AlwaysAFKEnabled do
                 fireAFK()
-                task.wait(1)
+                task.wait(0.25)
             end
         end)
     else
