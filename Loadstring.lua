@@ -4499,7 +4499,7 @@ grabReturnPos = nil
 grabbedTarget = nil
 lastGrabAttempt = 0
 
-local GRAB_CONFIG = {
+GRAB_CONFIG = {
     HEIGHT_ABOVE_TARGET = 2.5,
     GRAB_DURATION = 1,
     KEY_PRESS_INTERVAL = 0.7,
@@ -4531,6 +4531,11 @@ GRAB_REMOTES = {
         Path = {"ReplicatedStorage", "MainEvent"},
         Method = "FireServer",
         Args = {"Grabbing", false}
+    },
+    {
+        Path = {"ReplicatedStorage", "GameRemotes", "MainGameEvent"},
+        Method = "FireServer",
+        Args = {"Grabbing", true}
     },
 }
 
