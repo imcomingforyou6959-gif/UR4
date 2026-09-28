@@ -18,6 +18,11 @@ ProtectGui(ScreenGui);
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 ScreenGui.Parent = CoreGui;
 
+function Library:IsTyping()
+    local focused = InputService:GetFocusedTextBox()
+    return focused ~= nil
+end
+
 local Toggles = {};
 local Options = {};
 
@@ -1284,7 +1289,11 @@ do
             end;
         end);
 
-                Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+        Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
+            if InputService:GetFocusedTextBox() then
+                return;
+            end;
+
             if (not Picking) then
                 if KeyPicker.Mode == 'Toggle' then
                     local Key = KeyPicker.Value;
@@ -1319,6 +1328,10 @@ do
         end))
 
         Library:GiveSignal(InputService.InputEnded:Connect(function(Input)
+            if InputService:GetFocusedTextBox() then
+                return;
+            end;
+
             if (not Picking) then
                 KeyPicker:Update();
             end;
