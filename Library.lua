@@ -18,11 +18,6 @@ ProtectGui(ScreenGui);
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 ScreenGui.Parent = CoreGui;
 
-function Library:IsTyping()
-    local focused = InputService:GetFocusedTextBox()
-    return focused ~= nil
-end
-
 local Toggles = {};
 local Options = {};
 
