@@ -3870,7 +3870,7 @@ BT_Conn = nil
 
 local BT_Heartbeat = {}
 
-local function BT_SequenceFade(beam, a0, a1)
+function BT_SequenceFade(beam, a0, a1)
     local elapsed = 0
     local kp = beam.Transparency.Keypoints
     local t0 = kp[1].Value
@@ -3898,7 +3898,7 @@ local function BT_SequenceFade(beam, a0, a1)
     table.insert(BT_Heartbeat, fn)
 end
 
-local function BT_SpawnBeam(startCF, endCF)
+function BT_SpawnBeam(startCF, endCF)
     local template = BT_BeamCache[BT_Style] or BT_BeamCache.laser
     local beam = template:Clone()
     beam.Color = ColorSequence.new(BT_Color1, BT_Color2)
@@ -3916,7 +3916,7 @@ local function BT_SpawnBeam(startCF, endCF)
     task.delay(BT_Lifetime, BT_SequenceFade, beam, a0, a1)
 end
 
-local function BT_SpawnLine(from, to)
+function BT_SpawnLine(from, to)
     local main = Drawing.new('Line')
     main.Color = BT_Color1
     main.Thickness = 1
@@ -5357,7 +5357,7 @@ task.spawn(_WalkSpeedChanged)
 
 _njp = 50
 
-local function _JumpPowerLoop()
+function _JumpPowerLoop()
     if not Toggles.JumpPowerEnabled.Value then 
         return 
     end
@@ -5371,7 +5371,7 @@ local function _JumpPowerLoop()
     end
 end
 
-local function _JumpPowerChanged()
+function _JumpPowerChanged()
     if _JPConnection then
         _JPConnection:Disconnect()
         _JPConnection = nil
@@ -6550,7 +6550,7 @@ do
         end
     end
 
-    local function _orbitTargetValid(target)
+    function _orbitTargetValid(target)
         if not target then return false end
         if not target.Parent then return false end
         if not target.Character then return false end
@@ -6745,10 +6745,10 @@ Toggles.FaceTarget:OnChanged(function(value)
 end)
 
 -- always afk
-local AlwaysAFKEnabled = false
-local afkThread = nil
+AlwaysAFKEnabled = false
+afkThread = nil
 
-local function fireAFK()
+function fireAFK()
     local replicatedStorage = game:GetService("ReplicatedStorage")
     
     local remotes = {
@@ -6772,7 +6772,7 @@ local function fireAFK()
     end
 end
 
-local AFKToggle = _78:AddToggle('AlwaysAFK', {
+AFKToggle = _78:AddToggle('AlwaysAFK', {
     Text = 'Always AFK',
     Default = false,
 })
