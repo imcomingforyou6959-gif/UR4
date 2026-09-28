@@ -1642,45 +1642,63 @@ end)
 MovementSection = WorldTab:AddRightGroupbox('Extras <3')
 
 -- Camera Distance
-_G.old_camera_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
+old_camera_max_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
+old_camera_min_distance = game.Players.LocalPlayer.CameraMinZoomDistance
+unlock_camera_connection = nil
+
+local function unlock_camera_loop()
+    if not Toggles.UnlockCameraDistance.Value then return end
+    local plr = game.Players.LocalPlayer
+    if plr.CameraMaxZoomDistance ~= 9e9 then
+        plr.CameraMaxZoomDistance = 9e9
+    end
+    if plr.CameraMinZoomDistance ~= 0 then
+        plr.CameraMinZoomDistance = 0
+    end
+end
 
 MovementSection:AddToggle('UnlockCameraDistance', {
     Text = 'Unlock Camera Distance',
     Default = false,
 })
 
-Toggles.UnlockCameraDistance:OnChanged(function()
-    if Toggles.UnlockCameraDistance.Value then
-        game.Players.LocalPlayer.CameraMaxZoomDistance = 9e9
+Toggles.UnlockCameraDistance:OnChanged(function(value)
+    if unlock_camera_connection then
+        unlock_camera_connection:Disconnect()
+        unlock_camera_connection = nil
+    end
+
+    if value then
+        old_camera_max_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
+        old_camera_min_distance = game.Players.LocalPlayer.CameraMinZoomDistance
+        unlock_camera_connection = _52.Heartbeat:Connect(unlock_camera_loop)
+        unlock_camera_loop()
     else
-        game.Players.LocalPlayer.CameraMaxZoomDistance = _G.old_camera_distance
+        game.Players.LocalPlayer.CameraMaxZoomDistance = old_camera_max_distance
+        game.Players.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
     end
 end)
-
 -- Anti Sit
-_G.anti_sit_connection = nil
-_G.anti_sit_char_connection = nil
+anti_sit_connection = nil
+anti_sit_char_connection = nil
 
-_G.do_anti_sit = function()
-    if _G.anti_sit_connection then
-        _G.anti_sit_connection:Disconnect()
-        _G.anti_sit_connection = nil
+do_anti_sit = function()
+    if anti_sit_connection then
+        anti_sit_connection:Disconnect()
+        anti_sit_connection = nil
     end
 
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChild("Humanoid")
+    if not hum then return end
 
-    if hum then
-        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
 
-        _G.anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
-            if hum.Sit then
-                task.wait(0)
-                hum.Sit = false
-                hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-            end
-        end)
-    end
+    anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
+        if hum.Sit then
+            hum.Sit = false
+        end
+    end)
 end
 
 MovementSection:AddToggle('AntiSit', {
@@ -1689,31 +1707,32 @@ MovementSection:AddToggle('AntiSit', {
 })
 
 Toggles.AntiSit:OnChanged(function()
-    if _G.anti_sit_connection then
-        _G.anti_sit_connection:Disconnect()
-        _G.anti_sit_connection = nil
+    if anti_sit_connection then
+        anti_sit_connection:Disconnect()
+        anti_sit_connection = nil
     end
 
-    if _G.anti_sit_char_connection then
-        _G.anti_sit_char_connection:Disconnect()
-        _G.anti_sit_char_connection = nil
+    if anti_sit_char_connection then
+        anti_sit_char_connection:Disconnect()
+        anti_sit_char_connection = nil
     end
 
-    char = LocalPlayer.Character
-    hum = char and char:FindFirstChild("Humanoid")
-
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChild("Humanoid")
     if hum then
         hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
     end
 
     if Toggles.AntiSit.Value then
-        _G.anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function()
+        anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function()
             task.wait(0.5)
-            _G.do_anti_sit()
+            if Toggles.AntiSit.Value then
+                do_anti_sit()
+            end
         end)
 
         if LocalPlayer.Character then
-            _G.do_anti_sit()
+            do_anti_sit()
         end
     end
 end)
@@ -1820,6 +1839,7 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
+Misctab = _59:AddTab('Misc')
 Ragebot = _59:AddTab('Rage')
 
 OrbitGroupbox = Ragebot:AddLeftGroupbox('Strafing')
@@ -2116,20 +2136,13 @@ SpinbotSpeed = 50
 SpinbotConnection = nil
 
 function DoSpinbot()
-    pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-        
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.AutoRotate = false
-        end
-        
-        hrp.CFrame = hrp.CFrame * CFrame.fromEulerAnglesXYZ(0, SpinbotSpeed * 0.016, 0)
-    end)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if humanoid then humanoid.AutoRotate = false end
+    hrp.CFrame = hrp.CFrame * CFrame.fromEulerAnglesXYZ(0, SpinbotSpeed * 0.016, 0)
 end
 
 Toggles.Spinbot:OnChanged(function(value)
@@ -2441,17 +2454,19 @@ AS_blacklistedTools = {
     "Cookie",
 }
 
+AS_blacklistSet = {}
+for _, name in ipairs(AS_blacklistedTools) do
+    AS_blacklistSet[name] = true
+end
+
 function AS_isBlacklisted(toolName)
-    for _, blacklisted in ipairs(AS_blacklistedTools) do
-        if toolName == blacklisted then
-            return true
-        end
-    end
-    return false
+    return AS_blacklistSet[toolName] == true
 end
 
 function AS_getStimItem()
-    local shop = workspace.Ignored:FindFirstChild("Shop")
+    local ignored = workspace:FindFirstChild("Ignored")
+    if not ignored then return nil end
+    local shop = ignored:FindFirstChild("Shop")
     if not shop then return nil end
     local children = shop:GetChildren()
     for _, item in ipairs(children) do
@@ -2589,16 +2604,19 @@ function AS_stopRandomEquip()
 end
 
 function AS_buyStim()
-    if AS_busy or AS_hasStim() or _AA_busy or stomping or grabbing or AS_shared_lock then return end
+    if AS_busy or AS_shared_lock then return end
+    if AS_hasStim() then return end
+    if _AA_busy or stomping or grabbing then return end
+
     local char = _56.Character
     if not char then return end
     local hum = char:FindFirstChild("Humanoid")
     if not hum or hum.Health <= 0 then return end
-    
+
     AS_busy = true
     AS_shared_lock = true
     AS_unequipCurrentTool()
-    
+
     local wasVoidActive = _118
     if wasVoidActive then
         _118 = false
@@ -2615,7 +2633,7 @@ function AS_buyStim()
         _119 = nil
         task.wait(0.02)
     end
-    
+
     local ch = _56.Character
     if not ch then AS_busy = false AS_shared_lock = false return end
     local rt = ch:FindFirstChild("HumanoidRootPart")
@@ -2626,38 +2644,37 @@ function AS_buyStim()
     if not clickDetector then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
-    
-    -- Stay at stim until we successfully buy it
+
     local maxAttempts = 30
     local attempts = 0
-    
+
     while not AS_hasStim() and attempts < maxAttempts do
         if stomping or grabbing or _AA_busy then break end
         if not _56.Character then break end
-        
+
         rt = _56.Character:FindFirstChild("HumanoidRootPart")
         if not rt then break end
-        
+
         rt.CFrame = primaryPart.CFrame * CFrame.new(0, -3, 0)
-        
+
         for i = 1, 25 do
             fireclickdetector(clickDetector)
         end
-        
+
         task.wait(0.02)
         attempts = attempts + 1
-        
+
         if AS_hasStim() then
             break
         end
     end
-    
+
     pcall(function() rt.CFrame = oc end)
     task.wait(0.02)
-    
+
     AS_busy = false
     AS_shared_lock = false
-    
+
     if wasVoidActive then
         if _120 then _119 = _120.CFrame end
         _118 = true
@@ -2679,7 +2696,7 @@ function AS_buyStim()
             end
         end)
     end
-    
+
     task.wait(0.02)
     AS_reequipTool()
 end
@@ -2691,10 +2708,10 @@ function AS_autoStim()
     if AS_shared_lock then return end
     if stomping then return end
     if grabbing then return end
-    
+
     local hp, maxHp = AS_getHealth()
     local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
-    
+
     if not AS_hasStim() then
         if AS_buyStimEnabled or hp < maxHp then
             AS_buyStim()
@@ -2733,7 +2750,6 @@ end)
 Toggles.AutoStim:OnChanged(function(value)
     if value then
         AS_startRandomEquip()
-        task.spawn(AS_autoStim)
     else
         AS_stopRandomEquip()
     end
@@ -2742,29 +2758,22 @@ end)
 _56.CharacterAdded:Connect(function()
     AS_cache = nil
     AS_equippedTool = nil
-    task.wait(0.3)
-    if Toggles.AutoStim and Toggles.AutoStim.Value then
-        task.spawn(AS_autoStim)
-    end
 end)
 
 task.spawn(function()
-    while task.wait(0.02) do
+    while task.wait(0.05) do
         if not Toggles.AutoStim or not Toggles.AutoStim.Value then continue end
-        if _AA_busy then continue end
-        if AS_busy then continue end
-        if AS_shared_lock then continue end
-        if stomping then continue end
-        if grabbing then continue end
-        
+        if _AA_busy or AS_busy or AS_shared_lock then continue end
+        if stomping or grabbing then continue end
+
         local char = _56.Character
         if not char then continue end
         local hum = char:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
-        
+
         local hp, maxHp = AS_getHealth()
         local threshold = Options.AutoStimThreshold and Options.AutoStimThreshold.Value or 50
-        
+
         if not AS_hasStim() then
             if AS_buyStimEnabled or hp < maxHp then
                 task.spawn(function()
@@ -2775,7 +2784,7 @@ task.spawn(function()
                 end)
             end
         elseif hp <= threshold and hp < maxHp then
-            task.spawn(AS_useStim)
+            AS_useStim()
         end
     end
 end)
@@ -3165,6 +3174,7 @@ local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
     Title = 'Skeleton Color',
     Transparency = 0
 })
+
 -- Marin ESP
 ImageESP_Objects = {}
 ImageESP_Enabled = false
@@ -3277,7 +3287,11 @@ _78:AddToggle('MarinESP', {
     end,
 })
 
-Players.PlayerAdded:Connect(function(plr)
+local ImageESP_ConnectionAdded
+local ImageESP_ConnectionRemoving
+local ImageESP_ConnectionLocalAdded
+
+ImageESP_ConnectionAdded = Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         task.wait(0.5)
         if ImageESP_Enabled then
@@ -3290,18 +3304,18 @@ Players.PlayerAdded:Connect(function(plr)
     end)
 end)
 
-Players.PlayerRemoving:Connect(function(plr)
+ImageESP_ConnectionRemoving = Players.PlayerRemoving:Connect(function(plr)
     ImageESP_Remove(plr)
 end)
 
-LocalPlayer.CharacterAdded:Connect(function()
+ImageESP_ConnectionLocalAdded = LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.5)
     if ImageESP_Enabled then ImageESP_Refresh() end
 end)
 
 task.spawn(function()
     while task.wait() do
-        if ImageESP_Enabled then
+        if ImageESP_Enabled and next(ImageESP_Objects) then
             ImageESP_UpdatePositions()
         end
     end
@@ -3313,6 +3327,9 @@ _48:OnUnload(function()
     end
     table.clear(ImageESP_Objects)
     ImageESP_Cached = nil
+    if ImageESP_ConnectionAdded then ImageESP_ConnectionAdded:Disconnect() end
+    if ImageESP_ConnectionRemoving then ImageESP_ConnectionRemoving:Disconnect() end
+    if ImageESP_ConnectionLocalAdded then ImageESP_ConnectionLocalAdded:Disconnect() end
 end)
 
 -- China hat core
@@ -3825,6 +3842,245 @@ function SelfChams:setAddEffect(e)
 end
 function SelfChams:setParticleColor(c) SC_particleColor = c if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
 function SelfChams:setParticleTransparency(t) SC_particleTransparency = t if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
+
+local BT_Beams = {
+    laser = { FaceCamera = true, TextureSpeed = 1.5, Width0 = 0.25, Width1 = 0.25, TextureLength = 2, LightEmission = 3, Brightness = 2.5, Texture = 'rbxassetid://12781800668' },
+    light = { FaceCamera = true, TextureSpeed = 2, Width0 = 0.25, Width1 = 0.25, LightInfluence = 1, LightEmission = 3, Segments = 1, Texture = 'rbxassetid://2382169232', TextureLength = 15, TextureMode = Enum.TextureMode.Wrap },
+    flow  = { FaceCamera = true, TextureSpeed = 2.5, Width0 = 0.2, Width1 = 0.2, LightEmission = 3, Brightness = 5, Texture = 'rbxassetid://12788927812' },
+}
+
+local BT_BeamCache = {}
+for name, cfg in BT_Beams do
+    local beam = Instance.new('Beam')
+    for k, v in pairs(cfg) do beam[k] = v end
+    BT_BeamCache[name] = beam
+end
+
+BT_Color1 = Color3.fromRGB(255, 128, 128)
+BT_Color2 = Color3.new(1, 1, 1)
+BT_Trans = 0
+BT_GradTrans = 1
+BT_Lifetime = 0.8
+BT_Outline = Color3.new(0, 0, 0)
+BT_OutlineTrans = 0
+BT_Style = 'laser'
+BT_Type = 'Beam'
+BT_Enabled = false
+BT_Conn = nil
+
+local BT_Heartbeat = {}
+
+local function BT_SequenceFade(beam, a0, a1)
+    local elapsed = 0
+    local kp = beam.Transparency.Keypoints
+    local t0 = kp[1].Value
+    local t1 = kp[2].Value
+    local fn
+    fn = function(dt)
+        elapsed = elapsed + dt
+        local a = math.clamp(elapsed / 0.2, 0, 1)
+        beam.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, t0 + (1 - t0) * a),
+            NumberSequenceKeypoint.new(1, t1 + (1 - t1) * a),
+        })
+        if a >= 1 then
+            for i = 1, #BT_Heartbeat do
+                if BT_Heartbeat[i] == fn then
+                    table.remove(BT_Heartbeat, i)
+                    break
+                end
+            end
+            pcall(function() beam:Destroy() end)
+            if a0 then pcall(function() a0:Destroy() end) end
+            if a1 then pcall(function() a1:Destroy() end) end
+        end
+    end
+    table.insert(BT_Heartbeat, fn)
+end
+
+local function BT_SpawnBeam(startCF, endCF)
+    local template = BT_BeamCache[BT_Style] or BT_BeamCache.laser
+    local beam = template:Clone()
+    beam.Color = ColorSequence.new(BT_Color1, BT_Color2)
+    beam.Transparency = NumberSequence.new(BT_Trans, BT_GradTrans)
+    local terrain = workspace:FindFirstChild("Terrain") or workspace
+    local a0 = Instance.new('Attachment')
+    a0.CFrame = startCF
+    a0.Parent = terrain
+    local a1 = Instance.new('Attachment')
+    a1.CFrame = endCF
+    a1.Parent = terrain
+    beam.Attachment0 = a0
+    beam.Attachment1 = a1
+    beam.Parent = workspace
+    task.delay(BT_Lifetime, BT_SequenceFade, beam, a0, a1)
+end
+
+local function BT_SpawnLine(from, to)
+    local main = Drawing.new('Line')
+    main.Color = BT_Color1
+    main.Thickness = 1
+    main.Transparency = 1 - BT_Trans
+    main.Visible = true
+    local outline = Drawing.new('Line')
+    outline.Color = BT_Outline
+    outline.Thickness = 3
+    outline.Transparency = 1 - BT_OutlineTrans
+    outline.Visible = true
+    
+    local startTime = tick()
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        local sp1, on1 = workspace.CurrentCamera:WorldToViewportPoint(from)
+        local sp2, on2 = workspace.CurrentCamera:WorldToViewportPoint(to)
+        if not on1 and not on2 then
+            main.Visible = false
+            outline.Visible = false
+            return
+        end
+        local v1 = Vector2.new(sp1.X, sp1.Y)
+        local v2 = Vector2.new(sp2.X, sp2.Y)
+        main.From = v1
+        main.To = v2
+        local offset = (v1 - v2).Unit
+        outline.From = v1 + offset
+        outline.To = v2 - offset
+        local elapsed = tick() - startTime
+        if elapsed > BT_Lifetime then
+            local a = math.clamp((elapsed - BT_Lifetime) / 0.3, 0, 1)
+            main.Transparency = (1 - BT_Trans) + BT_Trans * a
+            outline.Transparency = 1
+            if a >= 1 then
+                main:Remove()
+                outline:Remove()
+                if conn then conn:Disconnect() end
+            end
+        end
+    end)
+end
+
+local function BT_Dispatch(object, beam, position, isLocal)
+    if not isLocal then return end
+    if not BT_Enabled then return end
+
+    local startCF = beam.Attachment0 and beam.Attachment0.WorldCFrame or object.CFrame
+    local endCF = position
+
+    if BT_Type == 'Beam' then
+        BT_SpawnBeam(startCF, endCF)
+    else
+        BT_SpawnLine(startCF.Position, endCF.Position)
+    end
+
+    pcall(function() object:Destroy() end)
+end
+
+local function BT_Refresh()
+    if BT_Conn then
+        BT_Conn:Disconnect()
+        BT_Conn = nil
+    end
+    if not BT_Enabled then return end
+
+    local ignored = workspace:FindFirstChild("Ignored")
+    local siren = ignored and ignored:FindFirstChild("Siren")
+    local radius = siren and siren:FindFirstChild("Radius")
+    if not radius then return end
+
+    BT_Conn = radius.ChildAdded:Connect(function(object)
+        task.wait()
+        if object.Name ~= "BULLET_RAYS" then return end
+        local beam = object:FindFirstChildOfClass("Beam")
+        if not beam then return end
+        local att1 = beam.Attachment1
+        if not att1 then return end
+        local isLocal = object:GetAttribute("OwnerCharacter") == LocalPlayer.Name
+        BT_Dispatch(object, beam, att1.WorldCFrame, isLocal)
+    end)
+end
+
+GunVisuals = Misctab:AddLeftGroupbox('Gun Visuals')
+
+GunVisuals:AddToggle('PlayerBulletTracers', {
+    Text = 'Bullet Tracers',
+    Default = false,
+    Callback = function(v) BT_Enabled = v BT_Refresh() end,
+})
+
+GunVisuals:AddDropdown('PlayerBulletTracersType', {
+    Text = 'Type',
+    Default = 'Beam',
+    Values = { 'Beam', 'Line' },
+    Callback = function(v) BT_Type = v end,
+})
+
+GunVisuals:AddDropdown('PlayerBulletTracersStyle', {
+    Text = 'Style',
+    Default = 'laser',
+    Values = { 'laser', 'light', 'flow' },
+    Callback = function(v) BT_Style = v end,
+})
+
+GunVisuals:AddLabel('Color'):AddColorPicker('PlayerBulletTracersColor', {
+    Default = Color3.fromRGB(255, 128, 128),
+    Callback = function(c) BT_Color1 = c end,
+})
+
+GunVisuals:AddLabel('Gradient'):AddColorPicker('PlayerBulletTracersGrad', {
+    Default = Color3.new(1, 1, 1),
+    Callback = function(c) BT_Color2 = c end,
+})
+
+GunVisuals:AddLabel('Outline'):AddColorPicker('PlayerBulletTracersOutline', {
+    Default = Color3.new(0, 0, 0),
+    Callback = function(c) BT_Outline = c end,
+})
+
+GunVisuals:AddSlider('PlayerBulletTracersTrans', {
+    Text = 'Transparency',
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(v) BT_Trans = v end,
+})
+
+GunVisuals:AddSlider('PlayerBulletTracersGradTrans', {
+    Text = 'Gradient Trans',
+    Default = 1,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+    Callback = function(v) BT_GradTrans = v end,
+})
+
+GunVisuals:AddSlider('PlayerBulletTracersLifetime', {
+    Text = 'Lifetime',
+    Default = 0.8,
+    Min = 0.05,
+    Max = 3,
+    Rounding = 2,
+    Callback = function(v) BT_Lifetime = v end,
+})
+
+task.spawn(function()
+    while task.wait() do
+        if #BT_Heartbeat > 0 then
+            local dt = task.wait()
+            for i = #BT_Heartbeat, 1, -1 do
+                local fn = BT_Heartbeat[i]
+                if fn then pcall(fn, dt) end
+            end
+        end
+    end
+end)
+
+_48:OnUnload(function()
+    if BT_Conn then BT_Conn:Disconnect() BT_Conn = nil end
+    for i = #BT_Heartbeat, 1, -1 do
+        BT_Heartbeat[i] = nil
+    end
+end)
 
 -- UI
 _78:AddDivider()
@@ -5813,205 +6069,202 @@ local function _197()
 end
 
 -- AUTO STOMP
-StompToggle:OnChanged(function(value)
-    StompEnabled = value
-    if not value and stompConnection then
-        stompConnection:Disconnect()
-        stompConnection = nil
-        stomping = false
-        if sethiddenproperty then
-            local char = _56.Character
-            local hum = char and char:FindFirstChildOfClass('Humanoid')
-            local root = hum and hum.RootPart
-            if root then pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end) end
-        end
-    end
-end)
+do
+    stompConnection = nil
+    stompRemote = nil
 
-local stompRemote = nil
-local function getStompRemote()
-    if stompRemote and stompRemote.Parent then
-        return stompRemote
-    end
-    
-    local replicatedStorage = game:GetService("ReplicatedStorage")
-    
-    -- GameRemotes.MainGameEvent
-    local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
-    if gameRemotes then
-        local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
-        if mainGameEvent then
-            stompRemote = mainGameEvent
-            return stompRemote
-        end
-    end
-    
-    -- MainRemotes.MainRemoteEvent
-    local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
-    if mainRemotes then
-        local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
-        if mainRemoteEvent then
-            stompRemote = mainRemoteEvent
-            return stompRemote
-        end
-    end
-    
-    -- Remotes.MainRemoteEvent
-    local remotes = replicatedStorage:FindFirstChild("Remotes")
-    if remotes then
-        local mainRemoteEvent = remotes:FindFirstChild("MainRemoteEvent")
-        if mainRemoteEvent then
-            stompRemote = mainRemoteEvent
-            return stompRemote
-        end
-    end
-    
-    -- MainEvent
-    local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
-    if mainEvent then
-        stompRemote = mainEvent
-        return stompRemote
-    end
-    
-    return nil
-end
-
-function fireStomp()
-    local remote = getStompRemote()
-    if not remote then return end
-    pcall(function()
-        remote:FireServer("Stomp")
-    end)
-end
-
-local stomping = false
-local stompConnection = nil
-
-function getBestStompPosition(targetChar)
-    local parts = {"UpperTorso", "Torso", "HumanoidRootPart", "LowerTorso", "Head"}
-    for _, partName in ipairs(parts) do
-        local part = targetChar:FindFirstChild(partName)
-        if part and part:IsA("BasePart") then
-            return part
-        end
-    end
-    return nil
-end
-
-function findSafeReturnPosition(originalPos)
-    local directions = {
-        Vector3.new(0, 5, 0),
-        Vector3.new(5, 0, 0),
-        Vector3.new(-5, 0, 0),
-        Vector3.new(0, 0, 5),
-        Vector3.new(0, 0, -5),
-        Vector3.new(5, 5, 0),
-        Vector3.new(-5, 5, 0),
-        Vector3.new(0, 5, 5),
-        Vector3.new(0, 5, -5),
-        Vector3.new(0, 10, 0),
-    }
-    
-    for _, offset in ipairs(directions) do
-        local checkPos = originalPos + offset
-        local ray = Ray.new(checkPos, Vector3.new(0, -20, 0))
-        local hit = workspace:FindPartOnRay(ray, _56.Character, false, true)
-        
-        if not hit then
-            return CFrame.new(checkPos)
-        end
-    end
-    
-    return CFrame.new(originalPos + Vector3.new(0, 4, 0))
-end
-
-function autoStompTarget()
-    if not StompEnabled then return end
-    if _118 then return end
-    if stomping then return end
-    if _AA_busy then return end
-    
-    local target = _104.targetplayer
-    if not target then return end
-    
-    local targetChar = target.Character
-    if not targetChar then return end
-    
-    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
-    if not BodyEffects then return end
-    
-    local KOCheck = BodyEffects:FindFirstChild("K.O")
-    if not KOCheck or KOCheck.Value ~= true then return end
-    if Grabbed(target) then return end
-    if isDead(target) then return end
-    
-    local localChar = _56.Character
-    if not localChar then return end
-    
-    local localHRP = localChar:FindFirstChild("HumanoidRootPart")
-    if not localHRP then return end
-    
-    local targetPart = getBestStompPosition(targetChar)
-    if not targetPart then return end
-    
-    stomping = true
-    local lastpos = localHRP.CFrame
-    
-    pcall(function() 
-        localHRP:SetNetworkOwner(_56) 
-        targetPart:SetNetworkOwner(_56)
-    end)
-    
-    localHRP.CFrame = targetPart.CFrame
-    
-    for i = 1, 10 do
-        fireStomp()
-    end
-    
-    if stompConnection then stompConnection:Disconnect() end
-    stompConnection = _52.RenderStepped:Connect(function()
-        if not stomping then
+    StompToggle:OnChanged(function(value)
+        StompEnabled = value
+        if not value and stompConnection then
             stompConnection:Disconnect()
             stompConnection = nil
-            return
+            stomping = false
+            if sethiddenproperty then
+                local char = _56.Character
+                local hum = char and char:FindFirstChildOfClass('Humanoid')
+                local root = hum and hum.RootPart
+                if root then pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end) end
+            end
         end
-        
-        local currentTargetPart = getBestStompPosition(targetChar)
-        if currentTargetPart then
-            localHRP.CFrame = currentTargetPart.CFrame
+    end)
+
+    function getStompRemote()
+        if stompRemote and stompRemote.Parent then
+            return stompRemote
+        end
+
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+
+        local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
+        if gameRemotes then
+            local mainGameEvent = gameRemotes:FindFirstChild("MainGameEvent")
+            if mainGameEvent then
+                stompRemote = mainGameEvent
+                return stompRemote
+            end
+        end
+
+        local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+        if mainRemotes then
+            local mainRemoteEvent = mainRemotes:FindFirstChild("MainRemoteEvent")
+            if mainRemoteEvent then
+                stompRemote = mainRemoteEvent
+                return stompRemote
+            end
+        end
+
+        local remotes = replicatedStorage:FindFirstChild("Remotes")
+        if remotes then
+            local mainRemoteEvent = remotes:FindFirstChild("MainRemoteEvent")
+            if mainRemoteEvent then
+                stompRemote = mainRemoteEvent
+                return stompRemote
+            end
+        end
+
+        local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
+        if mainEvent then
+            stompRemote = mainEvent
+            return stompRemote
+        end
+
+        return nil
+    end
+
+    function fireStomp()
+        local remote = getStompRemote()
+        if not remote then return end
+        pcall(function()
+            remote:FireServer("Stomp")
+        end)
+    end
+
+    function getBestStompPosition(targetChar)
+        local parts = {"UpperTorso", "Torso", "HumanoidRootPart", "LowerTorso", "Head"}
+        for _, partName in ipairs(parts) do
+            local part = targetChar:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                return part
+            end
+        end
+        return nil
+    end
+
+    function findSafeReturnPosition(originalPos)
+        local directions = {
+            Vector3.new(0, 5, 0),
+            Vector3.new(5, 0, 0),
+            Vector3.new(-5, 0, 0),
+            Vector3.new(0, 0, 5),
+            Vector3.new(0, 0, -5),
+            Vector3.new(5, 5, 0),
+            Vector3.new(-5, 5, 0),
+            Vector3.new(0, 5, 5),
+            Vector3.new(0, 5, -5),
+            Vector3.new(0, 10, 0),
+        }
+
+        for _, offset in ipairs(directions) do
+            local checkPos = originalPos + offset
+            local ray = Ray.new(checkPos, Vector3.new(0, -20, 0))
+            local hit = workspace:FindPartOnRay(ray, _56.Character, false, true)
+
+            if not hit then
+                return CFrame.new(checkPos)
+            end
+        end
+
+        return CFrame.new(originalPos + Vector3.new(0, 4, 0))
+    end
+
+    function autoStompTarget()
+        if not StompEnabled then return end
+        if _118 then return end
+        if stomping then return end
+        if _AA_busy then return end
+
+        local target = _104.targetplayer
+        if not target then return end
+
+        local targetChar = target.Character
+        if not targetChar then return end
+
+        local BodyEffects = targetChar:FindFirstChild("BodyEffects")
+        if not BodyEffects then return end
+
+        local KOCheck = BodyEffects:FindFirstChild("K.O")
+        if not KOCheck or KOCheck.Value ~= true then return end
+        if Grabbed(target) then return end
+        if isDead(target) then return end
+
+        local localChar = _56.Character
+        if not localChar then return end
+
+        local localHRP = localChar:FindFirstChild("HumanoidRootPart")
+        if not localHRP then return end
+
+        local targetPart = getBestStompPosition(targetChar)
+        if not targetPart then return end
+
+        stomping = true
+        local lastpos = localHRP.CFrame
+
+        pcall(function()
+            localHRP:SetNetworkOwner(_56)
+            targetPart:SetNetworkOwner(_56)
+        end)
+
+        localHRP.CFrame = targetPart.CFrame
+
+        for i = 1, 10 do
             fireStomp()
         end
-    end)
-    
-    if sethiddenproperty then
-        task.wait()
-        pcall(function() 
-            local hum = localChar:FindFirstChildOfClass('Humanoid')
-            if hum and hum.RootPart then
-                sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", targetPart)
+
+        if stompConnection then stompConnection:Disconnect() end
+        stompConnection = _52.RenderStepped:Connect(function()
+            if not stomping then
+                stompConnection:Disconnect()
+                stompConnection = nil
+                return
             end
+
+            local currentTargetPart = getBestStompPosition(targetChar)
+            if currentTargetPart then
+                localHRP.CFrame = currentTargetPart.CFrame
+                fireStomp()
+            end
+        end)
+
+        if sethiddenproperty then
+            task.wait()
+            pcall(function()
+                local hum = localChar:FindFirstChildOfClass('Humanoid')
+                if hum and hum.RootPart then
+                    sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", targetPart)
+                end
+            end)
+        end
+
+        task.delay(0.5, function()
+            stomping = false
+            if stompConnection then
+                stompConnection:Disconnect()
+                stompConnection = nil
+            end
+
+            if sethiddenproperty then
+                local hum = localChar:FindFirstChildOfClass('Humanoid')
+                if hum and hum.RootPart then
+                    pcall(function() sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", nil) end)
+                end
+            end
+
+            local safeReturn = findSafeReturnPosition(lastpos.Position)
+            pcall(function()
+                localHRP.CFrame = safeReturn
+            end)
         end)
     end
-    
-    task.delay(0.5, function()
-        stomping = false
-        if stompConnection then
-            stompConnection:Disconnect()
-            stompConnection = nil
-        end
-        
-        if sethiddenproperty then
-            local hum = localChar:FindFirstChildOfClass('Humanoid')
-            if hum and hum.RootPart then
-                pcall(function() sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", nil) end)
-            end
-        end
-        
-        local safeReturn = findSafeReturnPosition(lastpos.Position)
-        pcall(function()
-            localHRP.CFrame = safeReturn
-        end)
-    end)
 end
 
 -- Auto grab
@@ -6241,177 +6494,204 @@ end)
 
 -- RAGEBOT LOGIC
 
-OrbitEnabled = false
-OrbitConnection = nil
-OrbitTarget = nil
-OrbitRadius = 5
-OrbitSpeed = 3
-OrbitHeight = 2
-OrbitAngle = 0
-OrbitRunning = false
-OrbitOriginalPosition = nil
-OrbitIsReturning = false
-_G.OrbitBehavior = 'Orbit'
-
-function ReturnToPos()
-    if not _56.Character then return end
-    if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
-    if OrbitOriginalPosition then
-        pcall(function()
-            _56.Character.HumanoidRootPart.CFrame = OrbitOriginalPosition
-            _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        end)
-        OrbitOriginalPosition = nil
-        OrbitIsReturning = false
-    end
-end
-
-function Orbit()
-    if not OrbitEnabled then return end
-    if _118 then return end
-    if _AA_busy then return end
-    if stomping then return end
-    if grabbing then return end
-    local target = _104.targetplayer
-    if not target then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    if not target.Character then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    local BodyEffects = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
-    if not BodyEffects then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    local KOCheck = BodyEffects:FindFirstChild("K.O")
-    if not KOCheck or KOCheck.Value == true then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    if Grabbed(target) then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    if isDead(target) then
-        OrbitTarget = nil
-        if OrbitOriginalPosition then ReturnToPos() end
-        return
-    end
-    OrbitTarget = target
-    if not _56.Character then return end
-    if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
-    if not target.Character:FindFirstChild("HumanoidRootPart") then return end
-
-    if not OrbitOriginalPosition and not OrbitIsReturning then
-        OrbitOriginalPosition = _56.Character.HumanoidRootPart.CFrame
-    end
-
-    pcall(function()
-        _56.Character.HumanoidRootPart:SetNetworkOwner(_56)
-        target.Character.HumanoidRootPart:SetNetworkOwner(_56)
-    end)
-
-    local behavior = _G.OrbitBehavior or 'Orbit'
-    local targetPos
-    local lookAtPos = target.Character.HumanoidRootPart.Position
-    if behavior == 'Orbit' then
-        OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
-        local offset = Vector3.new(
-            math.cos(OrbitAngle) * OrbitRadius,
-            OrbitHeight + math.sin(OrbitAngle * 0.5) * 0.5,
-            math.sin(OrbitAngle) * OrbitRadius
-        )
-        targetPos = target.Character.HumanoidRootPart.Position + offset
-    elseif behavior == 'Above' then
-        targetPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, OrbitHeight + 5, 0)
-    elseif behavior == 'Hide' then
-        targetPos = target.Character.HumanoidRootPart.Position + Vector3.new(0, -7, 0)
-    end
-    _56.Character.HumanoidRootPart.CFrame = CFrame.new(targetPos, lookAtPos)
-    _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-end
-
-function StartOrbit()
-    if OrbitConnection then
-        OrbitConnection:Disconnect()
-        OrbitConnection = nil
-    end
-    if not OrbitEnabled then return end
-
+do
+    OrbitEnabled = false
+    OrbitConnection = nil
+    OrbitTarget = nil
+    OrbitRadius = 5
+    OrbitSpeed = 3
+    OrbitHeight = 2
     OrbitAngle = 0
-    OrbitRunning = true
+    OrbitRunning = false
     OrbitOriginalPosition = nil
     OrbitIsReturning = false
-    OrbitConnection = RunService.Heartbeat:Connect(function()
-        Orbit()
-    end)
-end
+    OrbitNetworkClaimed = false
+    _G.OrbitBehavior = 'Orbit'
 
-function StopOrbit()
-    OrbitRunning = false
-    if OrbitOriginalPosition then
-        ReturnToPos()
+    local function _orbitReleaseNetwork(character)
+        if not character then return end
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            pcall(function() hrp:SetNetworkOwner(nil) end)
+        end
     end
-    if OrbitConnection then
-        OrbitConnection:Disconnect()
-        OrbitConnection = nil
+
+    local function _orbitClaimNetwork(localCharacter, targetCharacter)
+        if OrbitNetworkClaimed then return end
+        OrbitNetworkClaimed = true
+
+        local localHRP = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+        local targetHRP = targetCharacter and targetCharacter:FindFirstChild("HumanoidRootPart")
+
+        if localHRP then
+            pcall(function() localHRP:SetNetworkOwner(_56) end)
+        end
+        if targetHRP then
+            pcall(function() targetHRP:SetNetworkOwner(_56) end)
+        end
     end
-    OrbitTarget = nil
-    OrbitAngle = 0
-end
 
--- Connections
-Options.OBS:OnChanged(function(value)
-    _G.OrbitBehavior = value
-end)
+    function ReturnToPos()
+        if not _56.Character then return end
+        if not _56.Character:FindFirstChild("HumanoidRootPart") then return end
+        if OrbitOriginalPosition then
+            pcall(function()
+                _56.Character.HumanoidRootPart.CFrame = OrbitOriginalPosition
+                _56.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                _56.Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end)
+            OrbitOriginalPosition = nil
+            OrbitIsReturning = false
+        end
 
-Toggles.OrbitToggle:OnChanged(function(value)
-    OrbitEnabled = value
-    if value then
-        StartOrbit()
-    else
-        StopOrbit()
+        if OrbitNetworkClaimed then
+            _orbitReleaseNetwork(_56.Character)
+            OrbitNetworkClaimed = false
+        end
     end
-end)
 
-Options.OrbitKeybind:OnClick(function()
-    Toggles.OrbitToggle:SetValue(not Toggles.OrbitToggle.Value)
-end)
+    local function _orbitTargetValid(target)
+        if not target then return false end
+        if not target.Parent then return false end
+        if not target.Character then return false end
 
-Options.OrbitRadius:OnChanged(function(value)
-    OrbitRadius = value
-end)
+        local bodyEffects = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
+        if not bodyEffects then return false end
 
-Options.OrbitSpeed:OnChanged(function(value)
-    OrbitSpeed = value
-end)
+        local ko = bodyEffects:FindFirstChild("K.O")
+        if ko and ko.Value == true then return false end
 
-Options.OrbitHeight:OnChanged(function(value)
-    OrbitHeight = value
-end)
+        if Grabbed(target) then return false end
+        if isDead(target) then return false end
 
-_51.PlayerRemoving:Connect(function(player)
-    if OrbitTarget == player then
-        OrbitTarget = nil
+        return true
+    end
+
+    function Orbit()
+        if not OrbitEnabled then return end
+        if _118 then return end
+        if _AA_busy then return end
+        if stomping then return end
+        if grabbing then return end
+
+        local target = _104.targetplayer
+
+        if not _orbitTargetValid(target) then
+            if OrbitTarget then
+                OrbitTarget = nil
+                if OrbitOriginalPosition then ReturnToPos() end
+            end
+            return
+        end
+
+        local localChar = _56.Character
+        if not localChar then return end
+
+        local localHRP = localChar:FindFirstChild("HumanoidRootPart")
+        if not localHRP then return end
+
+        local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        if not targetHRP then return end
+
+        if OrbitTarget ~= target then
+            OrbitTarget = target
+            OrbitNetworkClaimed = false
+        end
+
+        if not OrbitOriginalPosition and not OrbitIsReturning then
+            OrbitOriginalPosition = localHRP.CFrame
+        end
+
+        _orbitClaimNetwork(localChar, target.Character)
+
+        local behavior = _G.OrbitBehavior or 'Orbit'
+        local targetPos
+        local lookAtPos = targetHRP.Position
+
+        if behavior == 'Orbit' then
+            OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
+            targetPos = targetHRP.Position + Vector3.new(
+                math.cos(OrbitAngle) * OrbitRadius,
+                OrbitHeight + math.sin(OrbitAngle * 0.5) * 0.5,
+                math.sin(OrbitAngle) * OrbitRadius
+            )
+        elseif behavior == 'Above' then
+            targetPos = targetHRP.Position + Vector3.new(0, OrbitHeight + 5, 0)
+        elseif behavior == 'Hide' then
+            targetPos = targetHRP.Position + Vector3.new(0, -7, 0)
+        else
+            targetPos = targetHRP.Position + Vector3.new(0, OrbitHeight, 0)
+        end
+
+        localHRP.CFrame = CFrame.new(targetPos, lookAtPos)
+        localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+    end
+
+    function StartOrbit()
+        if OrbitConnection then
+            OrbitConnection:Disconnect()
+            OrbitConnection = nil
+        end
+        if not OrbitEnabled then return end
+
+        OrbitAngle = 0
+        OrbitRunning = true
+        OrbitOriginalPosition = nil
+        OrbitIsReturning = false
+        OrbitNetworkClaimed = false
+
+        OrbitConnection = RunService.Heartbeat:Connect(Orbit)
+    end
+
+    function StopOrbit()
+        OrbitRunning = false
         if OrbitOriginalPosition then
             ReturnToPos()
         end
+        if OrbitConnection then
+            OrbitConnection:Disconnect()
+            OrbitConnection = nil
+        end
+        OrbitTarget = nil
+        OrbitAngle = 0
+        OrbitNetworkClaimed = false
     end
-end)
 
-_48:OnUnload(function()
-    StopOrbit()
-end)
+    Options.OBS:OnChanged(function(value)
+        _G.OrbitBehavior = value
+    end)
+
+    Toggles.OrbitToggle:OnChanged(function(value)
+        OrbitEnabled = value
+        if value then
+            StartOrbit()
+        else
+            StopOrbit()
+        end
+    end)
+
+    Options.OrbitKeybind:OnClick(function()
+        Toggles.OrbitToggle:SetValue(not Toggles.OrbitToggle.Value)
+    end)
+
+    Options.OrbitRadius:OnChanged(function(value) OrbitRadius = value end)
+    Options.OrbitSpeed:OnChanged(function(value) OrbitSpeed = value end)
+    Options.OrbitHeight:OnChanged(function(value) OrbitHeight = value end)
+
+    _51.PlayerRemoving:Connect(function(player)
+        if OrbitTarget == player then
+            OrbitTarget = nil
+            if OrbitOriginalPosition then
+                ReturnToPos()
+            end
+        end
+    end)
+
+    _48:OnUnload(function()
+        StopOrbit()
+    end)
+end
 
 FaceTargetConnection = nil
 
@@ -7870,7 +8150,8 @@ partNames = {
     "RightUpperLeg", "RightLowerLeg", "RightFoot"
 }
 
-screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+skeletonCamera = workspace.CurrentCamera
+screenSize = skeletonCamera and skeletonCamera.ViewportSize or Vector2.new(1920, 1080)
 screenPadding = 100
 
 function isOnScreen(position)
@@ -7879,22 +8160,18 @@ function isOnScreen(position)
 end
 
 function getJoints(character)
-    joints = {}
-    root = character:FindFirstChild("HumanoidRootPart")
-    if not root then return joints end
-    
+    local joints = {}
     for _, partName in ipairs(partNames) do
-        part = character:FindFirstChild(partName)
+        local part = character:FindFirstChild(partName)
         if part and part:IsA("BasePart") then
             joints[partName] = part
         end
     end
-    
     return joints
 end
 
 function createSkeletonLine(color)
-    line = Drawing.new("Line")
+    local line = Drawing.new("Line")
     line.Color = color
     line.Thickness = 1.5
     line.Transparency = 1
@@ -7903,36 +8180,33 @@ function createSkeletonLine(color)
     return line
 end
 
-fromVec = Vector2.new()
-toVec = Vector2.new()
-
 function updateSkeleton(player)
-    if not Toggles.ESPShowSkeleton.Value then 
-        lines = skeletonLines[player]
+    local lines = skeletonLines[player]
+
+    if not Toggles.ESPShowSkeleton.Value then
         if lines then
             for _, line in ipairs(lines) do
                 line.Visible = false
             end
         end
-        return 
+        return
     end
-    
-    character = player.Character
+
+    local character = player.Character
     if not character then return end
-    
-    joints = getJoints(character)
-    if not joints or not next(joints) then return end
-    
-    camera = workspace.CurrentCamera
+
+    local joints = getJoints(character)
+    if not next(joints) then return end
+
+    local camera = workspace.CurrentCamera
     if not camera then return end
-    
+
     screenSize = camera.ViewportSize
 
-    rootPart = joints["HumanoidRootPart"] or character:FindFirstChild("HumanoidRootPart")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
     if rootPart then
-        rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+        local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
         if not onScreen or not isOnScreen(rootPos) then
-            lines = skeletonLines[player]
             if lines then
                 for _, line in ipairs(lines) do
                     line.Visible = false
@@ -7941,10 +8215,9 @@ function updateSkeleton(player)
             return
         end
     end
-    
-    color = Options.SkeletonColor.Value
-    
-    lines = skeletonLines[player]
+
+    local color = Options.SkeletonColor.Value
+
     if not lines then
         lines = {}
         for i = 1, #bones do
@@ -7952,48 +8225,37 @@ function updateSkeleton(player)
         end
         skeletonLines[player] = lines
     end
-    
-    anyVisible = false
-    
+
     for i, bone in ipairs(bones) do
-        part1 = joints[bone[1]]
-        part2 = joints[bone[2]]
-        line = lines[i]
-        
+        local part1 = joints[bone[1]]
+        local part2 = joints[bone[2]]
+        local line = lines[i]
+
         if part1 and part2 and line then
-            pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
-            pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
-            
+            local pos1, onScreen1 = camera:WorldToViewportPoint(part1.Position)
+            local pos2, onScreen2 = camera:WorldToViewportPoint(part2.Position)
+
             if (onScreen1 or onScreen2) and (isOnScreen(pos1) or isOnScreen(pos2)) then
-                fromVec = Vector2.new(pos1.X, pos1.Y)
-                toVec = Vector2.new(pos2.X, pos2.Y)
-                line.From = fromVec
-                line.To = toVec
+                line.From = Vector2.new(pos1.X, pos1.Y)
+                line.To = Vector2.new(pos2.X, pos2.Y)
                 line.Visible = true
                 line.Color = color
-                anyVisible = true
             else
                 line.Visible = false
             end
-        else
-            if line then line.Visible = false end
+        elseif line then
+            line.Visible = false
         end
     end
 end
 
 function cleanupSkeleton(player)
-    lines = skeletonLines[player]
+    local lines = skeletonLines[player]
     if lines then
         for _, line in ipairs(lines) do
             line:Remove()
         end
         skeletonLines[player] = nil
-    end
-    
-    conn = skeletonConnections[player]
-    if conn then
-        conn:Disconnect()
-        skeletonConnections[player] = nil
     end
 end
 
@@ -8004,19 +8266,19 @@ function cleanupAllSkeletons()
         end
     end
     skeletonLines = {}
-    
+
     for player, conn in pairs(skeletonConnections) do
         if conn then
             conn:Disconnect()
         end
     end
     skeletonConnections = {}
-    
+
     if skeletonRenderConnection then
         skeletonRenderConnection:Disconnect()
         skeletonRenderConnection = nil
     end
-    
+
     if skeletonPlayerRemovingConnection then
         skeletonPlayerRemovingConnection:Disconnect()
         skeletonPlayerRemovingConnection = nil
@@ -8025,7 +8287,7 @@ end
 
 Toggles.ESPShowSkeleton:OnChanged(function(value)
     if not value then
-        for player, lines in pairs(skeletonLines) do
+        for _, lines in pairs(skeletonLines) do
             for _, line in ipairs(lines) do
                 line.Visible = false
             end
@@ -8043,22 +8305,21 @@ end)
 
 skeletonRenderConnection = _52.RenderStepped:Connect(function()
     if not Toggles.ESPShowSkeleton.Value then return end
-    
-    camera = workspace.CurrentCamera
+
+    local camera = workspace.CurrentCamera
     if not camera then return end
-    
-    players = _51:GetPlayers()
-    for _, player in ipairs(players) do
+
+    for _, player in ipairs(_51:GetPlayers()) do
         if player ~= _56 then
-            character = player.Character
+            local character = player.Character
             if character then
-                rootPart = character:FindFirstChild("HumanoidRootPart")
+                local rootPart = character:FindFirstChild("HumanoidRootPart")
                 if rootPart then
-                    rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
+                    local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
                     if onScreen and isOnScreen(rootPos) then
                         updateSkeleton(player)
                     else
-                        lines = skeletonLines[player]
+                        local lines = skeletonLines[player]
                         if lines then
                             for _, line in ipairs(lines) do
                                 line.Visible = false
@@ -8550,11 +8811,12 @@ function setupFriendStatusMonitoring()
     end
     connections.FriendStatusMonitor = _51.PlayerAdded:Connect(onPlayerAdded)
 end
+
 local ESP = {
     labels = {},
     cache = {},
     lastUpdate = 0,
-    interval = 0.05
+    interval = 0.01
 }
 
 function createLabel(player)
