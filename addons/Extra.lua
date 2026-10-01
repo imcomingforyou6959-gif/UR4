@@ -189,7 +189,7 @@ function Library:CreateLabel(Properties, IsHud)
     return Library:Create(_Instance, Properties);
 end;
 
-function Library:MakeDraggable(Instance, Cutoff)
+function (Instance, Cutoff)
     Instance.Active = true;
 
     Instance.InputBegan:Connect(function(Input)
@@ -3009,8 +3009,6 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
-    Library:MakeDraggable(Outer, 25 + TopOffset);
-
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
         BorderColor3 = Library.AccentColor;
@@ -3046,9 +3044,11 @@ function Library:CreateWindow(...)
         Outer.Size = Config.Size + UDim2.new(0, 0, 0, TopOffset)
     end
 
+    Library:MakeDraggable(Outer, 25 + TopOffset);
+
     local WindowLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 8, 0, TopOffset + 25);
-        Size = UDim2.new(1, -16, 1, -(TopOffset + 33));
+        Position = UDim2.new(0, 7, 0, TopOffset);
+        Size = UDim2.new(0, 0, 0, 25);
         Text = Config.Title or '';
         TextXAlignment = Enum.TextXAlignment.Left;
         ZIndex = 1;
