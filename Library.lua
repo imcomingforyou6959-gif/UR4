@@ -12,6 +12,33 @@ local HttpService = game:GetService('HttpService');
 local UserInputService = InputService;
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
+local LogoAssetFolder = "woodie/assets/images"
+local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
+local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
+
+local function EnsureLogoAsset()
+    if not isfolder("woodie") then makefolder("woodie") end
+    if not isfolder("woodie/assets") then makefolder("woodie/assets") end
+    if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
+
+    if not isfile(LogoAssetPath) then
+        local ok, data = pcall(game.HttpGet, game, LogoRawURL)
+        if ok and data and #data > 0 then
+            writefile(LogoAssetPath, data)
+        end
+    end
+
+    if isfile(LogoAssetPath) then
+        local GetCustomAsset = getcustomasset or getsynasset
+        if GetCustomAsset then
+            local aok, asset = pcall(GetCustomAsset, LogoAssetPath)
+            if aok then return asset end
+        end
+    end
+
+    return nil
+end
+
 local ScreenGui = Instance.new('ScreenGui');
 ProtectGui(ScreenGui);
 
@@ -2982,8 +3009,6 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
-    Library:MakeDraggable(Outer, 25);
-
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
         BorderColor3 = Library.AccentColor;
@@ -2999,8 +3024,29 @@ function Library:CreateWindow(...)
         BorderColor3 = 'AccentColor';
     });
 
+    local LOGO_WIDTH  = 300
+    local LOGO_HEIGHT = 100
+    local LogoAsset = EnsureLogoAsset()
+    local TopOffset = 0
+
+    if LogoAsset then
+        Library:Create('ImageLabel', {
+            Name = "WindowLogo";
+            BackgroundTransparency = 1;
+            AnchorPoint = Vector2.new(1, 1);
+            Position = UDim2.new(1, 0, 0, -2);
+            Size = UDim2.new(0, 200, 0, 150);
+            Image = LogoAsset;
+            ScaleType = Enum.ScaleType.Fit;
+            ZIndex = 10;
+            Parent = Inner;
+        });
+    end
+
+    Library:MakeDraggable(Outer, 25 + TopOffset);
+
     local WindowLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 7, 0, 0);
+        Position = UDim2.new(0, 7, 0, TopOffset);
         Size = UDim2.new(0, 0, 0, 25);
         Text = Config.Title or '';
         TextXAlignment = Enum.TextXAlignment.Left;
