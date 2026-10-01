@@ -3034,8 +3034,8 @@ function Library:CreateWindow(...)
             Name = "WindowLogo";
             BackgroundTransparency = 1;
             AnchorPoint = Vector2.new(1, 1);
-            Position = UDim2.new(1, 1, 0, -2);
-            Size = UDim2.new(0, LOGO_WIDTH, 0, LOGO_HEIGHT);
+            Position = UDim2.new(1, 0, 0, 25);
+            Size = UDim2.new(0, 120, 0, 50);
             Image = LogoAsset;
             ScaleType = Enum.ScaleType.Fit;
             ZIndex = 10;
