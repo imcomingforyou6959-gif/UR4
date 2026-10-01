@@ -1,162 +1,106 @@
-local Players=game:GetService("Players")
-local UserInputService=game:GetService("UserInputService")
-local localPlayer=Players.LocalPlayer
-local isFiring=false
-local currentTool=nil
-local fireRate=0.02
-local rapidFireEnabled=true
-local characterConns={}
-local toolConns={}
-local hintedNotify=nil
+local P=game:GetService("Players")
+local U=game:GetService("UserInputService")
+local lp=P.LocalPlayer
+local f=false
+local t=nil
+local r=0.01
+local cc={}
+local tc={}
 
-local function getConnections(signal)
+local function gc(s)
     if not getconnections then return {} end
-    local ok, conns = pcall(getconnections, signal)
-    if not ok or type(conns) ~= "table" then return {} end
-    local out = {}
-    for _, c in ipairs(conns) do
-        local fn = c
-        if type(c) == "table" then
-            fn = c.Function or c.func or c[1]
-        end
-        if fn and type(fn) == "function" then
-            table.insert(out, fn)
-        end
+    local o,c=pcall(getconnections,s)
+    if not o or type(c)~="table" then return {} end
+    local x={}
+    for _,v in ipairs(c) do
+        local n=type(v)=="table" and (v.Function or v.func or v[1]) or v
+        if type(n)=="function" then x[#x+1]=n end
     end
-    return out
+    return x
 end
 
-local function removeDelays(tool)
-    if not tool then return end
-    local funcs = getConnections(tool.Activated)
-    for _, fn in ipairs(funcs) do
-        local ok, info = pcall(debug.getinfo, fn)
-        if not ok or not info then continue end
-        local nups = info.nups or 0
-        for i = 1, math.min(nups, 15) do
-            local ok2, name, val = pcall(debug.getupvalue, fn, i)
-            if ok2 and type(val) == "number" then
-                if val >= 0 and val <= 30 then
-                    pcall(debug.setupvalue, fn, i, 0)
+local function rd(o)
+    if not o then return end
+    for _,n in ipairs(gc(o.Activated)) do
+        local ok,i=pcall(debug.getinfo,n)
+        if ok and i then
+            for k=1,math.min(i.nups or 0,20) do
+                local ok2,_,v=pcall(debug.getupvalue,n,k)
+                if ok2 and type(v)=="number" and v>0 and v<=30 then
+                    pcall(debug.setupvalue,n,k,0)
                 end
             end
         end
     end
 end
 
-local function clearToolConns()
-    for _, c in ipairs(toolConns) do
-        pcall(function() c:Disconnect() end)
-    end
-    table.clear(toolConns)
+local function cl(a)
+    for _,c in ipairs(a) do pcall(function() c:Disconnect() end) end
+    table.clear(a)
 end
 
-local function clearCharacterConns()
-    for _, c in ipairs(characterConns) do
-        pcall(function() c:Disconnect() end)
+local function sf()
+    if not t then return end
+    f=true
+    local o=t
+    while f and t==o and o.Parent do
+        o:Activate()
+        task.wait(r)
     end
-    table.clear(characterConns)
+    f=false
 end
 
-local function startRapidFire()
-    if not currentTool then return end
-    if not rapidFireEnabled then return end
-    isFiring=true
-    while isFiring and currentTool and currentTool.Parent and rapidFireEnabled do
-        local ok = pcall(function()
-            currentTool:Activate()
-        end)
-        if not ok then
-            isFiring = false
-            break
-        end
-        task.wait(fireRate)
-    end
-    isFiring=false
+local function ot(c)
+    if not c:IsA("Tool") then return end
+    task.wait(0.1)
+    t=c
+    pcall(rd,c)
+    tc[#tc+1]=c.AncestryChanged:Connect(function()
+        if not c.Parent and t==c then t=nil f=false end
+    end)
+    tc[#tc+1]=c.Destroying:Connect(function()
+        if t==c then t=nil f=false end
+    end)
 end
 
-local function notifyRapidFire()
-    if hintedNotify then
-        pcall(hintedNotify, rapidFireEnabled and "Rapid Fire: ON" or "Rapid Fire: OFF")
-    end
-end
-
-local function toggleRapidFire()
-    rapidFireEnabled=not rapidFireEnabled
-    if not rapidFireEnabled then
-        isFiring=false
-    end
-    notifyRapidFire()
-end
-
-UserInputService.InputBegan:Connect(function(input,gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode==Enum.KeyCode.M then
-        toggleRapidFire()
-    end
-    if input.UserInputType==Enum.UserInputType.MouseButton1 and rapidFireEnabled then
-        if isFiring then return end
-        task.spawn(startRapidFire)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton1 then
-        isFiring=false
-    end
-end)
-
-local function onCharacterAdded(character)
+local function oc(c)
     task.wait(0.5)
-    if not character or not character.Parent then return end
+    if not c or not c.Parent then return end
+    cl(cc)
+    cl(tc)
+    t=nil
+    f=false
+    local o=c:FindFirstChildOfClass("Tool")
+    if o then task.spawn(ot,o) end
+    cc[#cc+1]=c.ChildAdded:Connect(ot)
+    cc[#cc+1]=c.ChildRemoved:Connect(function(x)
+        if x:IsA("Tool") and x==t then t=nil f=false end
+    end)
+    cc[#cc+1]=c.Destroying:Connect(function()
+        cl(cc)
+        cl(tc)
+        t=nil
+        f=false
+    end)
+end
 
-    clearCharacterConns()
-    clearToolConns()
-    currentTool=nil
-    isFiring=false
-
-    local function checkTools()
-        if not character or not character.Parent then return end
-        local tool=character:FindFirstChildOfClass("Tool")
-        if tool and tool~=currentTool then
-            currentTool=tool
-            pcall(function()
-                removeDelays(tool)
-            end)
-        elseif not tool then
-            currentTool=nil
-        end
+U.InputBegan:Connect(function(i,g)
+    if g then return end
+    if i.UserInputType==Enum.UserInputType.MouseButton1 and not f then
+        task.spawn(sf)
     end
+end)
 
-    checkTools()
+U.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then f=false end
+end)
 
-    table.insert(characterConns, character.ChildAdded:Connect(function(child)
-        if child:IsA("Tool") and character == localPlayer.Character then
-            task.wait(0.1)
-            currentTool=child
-            pcall(function()
-                removeDelays(child)
-            end)
-        end
-    end))
+if lp.Character then oc(lp.Character) end
+lp.CharacterAdded:Connect(oc)
 
-    table.insert(characterConns, character.ChildRemoved:Connect(function(child)
-        if child:IsA("Tool") and child==currentTool then
-            currentTool=nil
-            isFiring=false
-        end
-    end))
+_G.RC=function()
+    f=false
+    t=nil
+    cl(cc)
+    cl(tc)
 end
-
-if hintedNotify == nil then
-    hintedNotify = function(msg)
-        if Library and Library.Notify then
-            pcall(Library.Notify, Library, msg, 2)
-        end
-    end
-end
-
-if localPlayer.Character then
-    onCharacterAdded(localPlayer.Character)
-end
-localPlayer.CharacterAdded:Connect(onCharacterAdded)
