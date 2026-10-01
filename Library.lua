@@ -380,19 +380,27 @@ function Library:RemoveFromRegistry(Instance)
     end;
 end;
 
-function Library:AddToRegistry(Instance, Properties, Hud)
-    local Entry = { Instance = Instance, Properties = Properties }
-    table.insert(Library.Registry, Entry)
-    -- apply once immediately
-    for Property, ColorIdx in next, Properties do
-        if type(ColorIdx) == 'string' then
-            Instance[Property] = Library[ColorIdx]
-        elseif type(ColorIdx) == 'function' then
-            Instance[Property] = ColorIdx()
-        end
-    end
-    return Entry
-end
+function Library:UpdateColorsUsingRegistry()
+    -- TODO: Could have an 'active' list of objects
+    -- where the active list only contains Visible objects.
+
+    -- IMPL: Could setup .Changed events on the AddToRegistry function
+    -- that listens for the 'Visible' propert being changed.
+    -- Visible: true => Add to active list, and call UpdateColors function
+    -- Visible: false => Remove from active list.
+
+    -- The above would be especially efficient for a rainbow menu color or live color-changing.
+
+    for Idx, Object in next, Library.Registry do
+        for Property, ColorIdx in next, Object.Properties do
+            if type(ColorIdx) == 'string' then
+                Object.Instance[Property] = Library[ColorIdx];
+            elseif type(ColorIdx) == 'function' then
+                Object.Instance[Property] = ColorIdx()
+            end
+        end;
+    end;
+end;
 
 function Library:GiveSignal(Signal)
     -- Only used for signals not attached to library instances, as those should be cleaned up on object destruction by Roblox
