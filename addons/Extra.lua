@@ -3024,8 +3024,8 @@ function Library:CreateWindow(...)
         BorderColor3 = 'AccentColor';
     });
 
-    local LOGO_WIDTH  = 120
-    local LOGO_HEIGHT = 50
+    local LOGO_WIDTH  = 300
+    local LOGO_HEIGHT = 100
     local LogoAsset = EnsureLogoAsset()
     local TopOffset = 0
 
@@ -3034,7 +3034,7 @@ function Library:CreateWindow(...)
             Name = "WindowLogo";
             BackgroundTransparency = 1;
             AnchorPoint = Vector2.new(1, 1);
-            Position = UDim2.new(1, -13, 0, 2);
+            Position = UDim2.new(1, -18, 0, -2);
             Size = UDim2.new(0, LOGO_WIDTH, 0, LOGO_HEIGHT);
             Image = LogoAsset;
             ScaleType = Enum.ScaleType.Fit;
