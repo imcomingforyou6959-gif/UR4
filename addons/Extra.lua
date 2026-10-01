@@ -3024,24 +3024,25 @@ function Library:CreateWindow(...)
         BorderColor3 = 'AccentColor';
     });
 
+    local LOGO_WIDTH  = 120
     local LOGO_HEIGHT = 50
     local LogoAsset = EnsureLogoAsset()
     local TopOffset = 0
 
     if LogoAsset then
-        TopOffset = LOGO_HEIGHT
-
+        -- Floating logo, right-aligned, bottom edge resting on the pink accent line
+        -- (MainSectionOuter starts at Y = 25 inside Inner).
         Library:Create('ImageLabel', {
+            Name = "WindowLogo";
             BackgroundTransparency = 1;
-            Position = UDim2.new(0, 0, 0, 0);
-            Size = UDim2.new(1, 0, 0, LOGO_HEIGHT);
+            AnchorPoint = Vector2.new(1, 1);
+            Position = UDim2.new(1, -8, 0, 27);
+            Size = UDim2.new(0, LOGO_WIDTH, 0, LOGO_HEIGHT);
             Image = LogoAsset;
             ScaleType = Enum.ScaleType.Fit;
-            ZIndex = 1;
+            ZIndex = 10;
             Parent = Inner;
         });
-
-        Outer.Size = Config.Size + UDim2.new(0, 0, 0, TopOffset)
     end
 
     Library:MakeDraggable(Outer, 25 + TopOffset);
