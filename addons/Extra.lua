@@ -12,6 +12,33 @@ local HttpService = game:GetService('HttpService');
 local UserInputService = InputService;
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
+local LogoAssetFolder = "woodie/assets/images"
+local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.jpg"
+local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.jpg"
+
+local function EnsureLogoAsset()
+    if not isfolder("woodie") then makefolder("woodie") end
+    if not isfolder("woodie/assets") then makefolder("woodie/assets") end
+    if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
+
+    if not isfile(LogoAssetPath) then
+        local ok, data = pcall(game.HttpGet, game, LogoRawURL)
+        if ok and data and #data > 0 then
+            writefile(LogoAssetPath, data)
+        end
+    end
+
+    if isfile(LogoAssetPath) then
+        local GetCustomAsset = getcustomasset or getsynasset
+        if GetCustomAsset then
+            local aok, asset = pcall(GetCustomAsset, LogoAssetPath)
+            if aok then return asset end
+        end
+    end
+
+    return nil
+end
+
 local ScreenGui = Instance.new('ScreenGui');
 ProtectGui(ScreenGui);
 
@@ -2982,7 +3009,7 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
-    Library:MakeDraggable(Outer, 25);
+    Library:MakeDraggable(Outer, 25 + TopOffset);
 
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
@@ -2999,9 +3026,29 @@ function Library:CreateWindow(...)
         BorderColor3 = 'AccentColor';
     });
 
+    local LOGO_HEIGHT = 50
+    local LogoAsset = EnsureLogoAsset()
+    local TopOffset = 0
+
+    if LogoAsset then
+        TopOffset = LOGO_HEIGHT
+
+        Library:Create('ImageLabel', {
+            BackgroundTransparency = 1;
+            Position = UDim2.new(0, 0, 0, 0);
+            Size = UDim2.new(1, 0, 0, LOGO_HEIGHT);
+            Image = LogoAsset;
+            ScaleType = Enum.ScaleType.Fit;
+            ZIndex = 1;
+            Parent = Inner;
+        });
+
+        Outer.Size = Config.Size + UDim2.new(0, 0, 0, TopOffset)
+    end
+
     local WindowLabel = Library:CreateLabel({
-        Position = UDim2.new(0, 7, 0, 0);
-        Size = UDim2.new(0, 0, 0, 25);
+        Position = UDim2.new(0, 8, 0, TopOffset + 25);
+        Size = UDim2.new(1, -16, 1, -(TopOffset + 33));
         Text = Config.Title or '';
         TextXAlignment = Enum.TextXAlignment.Left;
         ZIndex = 1;
