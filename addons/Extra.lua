@@ -13,7 +13,7 @@ local UserInputService = InputService;
 local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
 
 local LogoAssetFolder = "woodie/assets/images"
-local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.jpg"
+local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
 local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
 
 local function EnsureLogoAsset()
