@@ -3030,13 +3030,11 @@ function Library:CreateWindow(...)
     local TopOffset = 0
 
     if LogoAsset then
-        -- Floating logo, right-aligned, bottom edge resting on the pink accent line
-        -- (MainSectionOuter starts at Y = 25 inside Inner).
         Library:Create('ImageLabel', {
             Name = "WindowLogo";
             BackgroundTransparency = 1;
             AnchorPoint = Vector2.new(1, 1);
-            Position = UDim2.new(1, -8, 0, 27);
+            Position = UDim2.new(1, -8, 0, 17);
             Size = UDim2.new(0, LOGO_WIDTH, 0, LOGO_HEIGHT);
             Image = LogoAsset;
             ScaleType = Enum.ScaleType.Fit;
