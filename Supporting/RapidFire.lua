@@ -3,9 +3,11 @@ local U=game:GetService("UserInputService")
 local lp=P.LocalPlayer
 local f=false
 local t=nil
-local r=0.01
+local r=0.03
 local cc={}
 local tc={}
+local rc=nil
+local lc=nil
 
 local function gc(s)
     if not getconnections then return {} end
@@ -96,11 +98,22 @@ U.InputEnded:Connect(function(i)
 end)
 
 if lp.Character then oc(lp.Character) end
-lp.CharacterAdded:Connect(oc)
+rc = lp.CharacterAdded:Connect(oc)
+
+lp.CharacterRemoving:Connect(function()
+    f=false
+    t=nil
+    cl(cc)
+    cl(tc)
+    if rc then rc:Disconnect() end
+    rc = lp.CharacterAdded:Connect(oc)
+end)
 
 _G.RC=function()
     f=false
     t=nil
     cl(cc)
     cl(tc)
+    if rc then rc:Disconnect() rc=nil end
+    if lc then lc:Disconnect() lc=nil end
 end
