@@ -391,13 +391,18 @@ function Library:UpdateColorsUsingRegistry()
 
     -- The above would be especially efficient for a rainbow menu color or live color-changing.
 
-    for Idx, Object in next, Library.Registry do
-        for Property, ColorIdx in next, Object.Properties do
-            if type(ColorIdx) == 'string' then
-                Object.Instance[Property] = Library[ColorIdx];
-            elseif type(ColorIdx) == 'function' then
-                Object.Instance[Property] = ColorIdx()
-            end
+    for Idx = 1, #Library.Registry do
+        local Object = Library.Registry[Idx];
+        local Instance = Object.Instance;
+
+        if Instance and Instance.Parent then
+            for Property, ColorIdx in next, Object.Properties do
+                if type(ColorIdx) == 'string' then
+                    Instance[Property] = Library[ColorIdx];
+                elseif type(ColorIdx) == 'function' then
+                    Instance[Property] = ColorIdx();
+                end;
+            end;
         end;
     end;
 end;
@@ -491,8 +496,16 @@ do
             Parent = ScreenGui,
         });
 
+        local LastPickerAbsPos = Vector2.new(-1, -1)
+
         DisplayFrame:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
-            PickerFrameOuter.Position = UDim2.fromOffset(DisplayFrame.AbsolutePosition.X, DisplayFrame.AbsolutePosition.Y + 18);
+            if not PickerFrameOuter.Visible then return end
+
+            local AbsPos = DisplayFrame.AbsolutePosition
+            if AbsPos == LastPickerAbsPos then return end
+            LastPickerAbsPos = AbsPos
+
+            PickerFrameOuter.Position = UDim2.fromOffset(AbsPos.X, AbsPos.Y + 18);
         end)
 
         local PickerFrameInner = Library:Create('Frame', {
@@ -1085,9 +1098,20 @@ do
             ZIndex = 14;
             Parent = ScreenGui;
         });
+        
+        local LastModeAbsPos = Vector2.new(-1, -1)
+        local LastModeAbsSize = Vector2.new(-1, -1)
 
         ToggleLabel:GetPropertyChangedSignal('AbsolutePosition'):Connect(function()
-            ModeSelectOuter.Position = UDim2.fromOffset(ToggleLabel.AbsolutePosition.X + ToggleLabel.AbsoluteSize.X + 4, ToggleLabel.AbsolutePosition.Y + 1);
+            if not ModeSelectOuter.Visible then return end
+
+            local AbsPos = ToggleLabel.AbsolutePosition
+            local AbsSize = ToggleLabel.AbsoluteSize
+            if AbsPos == LastModeAbsPos and AbsSize == LastModeAbsSize then return end
+            LastModeAbsPos = AbsPos
+            LastModeAbsSize = AbsSize
+
+            ModeSelectOuter.Position = UDim2.fromOffset(AbsPos.X + AbsSize.X + 4, AbsPos.Y + 1);
         end);
 
         local ModeSelectInner = Library:Create('Frame', {
@@ -2174,6 +2198,11 @@ do
                     RenderStepped:Wait();
                 end;
 
+                local FinalX = math.ceil(Library:MapValue(Slider.Value, Slider.Min, Slider.Max, 0, Slider.MaxSize))
+                TweenService:Create(Fill, TweenInfo.new(0.08, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                    Size = UDim2.new(0, FinalX, 1, 0)
+                }):Play()
+
                 Library:AttemptSave();
             end;
         end);
@@ -2529,12 +2558,29 @@ do
             ListOuter.Visible = true;
             Library.OpenedFrames[ListOuter] = true;
             DropdownArrow.Rotation = 180;
+
+            --! Animate the dropdown inner sliding down
+            local ListInner = ListOuter:FindFirstChildOfClass("Frame")
+            if ListInner then
+                ListInner.Position = UDim2.new(0, 1, 0, -8)
+                TweenService:Create(ListInner, TweenInfo.new(0.12, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                    Position = UDim2.new(0, 1, 0, 1),
+                }):Play()
+            end
+
+            --! Animate arrow
+            TweenService:Create(DropdownArrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Rotation = 180,
+            }):Play()
         end;
 
         function Dropdown:CloseDropdown()
             ListOuter.Visible = false;
             Library.OpenedFrames[ListOuter] = nil;
-            DropdownArrow.Rotation = 0;
+
+            TweenService:Create(DropdownArrow, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Rotation = 0,
+            }):Play()
         end;
 
         function Dropdown:OnChanged(Func)
@@ -2958,18 +3004,27 @@ function Library:Notify(Text, Time)
         BackgroundColor3 = 'AccentColor';
     }, true);
 
-    pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, XSize + 8 + 4, 0, YSize), 'Out', 'Quad', 0.4, true);
+    NotifyOuter.Size = UDim2.new(0, 0, 0, YSize)
+
+    local NotifyInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local CloseInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+
+    TweenService:Create(NotifyOuter, NotifyInfo, {
+        Size = UDim2.new(0, XSize + 12, 0, YSize)
+    }):Play()
 
     task.spawn(function()
-        wait(Time or 5);
+        task.wait(Time or 5)
 
-        pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, 0, 0, YSize), 'Out', 'Quad', 0.4, true);
+        local CloseTween = TweenService:Create(NotifyOuter, CloseInfo, {
+            Size = UDim2.new(0, 0, 0, YSize),
+            BackgroundTransparency = 1,
+        })
+        CloseTween:Play()
+        CloseTween.Completed:Wait()
 
-        wait(0.4);
-
-        NotifyOuter:Destroy();
-    end);
-end;
+        NotifyOuter:Destroy()
+    end)
 
 function Library:CreateWindow(...)
     local Arguments = { ... }
@@ -4808,10 +4863,16 @@ function Library:CreateSpotifyPlayer()
         scroll.CanvasSize = UDim2.new(0, 0, 0, h)
     end
 
-    local function RenderLyrics(activeIndex)
-        if not CurrentLyrics or #CurrentLyrics == 0 then return end
+local LastRenderedIndex = -1
+local LastRenderedAccent = nil
 
+local function RenderLyrics(activeIndex)
+        if not CurrentLyrics or #CurrentLyrics == 0 then return end
         local accent = Library.AccentColor
+        if activeIndex == LastRenderedIndex and accent == LastRenderedAccent then return end
+        LastRenderedIndex = activeIndex
+        LastRenderedAccent = accent
+
         local accentHex = string.format("#%02X%02X%02X",
             math.floor(accent.R * 255),
             math.floor(accent.G * 255),
@@ -4832,7 +4893,17 @@ function Library:CreateSpotifyPlayer()
         ResizeLyricsCanvas()
     end
 
+    local LastScrollGen = 0
+    local LastScrollTarget = -1
+    local LastScrollTime = 0
+
     local function ScrollToActiveLine(activeIndex, myGen)
+        if myGen and myGen == LastScrollGen then return end
+        local now = tick()
+        if now - LastScrollTime < 0.1 then return end
+        LastScrollTime = now
+        if myGen then LastScrollGen = myGen end
+
         task.spawn(function()
             local attempts = 0
             while attempts < 30 do
@@ -4875,12 +4946,36 @@ function Library:CreateSpotifyPlayer()
             local maxScroll = math.max(totalH - viewportH, 0)
             targetY = math.clamp(targetY, 0, maxScroll)
 
+            if math.abs(targetY - LastScrollTarget) < 2 then return end
+            LastScrollTarget = targetY
+
             if math.abs(targetY - scroll.CanvasPosition.Y) < 2 then return end
 
             Tween(scroll, {
                 CanvasPosition = Vector2.new(0, targetY),
             }, TweenInfo.new(0.45, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
         end)
+    end
+
+    local function UpdateLyricsHighlight(currentMs)
+        if not CurrentLyricsSynced or #CurrentLyrics == 0 then return end
+
+        local activeIndex = 1
+        for i, line in ipairs(CurrentLyrics) do
+            if line.Time <= currentMs then
+                activeIndex = i
+            else
+                break
+            end
+        end
+
+        if activeIndex ~= CurrentHighlightIndex then
+            CurrentHighlightIndex = activeIndex
+            LyricsRenderGen = LyricsRenderGen + 1
+            local myGen = LyricsRenderGen
+            RenderLyrics(activeIndex)
+            ScrollToActiveLine(activeIndex, myGen)
+        end
     end
 
     local function UpdateLyricsHighlight(currentMs)
