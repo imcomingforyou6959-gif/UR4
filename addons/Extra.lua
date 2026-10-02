@@ -3004,27 +3004,28 @@ function Library:Notify(Text, Time)
         BackgroundColor3 = 'AccentColor';
     }, true);
 
-    NotifyOuter.Size = UDim2.new(0, 0, 0, YSize)
+    NotifyOuter.Size = UDim2.new(0, 0, 0, YSize);
 
-    local NotifyInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-    local CloseInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+    local NotifyInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out);
+    local CloseInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In);
 
     TweenService:Create(NotifyOuter, NotifyInfo, {
         Size = UDim2.new(0, XSize + 12, 0, YSize)
-    }):Play()
+    }):Play();
 
     task.spawn(function()
-        task.wait(Time or 5)
+        task.wait(Time or 5);
 
         local CloseTween = TweenService:Create(NotifyOuter, CloseInfo, {
             Size = UDim2.new(0, 0, 0, YSize),
             BackgroundTransparency = 1,
-        })
-        CloseTween:Play()
-        CloseTween.Completed:Wait()
+        });
+        CloseTween:Play();
+        CloseTween.Completed:Wait();
 
-        NotifyOuter:Destroy()
-    end)
+        NotifyOuter:Destroy();
+    end);
+end;
 
 function Library:CreateWindow(...)
     local Arguments = { ... }
