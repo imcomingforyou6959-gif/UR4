@@ -236,7 +236,7 @@ local function _18()
     }
 end
 
-local function _getExecutorInfo()
+function _getExecutorInfo()
     local name, version = "Unknown", "Unknown"
 
     if identifyexecutor then
@@ -1675,7 +1675,7 @@ old_camera_max_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
 old_camera_min_distance = game.Players.LocalPlayer.CameraMinZoomDistance
 unlock_camera_connection = nil
 
-local function unlock_camera_loop()
+function unlock_camera_loop()
     if not Toggles.UnlockCameraDistance.Value then return end
     local plr = game.Players.LocalPlayer
     if plr.CameraMaxZoomDistance ~= 9e9 then
@@ -1707,6 +1707,7 @@ Toggles.UnlockCameraDistance:OnChanged(function(value)
         game.Players.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
     end
 end)
+
 -- Anti Sit
 anti_sit_connection = nil
 anti_sit_char_connection = nil
@@ -3466,7 +3467,7 @@ local ImageESP_ConnectionAdded
 local ImageESP_ConnectionRemoving
 local ImageESP_ConnectionLocalAdded
 
-local function ImageESP_TrackPlayer(plr)
+function ImageESP_TrackPlayer(plr)
     if ImageESP_PlayerConns[plr] then return end
     local conns = {}
 
@@ -3485,7 +3486,7 @@ local function ImageESP_TrackPlayer(plr)
     ImageESP_PlayerConns[plr] = conns
 end
 
-local function ImageESP_UntrackPlayer(plr)
+function ImageESP_UntrackPlayer(plr)
     local conns = ImageESP_PlayerConns[plr]
     if conns then
         for _, c in ipairs(conns) do
