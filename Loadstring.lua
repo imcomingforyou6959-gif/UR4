@@ -711,7 +711,7 @@ end)
 EmoteTabBox = WorldTab:AddRightTabbox()
 EmoteTab = EmoteTabBox:AddTab('Emotes')
 
-_G.Emotes = {Enabled = false, CurrentAnimation = nil, DefaultAnim = "rbxassetid://5917459365", Anims = {kickinglegs = 112540347880956, spongebobdance = 18443245017, teleport = 104767795538635, crossed = 128386160365167, imagination = 18443237526, yungblud = 15609995579, laugh = 3337966527, OrangeJustice = 129748377368660, floss = 5917459365, sleep = 4686925579, Sleeply = 105016815489641, Scenario = 111901279618983, ElectricAngel = 77166149654675, Salsa = 100319995972885, hype = 3695333486, sad = 4841407203, NLECHOPPA = 133293268056643, heyyamove = 119734573196374, invisibleme = 126995783634131, happywave = 77519822285697, strangerthings = 70692992882447, iwantmoney = 128258195574116, tornado = 135373056067761, jabbaswitchway = 77791964179635, DoThatThang = 98064631733787, invisibleme2 = 112119483472206, ldance = 114846964045392, griddy = 106715239721951, worm = 112153137737330, Druski = 98405298116702, hipsway = 80963950541052, Caramelldansen = 97847706148165, rollin = 89068990860975, kawaiisit = 71952737697877, zerotwodance = 95385842020103}}
+_G.Emotes = {Enabled = false, CurrentAnimation = nil, DefaultAnim = "rbxassetid://5917459365", Anims = {TRUCK_TRANSFORMATION = 131614714051116, Tyranno = 82026568595380, zerotwodance = 95385842020103, laughingitupemote = 122240620529815, tf2laughingspyr6 = 76507949699963, billybounce = 93450937830334, catgirlsittingdown = 124682757478598, celebratoryapplauseclap = 71112576712945, happyhappyhappy = 99066466026711, gayemote2 = 104918870934219, flossemote = 123783175775850, scubanickwilde = 70919402339484, Salsa = 100319995972885, hipsway = 80963950541052, nonchalantaurafilleddance = 80035199697503, kickinglegs = 112540347880956, twerkyoassoff = 85115037529002, Scenario = 111901279618983, slowclaps = 122162023523653, heyyamove = 119734573196374, Caramelldansen = 97847706148165, Sleeply = 105016815489641, griddy = 106715239721951, creepindance = 80985588930231, upsidedownclapping = 135648992354309, OrangeJustice = 129748377368660, spiceclapslay = 76426815825663, evillaugh = 73856013353080, coffinwalkout = 117302755748327, facepalm = 116894206473799, ldance = 114846964045392, smugdance = 136079923684452, jabbaswitchway = 77791964179635, thisdancegoeshard = 109910154206713, spinspinspin = 100677848413238, Druski = 98405298116702, gayidle = 135210847181660, NLECHOPPA = 133293268056643, mjpytprettyyoungthing = 137234266130963, worm = 112153137737330, gayclap = 108147171194405, ratdance = 98603994713783, gayemote = 130781901105365, iwantmoney = 128258195574116, kawaiisit = 71952737697877, floss = 5917459365, sleep = 4686925579, laugh = 3337966527, yungblud = 15609995579, imagination = 18443237526, crossed = 128386160365167, teleport = 104767795538635, spongebobdance = 18443245017, hype = 3695333486, sad = 4841407203, rollin = 89068990860975, DoThatThang = 98064631733787, invisibleme = 126995783634131, invisibleme2 = 112119483472206, happywave = 77519822285697, strangerthings = 70692992882447, tornado = 135373056067761, heart = 84396003438766, ElectricAngel = 77166149654675}}
 
 _G.PlayEmote = function(name, speed)
     speed = tonumber(speed) or 1
@@ -767,7 +767,7 @@ EmoteTab:AddToggle('EmotesEnabled', {
 })
 
 EmoteTab:AddDropdown('EmoteSelect', {
-    Values = {"kickinglegs","heyyamove","spongebobdance","crossed","invisibleme","imagination","yungblud","strangerthings","laugh","floss","sleep","hype","sad", "tornado", "jabbaswitchway", "ldance", "griddy", "worm", "rollin", "kawaiisit", "zerotwodance","Sleeply","happywave","NLECHOPPA","Caramelldansen","Druski","hipsway","OrangeJustice","iwantmoney","DoThatThang","Salsa","ElectricAngel","Scenario"},
+    Values = {"TRUCK_TRANSFORMATION","Tyranno","zerotwodance","laughingitupemote","tf2laughingspyr6","billybounce","catgirlsittingdown","celebratoryapplauseclap","happyhappyhappy","gayemote2","flossemote","scubanickwilde","Salsa","hipsway","nonchalantaurafilleddance","kickinglegs","twerkyoassoff","Scenario","slowclaps","heyyamove","Caramelldansen","Sleeply","griddy","creepindance","upsidedownclapping","OrangeJustice","spiceclapslay","evillaugh","coffinwalkout","facepalm","ldance","smugdance","jabbaswitchway","thisdancegoeshard","spinspinspin","Druski","gayidle","NLECHOPPA","mjpytprettyyoungthing","worm", "heart","gayclap","ratdance","gayemote","iwantmoney","kawaiisit","floss","sleep","laugh","yungblud","imagination","crossed","teleport","spongebobdance","hype","sad","rollin","DoThatThang","invisibleme","invisibleme2","happywave","strangerthings","tornado","ElectricAngel"},
     Default = "floss",
     Text = 'Selected Emote',
 })
@@ -5192,6 +5192,14 @@ loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gi
 task.wait(1)
 
 setfflag("DebugRunParallelLuaOnMainThread", "true")
+setfflag("FFlagUserEnablePlayerCharacterDestroyBehavior", "true")
+setfflag("FIntRenderShadowIntensity", 0)
+setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
+setfflag("DFIntRuntimeConcurrency", "4")
+setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
+setfflag("DFIntConnectionMTUSize", "1472")
+setfflag("DFIntS2PhysicsSenderRate", "15")
+setfflag("DFIntDataSenderRate", "15")
 
 local _104 = {
     enabled = false,
