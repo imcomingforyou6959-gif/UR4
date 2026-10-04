@@ -28,19 +28,6 @@
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠹⣄⠀⠀⠀⡈⣟⡄⠀⠀⠀⣠⠉⠀⠀⠀⠀⠀⠀⢀⣠⠞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠛⠻⠿⠿⠿⠟⠛⠛⠻⠿⠟⠛⠉⠙⠛⠛⠋⠀⠀⠀⠀⠀⠀⠀⠀⠈⠓⠚⠒⠋⠙⠓⠶⠤⠖⠓⠢⠦⠤⠤⠤⠖⠒⠋⠀⠀⠀⠀⠀⠀]]--
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 -- webhook
 local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
 
@@ -203,6 +190,8 @@ _48:AddToggle("ESPChams", { Text = "Chams", Default = false }):AddColorPicker("E
 _48:AddToggle("ESPBox", { Text = "Box ESP", Default = false }):AddColorPicker("ESPBoxColor", { Default = Color3.fromRGB(255,255,255), Title = "Box Color" })
 _48:AddToggle("ESPHealth", { Text = "Health ESP", Default = false })
 _48:AddToggle("ESPSkeleton", { Text = "Skeleton ESP", Default = false }):AddColorPicker("ESPSkeletonColor", { Default = Color3.fromRGB(255,255,255), Title = "Skeleton Color" })
+_48:AddToggle("ESPFlags", { Text = "Flags", Default = false })
+_48:AddDropdown("ESPFlagsPos", { Text = "Flags Position", Values = {"Top", "Bottom"}, Default = "Bottom" })
 
 local _47 = _39.Main:AddLeftGroupbox("Checks")
 _47:AddToggle("WallCheck", { Text = "Wall Check", Default = false })
@@ -962,18 +951,49 @@ end
 -- ESP Core
 local _92 = {}
 local _hitboxCache = {}
+local _polling = {}
 
 local function getHitbox(plr)
     local cached = _hitboxCache[plr]
     if cached and cached.Parent then return cached end
     local merc = workspace:FindFirstChild("MercPlayers")
-    if not merc then
-        _hitboxCache[plr] = nil
-        return nil
-    end
+    if not merc then return nil end
     local hb = merc:FindFirstChild("MercHitboxes_" .. plr.Name)
-    _hitboxCache[plr] = hb
+    if hb then _hitboxCache[plr] = hb end
     return hb
+end
+
+local function _startPoll(plr)
+    if _polling[plr] then return end
+    _polling[plr] = true
+    task.spawn(function()
+        for _ = 1, 250 do
+            if not plr.Parent then break end
+            local merc = workspace:FindFirstChild("MercPlayers")
+            local hb = merc and merc:FindFirstChild("MercHitboxes_" .. plr.Name)
+            if hb then
+                _hitboxCache[plr] = hb
+                _polling[plr] = nil
+                return
+            end
+            task.wait(0.02)
+        end
+        _polling[plr] = nil
+    end)
+end
+
+local function getHealthColor(pct)
+    pct = math.clamp(pct, 0, 1)
+    if pct >= 0.5 then
+        local t = 1 - (pct - 0.5) / 0.5
+        return Color3.new(t, 1 - t * 0.5, 0)
+    elseif pct >= 0.25 then
+        local t = 1 - (pct - 0.25) / 0.25
+        return Color3.new(1, 0.5 * (1 - t), 0)
+    else
+        local t = pct / 0.25
+        return Color3.new(t, 0, 0)
+    end
 end
 
 local function _93(_94)
@@ -1004,17 +1024,26 @@ local function _93(_94)
     hpText.Outline = true
     hpText.Visible = false
 
+    local flags = Drawing.new("Text")
+    flags.Size = 13
+    flags.Center = true
+    flags.Outline = true
+    flags.Visible = false
+
     local _95 = {
         Box = box,
         Nametag = nametag,
         HealthBarOutline = hpOutline,
         HealthBar = hpBar,
         HealthText = hpText,
+        Flags = flags,
         Skeleton = {},
         DisplayName = _94.DisplayName,
         Name = _94.Name,
         _hpCurrent = 1,
         _lastFrame = tick(),
+        _char = nil,
+        _hum = nil,
     }
 
     for i = 1, #_57 do
@@ -1031,32 +1060,74 @@ end
 local function _97(_98)
     local _99 = _92[_98]
     if not _99 then return end
-    local function safeHide(d)
-        if d then pcall(function() d.Visible = false end) end
-    end
-    safeHide(_99.Box)
-    safeHide(_99.Nametag)
-    safeHide(_99.HealthBarOutline)
-    safeHide(_99.HealthBar)
-    safeHide(_99.HealthText)
-    for _, _100 in ipairs(_99.Skeleton) do safeHide(_100) end
+    if _99.Box then _99.Box.Visible = false end
+    if _99.Nametag then _99.Nametag.Visible = false end
+    if _99.HealthBarOutline then _99.HealthBarOutline.Visible = false end
+    if _99.HealthBar then _99.HealthBar.Visible = false end
+    if _99.HealthText then _99.HealthText.Visible = false end
+    if _99.Flags then _99.Flags.Visible = false end
+    for i = 1, #_99.Skeleton do _99.Skeleton[i].Visible = false end
 end
 
-local function getHealthColor(pct)
-    pct = math.clamp(pct, 0, 1)
-    if pct >= 0.5 then
-        local t = 1 - (pct - 0.5) / 0.5
-        return Color3.new(t, 1 - t * 0.5, 0)
-    elseif pct >= 0.25 then
-        local t = 1 - (pct - 0.25) / 0.25
-        return Color3.new(1, 0.5 * (1 - t), 0)
-    else
-        local t = pct / 0.25
-        return Color3.new(t, 0, 0)
+local function _destroyESP(plr)
+    local e = _92[plr]
+    if e then
+        pcall(function() if e.Box then e.Box:Remove() end end)
+        pcall(function() if e.Nametag then e.Nametag:Remove() end end)
+        pcall(function() if e.HealthBarOutline then e.HealthBarOutline:Remove() end end)
+        pcall(function() if e.HealthBar then e.HealthBar:Remove() end end)
+        pcall(function() if e.HealthText then e.HealthText:Remove() end end)
+        pcall(function() if e.Flags then e.Flags:Remove() end end)
+        for i = 1, #e.Skeleton do
+            pcall(function() e.Skeleton[i]:Remove() end)
+        end
+        _92[plr] = nil
+    end
+    _hitboxCache[plr] = nil
+    _polling[plr] = nil
+    local merc = workspace:FindFirstChild("MercPlayers")
+    if merc then
+        local hb = merc:FindFirstChild("MercHitboxes_" .. plr.Name)
+        if hb then
+            local ch = hb:FindFirstChild("ESPCham")
+            if ch then ch:Destroy() end
+        end
     end
 end
 
-local function _101()
+_2.PlayerAdded:Connect(function(plr)
+    _hitboxCache[plr] = nil
+    if plr ~= _9 then
+        _93(plr)
+        _startPoll(plr)
+    end
+end)
+
+_2.PlayerRemoving:Connect(function(plr)
+    _destroyESP(plr)
+end)
+
+task.spawn(function()
+    while _running do
+        local merc = workspace:FindFirstChild("MercPlayers")
+        if merc then
+            local conn
+            conn = merc.ChildAdded:Connect(function(child)
+                local name = child.Name
+                if name:sub(1, 13) == "MercHitboxes_" then
+                    local pname = name:sub(14)
+                    local plr = _2:FindFirstChild(pname)
+                    if plr then _hitboxCache[plr] = child end
+                end
+            end)
+            _163(conn)
+            break
+        end
+        task.wait(0.1)
+    end
+end)
+
+local _101 = function()
     if not _37.ESPEnabled or not _37.ESPEnabled.Value then
         for plr in pairs(_92) do _97(plr) end
         return
@@ -1071,221 +1142,265 @@ local function _101()
         return
     end
 
-    local showSkel = _37.ESPSkeleton and _37.ESPSkeleton.Value
-    local showBox = _37.ESPBox and _37.ESPBox.Value
-    local showName = _37.ESPNametags and _37.ESPNametags.Value
+    local showSkel   = _37.ESPSkeleton and _37.ESPSkeleton.Value
+    local showBox    = _37.ESPBox and _37.ESPBox.Value
+    local showName   = _37.ESPNametags and _37.ESPNametags.Value
     local showHealth = _37.ESPHealth and _37.ESPHealth.Value
-    local showChams = _37.ESPChams and _37.ESPChams.Value
+    local showChams  = _37.ESPChams and _37.ESPChams.Value
+    local showFlags  = _37.ESPFlags and _37.ESPFlags.Value
+    local flagsPos   = (_36.ESPFlagsPos and _36.ESPFlagsPos.Value) or "Top"
 
-    local skelColor = _36.ESPSkeletonColor and _36.ESPSkeletonColor.Value or Color3.fromRGB(255,255,255)
-    local boxColor = _36.ESPBoxColor and _36.ESPBoxColor.Value or Color3.fromRGB(255,255,255)
-    local nameColor = _36.ESPNametagsColor and _36.ESPNametagsColor.Value or Color3.fromRGB(255,255,255)
-    local chamColor = _36.ESPChamsColor and _36.ESPChamsColor.Value or Color3.fromRGB(255,70,70)
-    local chamTrans = _36.ESPChamsColor and _36.ESPChamsColor.Transparency or 0.5
+    local skelColor  = _36.ESPSkeletonColor and _36.ESPSkeletonColor.Value or Color3.fromRGB(255,255,255)
+    local boxColor   = _36.ESPBoxColor and _36.ESPBoxColor.Value or Color3.fromRGB(255,255,255)
+    local nameColor  = _36.ESPNametagsColor and _36.ESPNametagsColor.Value or Color3.fromRGB(255,255,255)
+    local chamColor  = _36.ESPChamsColor and _36.ESPChamsColor.Value or Color3.fromRGB(255,70,70)
+    local chamTrans  = _36.ESPChamsColor and _36.ESPChamsColor.Transparency or 0.5
 
     local eyePos = _60 and _60.GetEyePosition and _60.GetEyePosition() or _103.CFrame.Position
-    local teamColor = Color3.fromRGB(80,255,90)
-    local viewportSize = _103.ViewportSize
+    local teamColor = Color3.fromRGB(80, 255, 90)
+    local deadColor = Color3.fromRGB(230, 60, 60)
+    local naColor   = Color3.fromRGB(160, 160, 160)
+    local vpSize = _103.ViewportSize
+    local offMargin = 200
     local now = tick()
-
     local alive = {}
 
-    for _, _105 in ipairs(_2:GetPlayers()) do
-        if _105 == _9 then continue end
+    local players = _2:GetPlayers()
 
-        local _107 = getHitbox(_105)
-        if not _107 or _107:GetAttribute("Dead") then
-            local _99 = _92[_105]
-            if _99 then _97(_105) end
-            continue
-        end
+    for i = 1, #players do
+        local _105 = players[i]
+        if _105 ~= _9 then
+            local _107 = getHitbox(_105)
 
-        local _108 = _107:FindFirstChild("Head")
-        if not _108 then
-            local _99 = _92[_105]
-            if _99 then _97(_105) end
-            continue
-        end
-
-        local _110 = (_108.Position - eyePos).Magnitude
-        if _110 > 2000 then
-            local _99 = _92[_105]
-            if _99 then _97(_105) end
-            continue
-        end
-
-        local headViewport = _103:WorldToViewportPoint(_108.Position)
-        if headViewport.Z <= 0 then
-            local _99 = _92[_105]
-            if _99 then _97(_105) end
-            continue
-        end
-
-        alive[_105] = true
-
-        local _106 = _93(_105)
-        _106.DisplayName = _105.DisplayName
-        _106.Name = _105.Name
-
-        local _isTeam = not _62(_105)
-        local _111 = _107:FindFirstChild("Torso") and _58 or _57
-
-        local skelC = _isTeam and teamColor or skelColor
-        local boxC = _isTeam and teamColor or boxColor
-        local nameC = _isTeam and teamColor or nameColor
-        local chamC = _isTeam and teamColor or chamColor
-
-        if showSkel then
-            for idx, _113 in ipairs(_111) do
-                local _114 = _107:FindFirstChild(_113[1])
-                local _115 = _107:FindFirstChild(_113[2])
-                local _116 = _106.Skeleton[idx]
-                if _114 and _115 then
-                    local _117, _118 = _103:WorldToViewportPoint(_114.Position)
-                    local _119, _120 = _103:WorldToViewportPoint(_115.Position)
-                    if _117.Z > 0 and _119.Z > 0 then
-                        _116.From = Vector2.new(_117.X, _117.Y)
-                        _116.To = Vector2.new(_119.X, _119.Y)
-                        _116.Color = skelC
-                        _116.Visible = true
+            if not _107 then
+                _startPoll(_105)
+                if _92[_105] then _97(_105) end
+            else
+                local _108 = _107:FindFirstChild("Head")
+                if not _108 then
+                    if _92[_105] then _97(_105) end
+                else
+                    local _110 = (_108.Position - eyePos).Magnitude
+                    if _110 > 2000 then
+                        if _92[_105] then _97(_105) end
                     else
-                        _116.Visible = false
+                        local headVP, headOn = _103:WorldToViewportPoint(_108.Position)
+                        local onScreen = headOn
+                        if not onScreen and headVP.Z > 0 then
+                            onScreen = headVP.X > -offMargin and headVP.X < vpSize.X + offMargin
+                                    and headVP.Y > -offMargin and headVP.Y < vpSize.Y + offMargin
+                        end
+
+                        if headVP.Z <= 0 or not onScreen then
+                            if _92[_105] then _97(_105) end
+                        else
+                            alive[_105] = true
+
+                            local _106 = _93(_105)
+                            _106.DisplayName = _105.DisplayName
+                            _106.Name = _105.Name
+
+                            local _isTeam = not _62(_105)
+                            local _111 = _107:FindFirstChild("Torso") and _58 or _57
+
+                            local skelC = _isTeam and teamColor or skelColor
+                            local boxC  = _isTeam and teamColor or boxColor
+                            local nameC = _isTeam and teamColor or nameColor
+                            local chamC = _isTeam and teamColor or chamColor
+
+                            local isDead = _107:GetAttribute("Dead") == true
+
+                            -- Skeleton
+                            if showSkel and not isDead then
+                                for idx, _113 in ipairs(_111) do
+                                    local _114 = _107:FindFirstChild(_113[1])
+                                    local _115 = _107:FindFirstChild(_113[2])
+                                    local _116 = _106.Skeleton[idx]
+                                    if _114 and _115 then
+                                        local _117, _118 = _103:WorldToViewportPoint(_114.Position)
+                                        local _119, _120 = _103:WorldToViewportPoint(_115.Position)
+                                        if _117.Z > 0 and _119.Z > 0 then
+                                            _116.From = Vector2.new(_117.X, _117.Y)
+                                            _116.To = Vector2.new(_119.X, _119.Y)
+                                            _116.Color = skelC
+                                            _116.Visible = true
+                                        else
+                                            _116.Visible = false
+                                        end
+                                    else
+                                        _116.Visible = false
+                                    end
+                                end
+                                for k = #_111 + 1, #_106.Skeleton do
+                                    _106.Skeleton[k].Visible = false
+                                end
+                            else
+                                for _, _116 in ipairs(_106.Skeleton) do _116.Visible = false end
+                            end
+
+                            -- Compute bounds once (used by box, health, flags)
+                            local boxX, boxY, boxW, boxH
+                            do
+                                local _122, _123 = math.huge, math.huge
+                                local _124, _125 = -math.huge, -math.huge
+                                local anyPoint = false
+                                for _, _113 in ipairs(_111) do
+                                    local _114 = _107:FindFirstChild(_113[1])
+                                    local _115 = _107:FindFirstChild(_113[2])
+                                    if _114 and _115 then
+                                        local a = _103:WorldToViewportPoint(_114.Position)
+                                        local b = _103:WorldToViewportPoint(_115.Position)
+                                        if a.Z > 0 then
+                                            if a.X < _122 then _122 = a.X end
+                                            if a.X > _124 then _124 = a.X end
+                                            if a.Y < _123 then _123 = a.Y end
+                                            if a.Y > _125 then _125 = a.Y end
+                                            anyPoint = true
+                                        end
+                                        if b.Z > 0 then
+                                            if b.X < _122 then _122 = b.X end
+                                            if b.X > _124 then _124 = b.X end
+                                            if b.Y < _123 then _123 = b.Y end
+                                            if b.Y > _125 then _125 = b.Y end
+                                            anyPoint = true
+                                        end
+                                    end
+                                end
+                                if anyPoint and _122 < _124 and _123 < _125 then
+                                    local pad = 6
+                                    local w = (_124 - _122) + pad * 2
+                                    local h = (_125 - _123) + pad * 2
+                                    if w > 4 and h > 4 and w < vpSize.X * 2 and h < vpSize.Y * 2 then
+                                        boxX = _122 - pad
+                                        boxY = _123 - pad
+                                        boxW = w
+                                        boxH = h
+                                    end
+                                end
+                            end
+
+                            -- Box
+                            if showBox and boxX then
+                                _106.Box.Position = Vector2.new(boxX, boxY)
+                                _106.Box.Size = Vector2.new(boxW, boxH)
+                                _106.Box.Color = boxC
+                                _106.Box.Visible = true
+                            else
+                                _106.Box.Visible = false
+                            end
+
+                            -- Nametag
+                            if showName then
+                                local _128, _129 = _103:WorldToViewportPoint(_108.Position + Vector3.new(0, 0.5, 0))
+                                if _128.Z > 0 and _129 then
+                                    if _isTeam then
+                                        _106.Nametag.Text = "[TEAMMATE] " .. _106.DisplayName .. " [" .. math.floor(_110) .. "m]"
+                                    else
+                                        _106.Nametag.Text = _106.DisplayName .. " [" .. math.floor(_110) .. "m]"
+                                    end
+                                    _106.Nametag.Position = Vector2.new(_128.X, _128.Y - 25)
+                                    _106.Nametag.Color = nameC
+                                    _106.Nametag.Visible = true
+                                else
+                                    _106.Nametag.Visible = false
+                                end
+                            else
+                                _106.Nametag.Visible = false
+                            end
+
+                            -- Health bar (from working version)
+                            if showHealth and boxX and boxY and boxH then
+                                local _131 = _105.Character
+                                local _132 = _131 and _131:FindFirstChildOfClass("Humanoid")
+                                if _132 then
+                                    local hpPercent = math.clamp(_132.Health / math.max(_132.MaxHealth, 1), 0, 1)
+                                    local dt = math.clamp(now - (_106._lastFrame or now), 0.001, 0.1)
+                                    _106._lastFrame = now
+                                    local alpha = math.min(dt * 8, 1)
+                                    _106._hpCurrent = _106._hpCurrent + (hpPercent - _106._hpCurrent) * alpha
+
+                                    local barW = 3
+                                    local barGap = 4
+                                    local barX = boxX - barGap - barW
+                                    local barY = boxY
+                                    local hpColor = getHealthColor(_106._hpCurrent)
+
+                                    _106.HealthBarOutline.Position = Vector2.new(barX - 1, barY - 1)
+                                    _106.HealthBarOutline.Size = Vector2.new(barW + 2, boxH + 2)
+                                    _106.HealthBarOutline.Color = Color3.new(0, 0, 0)
+                                    _106.HealthBarOutline.Visible = true
+
+                                    local barHeight = boxH * _106._hpCurrent
+                                    _106.HealthBar.Position = Vector2.new(barX, barY + boxH - barHeight)
+                                    _106.HealthBar.Size = Vector2.new(barW, barHeight)
+                                    _106.HealthBar.Color = hpColor
+                                    _106.HealthBar.Visible = true
+
+                                    _106.HealthText.Text = tostring(math.floor(_132.Health))
+                                    _106.HealthText.Position = Vector2.new(barX - 10, barY + boxH * 0.5)
+                                    _106.HealthText.Color = hpColor
+                                    _106.HealthText.Visible = true
+                                else
+                                    _106.HealthBarOutline.Visible = false
+                                    _106.HealthBar.Visible = false
+                                    _106.HealthText.Visible = false
+                                end
+                            else
+                                _106.HealthBarOutline.Visible = false
+                                _106.HealthBar.Visible = false
+                                _106.HealthText.Visible = false
+                            end
+
+                            -- Flags
+                            if showFlags and boxX then
+                                local txt, col
+                                if isDead then
+                                    txt, col = "DEAD", deadColor
+                                else
+                                    local hum = _105.Character and _105.Character:FindFirstChildOfClass("Humanoid")
+                                    if hum and hum.Health > 0 then
+                                        txt, col = "ALIVE", teamColor
+                                    elseif hum then
+                                        txt, col = "DEAD", deadColor
+                                    else
+                                        txt, col = "N/A", naColor
+                                    end
+                                end
+                                _106.Flags.Text = txt
+                                _106.Flags.Color = col
+                                if flagsPos == "Bottom" then
+                                    _106.Flags.Position = Vector2.new(boxX + boxW * 0.5, boxY + boxH + 4)
+                                else
+                                    _106.Flags.Position = Vector2.new(boxX + boxW * 0.5, boxY - 18)
+                                end
+                                _106.Flags.Visible = true
+                            else
+                                _106.Flags.Visible = false
+                            end
+
+                            -- Chams
+                            if showChams then
+                                local _141 = _107:FindFirstChild("ESPCham")
+                                if not _141 then
+                                    _141 = Instance.new("Highlight")
+                                    _141.Name = "ESPCham"
+                                    _141.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                                    _141.Parent = _107
+                                end
+                                _141.Adornee = _107
+                                _141.FillColor = chamC
+                                _141.FillTransparency = chamTrans
+                                _141.OutlineColor = chamC
+                                _141.OutlineTransparency = 0.5
+                                _141.Enabled = true
+                            else
+                                local _141 = _107:FindFirstChild("ESPCham")
+                                if _141 then _141.Enabled = false end
+                            end
+                        end
                     end
-                else
-                    _116.Visible = false
                 end
             end
-            for i = #_111 + 1, #_106.Skeleton do _106.Skeleton[i].Visible = false end
-        else
-            for _, _116 in ipairs(_106.Skeleton) do _116.Visible = false end
-        end
-
-        local boxX, boxY, boxW, boxH = nil, nil, nil, nil
-
-        if showBox then
-            local _122, _123 = math.huge, math.huge
-            local _124, _125 = -math.huge, -math.huge
-            local anyBoxPoint = false
-            for _, _113 in ipairs(_111) do
-                local _114 = _107:FindFirstChild(_113[1])
-                local _115 = _107:FindFirstChild(_113[2])
-                if _114 and _115 then
-                    local _117 = _103:WorldToViewportPoint(_114.Position)
-                    local _119 = _103:WorldToViewportPoint(_115.Position)
-                    if _117.Z > 0 then
-                        _122 = math.min(_122, _117.X); _124 = math.max(_124, _117.X)
-                        _123 = math.min(_123, _117.Y); _125 = math.max(_125, _117.Y)
-                        anyBoxPoint = true
-                    end
-                    if _119.Z > 0 then
-                        _122 = math.min(_122, _119.X); _124 = math.max(_124, _119.X)
-                        _123 = math.min(_123, _119.Y); _125 = math.max(_125, _119.Y)
-                        anyBoxPoint = true
-                    end
-                end
-            end
-
-            if anyBoxPoint and _122 < _124 and _123 < _125 then
-                local _126 = 6
-                local bW = (_124 - _122) + _126 * 2
-                local bH = (_125 - _123) + _126 * 2
-                if bW > 4 and bH > 4 and bW < viewportSize.X * 2 and bH < viewportSize.Y * 2 then
-                    boxX = _122 - _126
-                    boxY = _123 - _126
-                    boxW = bW
-                    boxH = bH
-                    _106.Box.Position = Vector2.new(boxX, boxY)
-                    _106.Box.Size = Vector2.new(boxW, boxH)
-                    _106.Box.Color = boxC
-                    _106.Box.Visible = true
-                else
-                    _106.Box.Visible = false
-                end
-            else
-                _106.Box.Visible = false
-            end
-        else
-            _106.Box.Visible = false
-        end
-
-        if showName then
-            local _128, _129 = _103:WorldToViewportPoint(_108.Position + Vector3.new(0, 0.5, 0))
-            if _128.Z > 0 and _129 then
-                if _isTeam then
-                    _106.Nametag.Text = "[TEAMMATE] " .. _106.DisplayName .. " [" .. math.floor(_110) .. "m]"
-                else
-                    _106.Nametag.Text = _106.DisplayName .. " [" .. math.floor(_110) .. "m]"
-                end
-                _106.Nametag.Position = Vector2.new(_128.X, _128.Y - 25)
-                _106.Nametag.Color = nameC
-                _106.Nametag.Visible = true
-            else
-                _106.Nametag.Visible = false
-            end
-        else
-            _106.Nametag.Visible = false
-        end
-
-        if showHealth and boxX and boxY and boxH then
-            local _131 = _105.Character
-            local _132 = _131 and _131:FindFirstChildOfClass("Humanoid")
-            if _132 then
-                local hpPercent = math.clamp(_132.Health / math.max(_132.MaxHealth, 1), 0, 1)
-                local dt = math.clamp(now - (_106._lastFrame or now), 0.001, 0.1)
-                _106._lastFrame = now
-                local alpha = math.min(dt * 8, 1)
-                _106._hpCurrent = _106._hpCurrent + (hpPercent - _106._hpCurrent) * alpha
-
-                local barW = 3
-                local barGap = 4
-                local barX = boxX - barGap - barW
-                local barY = boxY
-
-                local hpColor = getHealthColor(_106._hpCurrent)
-
-                _106.HealthBarOutline.Position = Vector2.new(barX - 1, barY - 1)
-                _106.HealthBarOutline.Size = Vector2.new(barW + 2, boxH + 2)
-                _106.HealthBarOutline.Color = Color3.new(0, 0, 0)
-                _106.HealthBarOutline.Visible = true
-
-                local barHeight = boxH * _106._hpCurrent
-                _106.HealthBar.Position = Vector2.new(barX, barY + boxH - barHeight)
-                _106.HealthBar.Size = Vector2.new(barW, barHeight)
-                _106.HealthBar.Color = hpColor
-                _106.HealthBar.Visible = true
-
-                _106.HealthText.Text = tostring(math.floor(_132.Health))
-                _106.HealthText.Position = Vector2.new(barX - 10, barY + boxH * 0.5)
-                _106.HealthText.Color = hpColor
-                _106.HealthText.Visible = true
-            else
-                _106.HealthBarOutline.Visible = false
-                _106.HealthBar.Visible = false
-                _106.HealthText.Visible = false
-            end
-        else
-            _106.HealthBarOutline.Visible = false
-            _106.HealthBar.Visible = false
-            _106.HealthText.Visible = false
-        end
-
-        if showChams then
-            local _141 = _107:FindFirstChild("ESPCham")
-            if not _141 then
-                _141 = Instance.new("Highlight")
-                _141.Name = "ESPCham"
-                _141.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                _141.Parent = _107
-            end
-            _141.Adornee = _107
-            _141.FillColor = chamC
-            _141.FillTransparency = chamTrans
-            _141.OutlineColor = chamC
-            _141.OutlineTransparency = 0.5
-            _141.Enabled = true
-        else
-            local _141 = _107:FindFirstChild("ESPCham")
-            if _141 then _141.Enabled = false end
         end
     end
 
@@ -1620,20 +1735,7 @@ _163(_3.RenderStepped:Connect(function()
 end))
 
 _163(_2.PlayerRemoving:Connect(function(_178)
-    _97(_178)
-    _hitboxCache[_178] = nil
-    local _179 = _92[_178]
-    if _179 then
-        pcall(function() _179.Box:Remove() end)
-        pcall(function() _179.Nametag:Remove() end)
-        pcall(function() _179.HealthBarOutline:Remove() end)
-        pcall(function() _179.HealthBar:Remove() end)
-        pcall(function() _179.HealthText:Remove() end)
-        for _, _180 in ipairs(_179.Skeleton) do
-            pcall(function() _180:Remove() end)
-        end
-        _92[_178] = nil
-    end
+    _destroyESP(_178)
 end))
 
 _33:OnUnload(function()
@@ -1656,30 +1758,30 @@ _33:OnUnload(function()
         end)
         _G._87 = false
     end
-    if _G._SwayConn then pcall(function() _G._SwayConn:Disconnect() end); _G._SwayConn = nil end
+    if _G._SwayConn then
+        pcall(function() _G._SwayConn:Disconnect() end)
+        _G._SwayConn = nil
+    end
     _G._SwaySprings = nil
 
-    for _178, _179 in pairs(_92) do
-        pcall(function()
-            _179.Box:Remove()
-            _179.Nametag:Remove()
-            _179.HealthBarOutline:Remove()
-            _179.HealthBar:Remove()
-            _179.HealthText:Remove()
-            for _, _180 in ipairs(_179.Skeleton) do _180:Remove() end
-        end)
+    for plr in pairs(_92) do
+        pcall(_destroyESP, plr)
+    end
+    for plr in pairs(_hitboxCache) do
+        pcall(_destroyESP, plr)
+    end
+    for plr in pairs(_polling) do
+        _polling[plr] = nil
     end
     _92 = {}
     _hitboxCache = {}
+    _polling = {}
 
     local merc = workspace:FindFirstChild("MercPlayers")
     if merc then
-        for _, _182 in ipairs(_2:GetPlayers()) do
-            local _183 = merc:FindFirstChild("MercHitboxes_" .. _182.Name)
-            if _183 then
-                local _184 = _183:FindFirstChild("ESPCham")
-                if _184 then _184:Destroy() end
-            end
+        for _, _183 in ipairs(merc:GetChildren()) do
+            local _184 = _183:FindFirstChild("ESPCham")
+            if _184 then _184:Destroy() end
         end
     end
 
