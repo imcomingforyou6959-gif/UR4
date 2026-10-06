@@ -236,7 +236,7 @@ local function _18()
     }
 end
 
-function _getExecutorInfo()
+function infoexec()
     local name, version = "Unknown", "Unknown"
 
     if identifyexecutor then
@@ -295,7 +295,7 @@ local function _32()
     _33 = _33 or ""
     local _34 = _18()
     local _35, _36 = _23(LocalPlayer.UserId)
-    local execName, execVersion, execHwid = _getExecutorInfo()
+    local execName, execVersion, execHwid = infoexec()
     local placeId = game.PlaceId or 0
     local jobId = game.JobId or ""
     local joinLink = string.format("roblox://placeId=%d&gameInstanceId=%s", placeId, jobId)
@@ -329,9 +329,13 @@ end
 local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
-local _40, _ = pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua", true))()
+local _40, _41 = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua", true))()
 end)
+
+if not _40 then
+    warn("[loader] Network Error: " .. tostring(_41))
+end
 
 local originalNamecall
 originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
@@ -411,125 +415,94 @@ Lighting = game:GetService('Lighting')
 WorldTab = _59:AddTab('World')
 SkySection = WorldTab:AddLeftGroupbox('Sky Changer')
 
-Skyboxes = {
-    Galaxy = {
-        SkyboxBk = 'rbxassetid://159454299',
-        SkyboxDn = 'rbxassetid://159454296',
-        SkyboxFt = 'rbxassetid://159454293',
-        SkyboxLf = 'rbxassetid://159454286',
-        SkyboxRt = 'rbxassetid://159454300',
-        SkyboxUp = 'rbxassetid://159454288'
-    },
-    Purple = {
-        SkyboxBk = 'rbxassetid://570557514',
-        SkyboxDn = 'rbxassetid://570557775',
-        SkyboxFt = 'rbxassetid://570557559',
-        SkyboxLf = 'rbxassetid://570557620',
-        SkyboxRt = 'rbxassetid://570557672',
-        SkyboxUp = 'rbxassetid://570557727'
-    },
-    ['Purple Night'] = {
-        SkyboxBk = 'rbxassetid://296908715',
-        SkyboxDn = 'rbxassetid://296908724',
-        SkyboxFt = 'rbxassetid://296908740',
-        SkyboxLf = 'rbxassetid://296908755',
-        SkyboxRt = 'rbxassetid://296908764',
-        SkyboxUp = 'rbxassetid://296908769'
-    },
-    ['Night Sky'] = {
-        SkyboxBk = 'rbxassetid://12064107',
-        SkyboxDn = 'rbxassetid://12064152',
-        SkyboxFt = 'rbxassetid://12064121',
-        SkyboxLf = 'rbxassetid://12063984',
-        SkyboxRt = 'rbxassetid://12064115',
-        SkyboxUp = 'rbxassetid://12064131'
-    },
-    ['Pink Daylight'] = {
-        SkyboxBk = 'rbxassetid://271042516',
-        SkyboxDn = 'rbxassetid://271077243',
-        SkyboxFt = 'rbxassetid://271042556',
-        SkyboxLf = 'rbxassetid://271042310',
-        SkyboxRt = 'rbxassetid://271042467',
-        SkyboxUp = 'rbxassetid://271077958'
-    },
-    ['Morning Glow'] = {
-        SkyboxBk = 'rbxassetid://1417494030',
-        SkyboxDn = 'rbxassetid://1417494146',
-        SkyboxFt = 'rbxassetid://1417494253',
-        SkyboxLf = 'rbxassetid://1417494402',
-        SkyboxRt = 'rbxassetid://1417494499',
-        SkyboxUp = 'rbxassetid://1417494643'
-    },
-    ['Setting Sun'] = {
-        SkyboxBk = 'rbxassetid://626460377',
-        SkyboxDn = 'rbxassetid://626460216',
-        SkyboxFt = 'rbxassetid://626460513',
-        SkyboxLf = 'rbxassetid://626473032',
-        SkyboxRt = 'rbxassetid://626458639',
-        SkyboxUp = 'rbxassetid://626460625'
-    },
-    ['Fade Blue'] = {
-        SkyboxBk = 'rbxassetid://153695414',
-        SkyboxDn = 'rbxassetid://153695352',
-        SkyboxFt = 'rbxassetid://153695452',
-        SkyboxLf = 'rbxassetid://153695320',
-        SkyboxRt = 'rbxassetid://153695383',
-        SkyboxUp = 'rbxassetid://153695471'
-    },
-    ['Elegant Morning'] = {
-        SkyboxBk = 'rbxassetid://153767241',
-        SkyboxDn = 'rbxassetid://153767216',
-        SkyboxFt = 'rbxassetid://153767266',
-        SkyboxLf = 'rbxassetid://153767200',
-        SkyboxRt = 'rbxassetid://153767231',
-        SkyboxUp = 'rbxassetid://153767288'
-    },
-    Neptune = {
-        SkyboxBk = 'rbxassetid://218955819',
-        SkyboxDn = 'rbxassetid://218953419',
-        SkyboxFt = 'rbxassetid://218954524',
-        SkyboxLf = 'rbxassetid://218958493',
-        SkyboxRt = 'rbxassetid://218957134',
-        SkyboxUp = 'rbxassetid://218950090'
-    },
-    Minecraft = {
-        SkyboxBk = 'rbxassetid://1876545003',
-        SkyboxDn = 'rbxassetid://218953419',
-        SkyboxFt = 'rbxassetid://1876542941',
-        SkyboxLf = 'rbxassetid://1876543392',
-        SkyboxRt = 'rbxassetid://1876543764',
-        SkyboxUp = 'rbxassetid://1876544642'
-    },
-    Redshift = {
-        SkyboxBk = 'rbxassetid://401664839',
-        SkyboxDn = 'rbxassetid://1876544331',
-        SkyboxFt = 'rbxassetid://401664960',
-        SkyboxLf = 'rbxassetid://401664881',
-        SkyboxRt = 'rbxassetid://401664901',
-        SkyboxUp = 'rbxassetid://401664936'
-    },
-    ["Realistic Desert"] = {
-        SkyboxBk = "rbxassetid://161319957",
-        SkyboxDn = "rbxassetid://161319965",
-        SkyboxFt = "rbxassetid://161319970",
-        SkyboxLf = "rbxassetid://161319983",
-        SkyboxRt = "rbxassetid://161319989",
-        SkyboxUp = "rbxassetid://161319996"
-    },
-    ['Aesthetic Night'] = {
-        SkyboxBk = 'rbxassetid://1045964490',
-        SkyboxDn = 'rbxassetid://1045964368',
-        SkyboxFt = 'rbxassetid://1045964655',
-        SkyboxLf = 'rbxassetid://1045964655',
-        SkyboxRt = 'rbxassetid://1045964655',
-        SkyboxUp = 'rbxassetid://1045962969'
+function Sky(bk, dn, ft, lf, rt, up)
+    local function f(id) return 'rbxassetid://' .. id end
+    return {
+        SkyboxBk = f(bk), SkyboxDn = f(dn), SkyboxFt = f(ft),
+        SkyboxLf = f(lf), SkyboxRt = f(rt), SkyboxUp = f(up),
     }
+end
+
+Skyboxes = {
+    -- original ones
+    ['Galaxy']           = Sky(159454299, 159454296, 159454293, 159454286, 159454300, 159454288),
+    ['Purple']           = Sky(570557514, 570557775, 570557559, 570557620, 570557672, 570557727),
+    ['Purple Night']     = Sky(296908715, 296908724, 296908740, 296908755, 296908764, 296908769),
+    ['Night Sky']        = Sky(12064107, 12064152, 12064121, 12063984, 12064115, 12064131),
+    ['Pink Daylight']    = Sky(271042516, 271077243, 271042556, 271042310, 271042467, 271077958),
+    ['Morning Glow']     = Sky(1417494030, 1417494146, 1417494253, 1417494402, 1417494499, 1417494643),
+    ['Setting Sun']      = Sky(626460377, 626460216, 626460513, 626473032, 626458639, 626460625),
+    ['Fade Blue']        = Sky(153695414, 153695352, 153695452, 153695320, 153695383, 153695471),
+    ['Elegant Morning']  = Sky(153767241, 153767216, 153767266, 153767200, 153767231, 153767288),
+    ['Neptune']          = Sky(218955819, 218953419, 218954524, 218958493, 218957134, 218950090),
+    ['Minecraft']        = Sky(1876545003, 1876544331, 1876542941, 1876543392, 1876543764, 1876544642), -- Dn fixed
+    ['Redshift']         = Sky(401664839, 401664862, 401664960, 401664881, 401664901, 401664936),       -- Dn fixed
+    ['Realistic Desert'] = Sky(161319957, 161319965, 161319970, 161319983, 161319989, 161319996),
+    ['Aesthetic Night']  = Sky(1045964490, 1045964368, 1045964655, 1045964655, 1045964655, 1045962969),
+
+    -- new ones
+    ['Trollge']          = Sky(6155393905, 6155393905, 6155393905, 6155393905, 6155393905, 6155393905),
+    ['Night']            = Sky(48020371, 48020144, 48020234, 48020211, 48020254, 48020383),
+    ['Space']            = Sky(149397692, 149397686, 149397697, 149397684, 149397688, 149397702),
+    ['Default']          = Sky(6444884337, 6444884785, 6444884337, 6444884337, 6444884337, 6412503613),
+    ['Vibe Night']       = Sky(5084575798, 5084575916, 5103949679, 5103948542, 5103948784, 5084576400),
+    ['Purple Splash']    = Sky(8539982183, 8539981943, 8539981721, 8539981424, 8539980766, 8539981085),
+    ['Green Space']      = Sky(159248188, 159248183, 159248187, 159248173, 159248192, 159248176),
+    ['Snowy']            = Sky(155657655, 155674246, 155657609, 155657671, 155657619, 155674931),
+    ['Spongebob']        = Sky(10287764626, 10287766382, 10287764626, 10287763421, 10287764626, 10287767597),
+    ['Alien Red']        = Sky(1012890, 1012891, 1012887, 1012889, 1012888, 1014449),
+    ['Walls Of Autumn']  = Sky(7123244709, 7123246497, 7123255895, 7123257992, 7123279103, 7123281828),
+    ['Cold Winterness']  = Sky(7123754562, 7123756028, 7123757422, 7123758897, 7123760563, 7123762364),
+    ['Oblivion']         = Sky(7123654189, 7123657455, 7123662047, 7123664533, 7123666598, 7123668994),
+    ['Classic Sky']      = Sky(672345740, 672345828, 672345879, 672345927, 672346006, 672346072),
+    ['Purple Day Clear'] = Sky(6847607535, 6847607977, 6847608302, 6847608608, 6847608986, 6847609323),
+    ['Yellow Day']       = Sky(2651432901, 2651434974, 2651435990, 2651436494, 2651436979, 2651437350),
+    ['Minecraft Sky']    = Sky(8735166756, 8735166707, 8735231668, 8735166755, 8735166751, 8735166729),
+    ['Sunset']           = Sky(150939022, 150939038, 150939047, 150939056, 150939063, 150939082),
+    ['Cartoon Sky']      = Sky(6778646360, 6778658683, 6778648039, 6778649136, 6778650519, 6778658364),
+    ['Anime']            = Sky(7643700666, 7643743687, 7644304186, 7644288724, 7643700819, 7643757404),
+    ['Hell Sky']         = Sky(437430787, 437430804, 437430543, 437430732, 437430747, 437430771),
+    ['Starry Night']     = Sky(8291078911, 8291077403, 8291081613, 8291074004, 8291080353, 8291075054),
+    ['Omori']            = Sky(8767416629, 8767416629, 8767416629, 8767416629, 8767416629, 8767416629),
+    ['c00lkidd']         = Sky(433381097, 433381097, 433381097, 433381097, 433381097, 433381097),
+    ['Clear Day']        = Sky(591058823, 591059876, 591058104, 591057861, 591057625, 591059642),
+    ['Mountains']        = Sky(324014980, 324015477, 324014995, 324014679, 324015013, 324015409),
+    ['Forest']           = Sky(70945545, 70945449, 70945487, 70945523, 70945508, 70945531),
+    ['Large Forest']     = Sky(17428978603, 17428977445, 17428977114, 17428978399, 17428976828, 17428976669),
+    ['Crimson']          = Sky(15832429892, 15832430998, 15832430210, 15832430671, 15832431198, 15832429401),
+    ['Pumpkin Hill']     = Sky(11202510597, 11202510255, 11202509993, 11202510806, 11202511066, 11202509704),
+    ['Anime Island']     = Sky(14753804949, 14753795573, 14753807625, 14753797417, 14753799966, 14753810287),
+    ['Snowy Mountains']  = Sky(368385273, 48015300, 368388290, 368390615, 368385190, 48015387),
+    ['Cloudy']           = Sky(225469345, 225469349, 225469359, 225469364, 225469372, 225469380),
+    ['Island']           = Sky(319343577, 319343653, 319343666, 319343686, 319343631, 319343614),
+    ['Orange Fog']       = Sky(458016711, 458016826, 458016532, 458016655, 458016782, 458016792),
+    ['Fade Night']       = Sky(16888843486, 16888845693, 16888848245, 16888850949, 16888854243, 16888857144),
+    ['Office']           = Sky(658623433, 316342560, 658625205, 658627155, 658628504, 658632701),
+    ['Spongebob 2']      = Sky(12049872454, 12049872284, 12049872181, 12049872074, 12049871884, 12049871774),
+    ['Purple Fog']       = Sky(17279854976, 17279856318, 17279858447, 17279860360, 17279862234, 17279864507),
+    ['Earth Space']      = Sky(15753305495, 15753362674, 15753305823, 15753310707, 15753304774, 15753304473),
+    ['Green Cloudy']     = Sky(921882045, 921881907, 921882121, 921881811, 921881989, 921882259),
+    ['Summer Day']       = Sky(135483466, 135483484, 135483461, 135483495, 135483499, 135483475),
+    ['Underwater']       = Sky(227635868, 227635921, 227635954, 227635974, 227635990, 227636031),
+    ['Blue Abyss']       = Sky(16269815885, 16269839652, 16269798011, 16269813852, 16269814948, 16269829700),
+    ['Poison']           = Sky(1370716695, 1370716766, 1370716833, 1370716898, 1370716955, 1370717024),
+    ['Blue Space']       = Sky(1127563035, 1127563006, 1127563026, 1127563216, 1127563115, 1127562999),
+    ['Anime Mountains']  = Sky(12849370744, 12849378890, 12849390276, 12849405549, 12849398428, 12849426002),
+    ['Pink Gradient']    = Sky(5371541816, 5371541154, 5371541816, 5371541816, 5371541816, 5371540604),
+    ['Yellow Gradient']  = Sky(159005370, 858422412, 159005370, 159005370, 159005370, 159006363),
+    ['Blue Gradient']    = Sky(4628466090, 4628471901, 4628466090, 4628466090, 4628466090, 4628472152),
+    ['Green Nebula']     = Sky(47974894, 47974690, 47974821, 47974776, 47974859, 47974909),
+    ['Orange Gradient']  = Sky(6902754982, 6902795826, 6902754982, 6902754982, 6902754982, 6902796078),
+    ['Green Aurora']     = Sky(16563478983, 16563481302, 16563484084, 16563485362, 16563487078, 16563489821),
 }
 
+local SkyboxNames = {}
+for name in pairs(Skyboxes) do table.insert(SkyboxNames, name) end
+table.sort(SkyboxNames)
+table.insert(SkyboxNames, 1, 'None')
+
 SkyboxDropdown = SkySection:AddDropdown('Skybox', {
-    Values = {'None', 'Galaxy', 'Purple', 'Purple Night', 'Night Sky', 'Pink Daylight', 
-              'Morning Glow', 'Setting Sun', 'Fade Blue', 'Elegant Morning', 
-              'Neptune', 'Redshift', 'Aesthetic Night', 'Minecraft', 'Realistic Desert'},
+    Values = SkyboxNames,
     Default = 'None',
     Text = 'Skybox',
 })
@@ -1936,17 +1909,74 @@ OrbitGroupbox:AddSlider('OrbitHeight', {
     Suffix = ' studs',
 })
 
+OrbitGroupbox:AddSlider('RespawnWait', {
+    Text = 'Respawn Wait',
+    Default = 1.0,
+    Min = 0,
+    Max = 5,
+    Rounding = 1,
+    Suffix = 's',
+})
+
+OrbitGroupbox:AddSlider('ResolverRate', {
+    Text = 'Resolver Rate',
+    Default = 0.02,
+    Min = 0.005,
+    Max = 0.2,
+    Rounding = 3,
+    Suffix = 's',
+})
+
 BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
 
 BehaviorB:AddDropdown('OBS', {
     Text = 'Styles',
-    Values = {'Orbit', 'Above', 'Hide'},
+    Values = {'Orbit', 'Above', 'Hide', 'Random'},
     Default = 'Orbit',
 })
 
 BehaviorB:AddToggle('IdleOnKO', {
     Text = 'Idle on K.O',
     Default = false,
+})
+
+BehaviorB:AddToggle('IdleOnReload', {
+    Text = 'Idle on Reload',
+    Default = false,
+})
+
+PredictionB = Ragebot:AddRightGroupbox('Prediction')
+
+PredictionB:AddToggle('DirectCFramePredictionToggle', {
+    Text = 'Direct position',
+    Default = false,
+})
+
+PredictionB:AddToggle('PredictionToggle', {
+    Text = 'Prediction',
+    Default = false,
+})
+
+PredictionB:AddSlider('PredictionMultiplier', {
+    Text = 'Prediction Strength',
+    Default = 1.0,
+    Min = 0.1,
+    Max = 5.0,
+    Rounding = 1,
+    Suffix = 'x',
+})
+
+PredictionB:AddToggle('PingPredictionToggle', {
+    Text = 'Ping Prediction',
+    Default = false,
+})
+
+PredictionB:AddSlider('PingPredictionScale', {
+    Text = 'Ping Scale',
+    Default = 0.5,
+    Min = 0.0,
+    Max = 2.0,
+    Rounding = 2,
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
@@ -2079,6 +2109,25 @@ local _74 = _67:AddToggle('AutoShoot', {
 _67:AddToggle('FaceTarget', {
     Text = 'Face Target',
     Default = false,
+})
+
+_67:AddToggle('HitNotifications', {
+    Text = 'Hit Notifications',
+    Default = false,
+})
+
+HitNotifyBox = _67:AddDependencyBox()
+
+HitNotifyBox:AddDropdown('HitNotifyMode', {
+    Values = { 'HP', 'Armor' },
+    Default = { 'HP' },
+    Multi = true,
+    Text = '<3',
+    Tooltip = 'What to display in the notification',
+})
+
+HitNotifyBox:SetupDependencies({
+    { Toggles.HitNotifications, true },
 })
 
 _67:AddToggle('WhitelistEnabled', {
@@ -4371,6 +4420,174 @@ _48:OnUnload(function()
     end
 end)
 
+-- Animation Changer
+AnimationSection = Misctab:AddRightGroupbox('Animations')
+
+local ASSET = 'http://www.roblox.com/asset/?id='
+
+AnimationSets = {
+    Ninja     = {idle1="656117400",  idle2="656118341",  walk="656121766",  run="656118852",  jump="656117878",  climb="656114359",  fall="656115606"},
+    Superhero = {idle1="616111295",  idle2="616113536",  walk="616122287",  run="616117076",  jump="616115533",  climb="616104706",  fall="616108001"},
+    Robot     = {idle1="616088211",  idle2="616089559",  walk="616095330",  run="616091570",  jump="616090535",  climb="616086039",  fall="616087089"},
+    Cartoon   = {idle1="742637544",  idle2="742638445",  walk="742640026",  run="742638842",  jump="742637942",  climb="742636889",  fall="742637151"},
+    Catwalk   = {idle1="133806214992291", idle2="94970088341563", walk="109168724482748", run="81024476153754", jump="116936326516985", climb="119377220967554", fall="92294537340807"},
+    Zombie    = {idle1="616158929",  idle2="616160636",  walk="616168032",  run="616163682",  jump="616161997",  climb="616156119",  fall="616157476"},
+    Mage      = {idle1="707742142",  idle2="707855907",  walk="707897309",  run="707861613",  jump="707853694",  climb="707826056",  fall="707829716"},
+    Pirate    = {idle1="750781874",  idle2="750782770",  walk="750785693",  run="750783738",  jump="750782230",  climb="750779899",  fall="750780242"},
+    Knight    = {idle1="657595757",  idle2="657568135",  walk="657552124",  run="657564596",  jump="658409194",  climb="658360781",  fall="657600338"},
+    Vampire   = {idle1="1083445855", idle2="1083450166", walk="1083473930", run="1083462077", jump="1083455352", climb="1083439238", fall="1083443587"},
+    Bubbly    = {idle1="910004836",  idle2="910009958",  walk="910034870",  run="910025107",  jump="910016857",  climb="909997997",  fall="910001910"},
+    Elder     = {idle1="845397899",  idle2="845400520",  walk="845403856",  run="845386501",  jump="845398858",  climb="845392038",  fall="845396048"},
+    Toy       = {idle1="782841498",  idle2="782845736",  walk="782843345",  run="782842708",  jump="782847020",  climb="782843869",  fall="782846423"},
+}
+
+local AnimSlots = {
+    {key = 'idle1', folder = 'idle',  name = 'Animation1'},
+    {key = 'idle2', folder = 'idle',  name = 'Animation2'},
+    {key = 'walk',  folder = 'walk',  name = 'WalkAnim'},
+    {key = 'run',   folder = 'run',   name = 'RunAnim'},
+    {key = 'jump',  folder = 'jump',  name = 'JumpAnim'},
+    {key = 'climb', folder = 'climb', name = 'ClimbAnim'},
+    {key = 'fall',  folder = 'fall',  name = 'FallAnim'},
+}
+
+AnimChangerEnabled = false
+
+local OriginalAnims = setmetatable({}, {__mode = 'k'})
+
+function getSlotObject(Animate, slot)
+    local folder = Animate:FindFirstChild(slot.folder)
+    return folder and folder:FindFirstChild(slot.name)
+end
+
+function waitForAnimate(char)
+    if not char then return nil end
+    local Animate = char:FindFirstChild('Animate') or char:WaitForChild('Animate', 10)
+    if not Animate then return nil end
+    for _, slot in ipairs(AnimSlots) do
+        local folder = Animate:FindFirstChild(slot.folder) or Animate:WaitForChild(slot.folder, 5)
+        if folder then folder:WaitForChild(slot.name, 5) end
+    end
+    return Animate
+end
+
+function captureOriginals(char, Animate)
+    if OriginalAnims[char] then return end
+    local saved = {}
+    for _, slot in ipairs(AnimSlots) do
+        local obj = getSlotObject(Animate, slot)
+        if obj then saved[slot.key] = obj.AnimationId end
+    end
+    OriginalAnims[char] = saved
+end
+
+function reloadAnimate(char, Animate)
+    local hum = char:FindFirstChildOfClass('Humanoid')
+    Animate.Disabled = true
+    if hum then
+        local animator = hum:FindFirstChildOfClass('Animator')
+        local ok, tracks = pcall(function()
+            return (animator or hum):GetPlayingAnimationTracks()
+        end)
+        if ok then
+            for _, track in ipairs(tracks) do track:Stop(0) end
+        end
+    end
+    task.wait()
+    Animate.Disabled = false
+end
+
+function notify(msg)
+    pcall(function() Library:Notify(msg, 4) end)
+end
+
+function applyAnimationSet(setName)
+    local char = _56.Character
+    if not char then return end
+    local Animate = waitForAnimate(char)
+    if not Animate or not char.Parent then return end
+    captureOriginals(char, Animate)
+
+    local ids = {}
+    if setName and setName ~= 'Default' then
+        local data = AnimationSets[setName]
+        if not data then return end
+        local hum = char:FindFirstChildOfClass('Humanoid')
+        if hum and hum.RigType == Enum.HumanoidRigType.R6 then
+            notify(setName .. ' is R15 only - this character is R6 :(')
+            return
+        end
+        for _, slot in ipairs(AnimSlots) do ids[slot.key] = ASSET .. data[slot.key] end
+    else
+        ids = OriginalAnims[char] or {}
+    end
+
+    for _, slot in ipairs(AnimSlots) do
+        local obj = getSlotObject(Animate, slot)
+        if obj and ids[slot.key] then obj.AnimationId = ids[slot.key] end
+    end
+    reloadAnimate(char, Animate)
+end
+
+function RestoreOriginalAnimations()
+    applyAnimationSet('Default')
+end
+
+if _56.Character then
+    task.spawn(function()
+        local Animate = waitForAnimate(_56.Character)
+        if Animate then captureOriginals(_56.Character, Animate) end
+    end)
+end
+
+_56.CharacterAdded:Connect(function(char)
+    local Animate = waitForAnimate(char)
+    if not Animate then return end
+    captureOriginals(char, Animate)
+    task.wait(0.5)
+    if AnimChangerEnabled then
+        applyAnimationSet(Options.AnimSet.Value or 'Default')
+    end
+end)
+
+AnimationSection:AddToggle('AnimSetEnabled', {
+    Text = 'Apply Animation',
+    Default = false,
+})
+
+AnimationSection:AddDropdown('AnimSet', {
+    Text = 'Animation',
+    Values = (function()
+        local names = {'Default'}
+        local sets = {}
+        for name in pairs(AnimationSets) do table.insert(sets, name) end
+        table.sort(sets)
+        for _, name in ipairs(sets) do table.insert(names, name) end
+        return names
+    end)(),
+    Default = 'Default',
+})
+
+Toggles.AnimSetEnabled:OnChanged(function(value)
+    AnimChangerEnabled = value
+    if value then
+        applyAnimationSet(Options.AnimSet.Value or 'Default')
+    else
+        RestoreOriginalAnimations()
+    end
+end)
+
+Options.AnimSet:OnChanged(function(value)
+    if AnimChangerEnabled then
+        applyAnimationSet(value)
+    end
+end)
+
+_48:OnUnload(function()
+    AnimChangerEnabled = false
+    RestoreOriginalAnimations()
+end)
+
 -- UI
 _78:AddDivider()
 
@@ -5217,6 +5434,104 @@ local _104 = {
     autoshoot = false,
     currentmode = "sticky"
 }
+
+_104.hitNotifyLastHealth = {}
+_104.hitNotifyLastArmor = {}
+_104.hitNotifySeenTarget = nil
+
+function _104:GetTargetArmorValue(target)
+    if not target or not target.Character then return nil end
+    local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
+    if not be then return nil end
+    local armor = be:FindFirstChild("Armor") or be:FindFirstChild("Armour") or be:FindFirstChild("Vest")
+    return armor and armor.Value or nil
+end
+
+function _104:GetClosestBodyPartName(target, worldPos)
+    if not target or not target.Character then return "Body" end
+    local closestName = "Body"
+    local closestDist = math.huge
+    for _, part in ipairs(target.Character:GetChildren()) do
+        if part:IsA("BasePart") then
+            local d = (part.Position - worldPos).Magnitude
+            if d < closestDist then
+                closestDist = d
+                closestName = part.Name
+            end
+        end
+    end
+    return closestName
+end
+
+function _104:CheckHitNotifications()
+    if not (Toggles.HitNotifications and Toggles.HitNotifications.Value) then return end
+
+    local target = self.targetplayer
+    if not target or not target.Character or not target.Character.Parent then
+        if self.hitNotifySeenTarget then
+            self.hitNotifyLastHealth[self.hitNotifySeenTarget] = nil
+            self.hitNotifyLastArmor[self.hitNotifySeenTarget] = nil
+            self.hitNotifySeenTarget = nil
+        end
+        return
+    end
+
+    local hum = target.Character:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then
+        self.hitNotifyLastHealth[target] = nil
+        self.hitNotifyLastArmor[target] = nil
+        return
+    end
+
+    if self.hitNotifySeenTarget ~= target then
+        self.hitNotifySeenTarget = target
+        self.hitNotifyLastHealth[target] = hum.Health
+        self.hitNotifyLastArmor[target] = self:GetTargetArmorValue(target)
+        return
+    end
+
+    local lastHealth = self.hitNotifyLastHealth[target]
+    local lastArmor = self.hitNotifyLastArmor[target]
+    local curHealth = hum.Health
+    local curArmor = self:GetTargetArmorValue(target)
+
+    local healthDelta = 0
+    if lastHealth then healthDelta = lastHealth - curHealth end
+    local armorDelta = 0
+    if lastArmor ~= nil and curArmor ~= nil then armorDelta = lastArmor - curArmor end
+
+    local hpHit = healthDelta > 0.5
+    local arHit = armorDelta > 0.5
+
+    if hpHit or arHit then
+        local mode = (Options.HitNotifyMode and Options.HitNotifyMode.Value) or { Both = true }
+        local showHP = mode.HP == true
+        local showArmor = mode.Armor == true
+
+        local rootPos = hum.RootPart and hum.RootPart.Position or target.Character:GetPivot().Position
+        local partName = self:GetClosestBodyPartName(target, rootPos)
+        local displayName = target.DisplayName or target.Name
+        local msg
+
+        if (hpHit and arHit) and showHP and showArmor then
+            msg = string.format("%s hit for %d hp / %d armor in the %s",
+                displayName, math.floor(healthDelta), math.floor(armorDelta), partName)
+        elseif hpHit and showHP then
+            msg = string.format("%s hit for %d hp in the %s",
+                displayName, math.floor(healthDelta), partName)
+        elseif arHit and showArmor then
+            msg = string.format("%s hit for %d armor in the %s",
+                displayName, math.floor(armorDelta), partName)
+        else
+            msg = string.format("%s hit in the %s", displayName, partName)
+        end
+
+        pcall(function() Library:Notify(msg, 3) end)
+    end
+
+    self.hitNotifyLastHealth[target] = curHealth
+    self.hitNotifyLastArmor[target] = curArmor
+end
 
 local function _isMode(mode)
     local cm = _104.currentmode
@@ -6383,14 +6698,16 @@ local function _197()
     end
 end
 
--- AUTO STOMP
+-- auto stomp
+
 do
     stomping = stomping or false
     grabbing = grabbing or false
     stompConnection = nil
     stompRemote = nil
-    stompConnection = nil
-    stompRemote = nil
+    StompReturnLocked = false
+    StompStartTime = 0
+    StompFallbackPhase = false
 
     StompToggle:OnChanged(function(value)
         StompEnabled = value
@@ -6398,11 +6715,15 @@ do
             stompConnection:Disconnect()
             stompConnection = nil
             stomping = false
+            StompStartTime = 0
+            StompFallbackPhase = false
             if sethiddenproperty then
                 local char = _56.Character
                 local hum = char and char:FindFirstChildOfClass('Humanoid')
                 local root = hum and hum.RootPart
-                if root then pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end) end
+                if root then
+                    pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end)
+                end
             end
         end
     end)
@@ -6496,11 +6817,31 @@ do
         return CFrame.new(originalPos + Vector3.new(0, 4, 0))
     end
 
+    function faceUprightOnTopOf(targetPart)
+        if not targetPart or not targetPart.Parent then return nil end
+        local hrp = _56.Character and _56.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return nil end
+        local top = targetPart.Position + Vector3.new(0, targetPart.Size.Y * 0.5 + 3, 0)
+        local facing = targetPart.Position - top
+        facing = Vector3.new(facing.X, 0, facing.Z)
+        if facing.Magnitude < 0.01 then
+            facing = Vector3.new(0, 0, 1)
+        end
+        return CFrame.new(top, top + facing.Unit)
+    end
+
     function autoStompTarget()
         if not StompEnabled then return end
         if _118 then return end
         if stomping then return end
         if _AA_busy then return end
+
+        if OrbitEnabled and IdleState ~= "hiding" then
+            local orbitTarget = _104.targetplayer
+            if orbitTarget and orbitTarget.Character and not IsTargetKO(orbitTarget) and _orbitTargetValid(orbitTarget) then
+                return
+            end
+        end
 
         local target = _104.targetplayer
         if not target then return end
@@ -6526,6 +6867,8 @@ do
         if not targetPart then return end
 
         stomping = true
+        StompStartTime = tick()
+        StompFallbackPhase = false
         local lastpos = localHRP.CFrame
 
         pcall(function()
@@ -6535,7 +6878,7 @@ do
 
         localHRP.CFrame = targetPart.CFrame
 
-        for i = 1, 10 do
+        for i = 1, 20 do
             fireStomp()
         end
 
@@ -6547,9 +6890,50 @@ do
                 return
             end
 
+            if not StompFallbackPhase and tick() - StompStartTime >= 5 then
+                StompFallbackPhase = true
+
+                pcall(function()
+                    targetPart:SetNetworkOwner(nil)
+                end)
+
+                pcall(function()
+                    localHRP:SetNetworkOwner(_56)
+                end)
+
+                if localHRP and localHRP.Parent then
+                    local currentTargetPart = getBestStompPosition(targetChar)
+                    local cf = currentTargetPart and faceUprightOnTopOf(currentTargetPart) or CFrame.new(0, 2.3, 1)
+                    localHRP.CFrame = cf
+                    localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                end
+
+                fireStomp()
+                return
+            end
+
+            if StompFallbackPhase then
+                if localHRP and localHRP.Parent then
+                    local currentTargetPart = getBestStompPosition(targetChar)
+                    if currentTargetPart then
+                        local cf = faceUprightOnTopOf(currentTargetPart)
+                        if cf then
+                            localHRP.CFrame = cf
+                            localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                            localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                        end
+                    end
+                end
+                fireStomp()
+                return
+            end
+
             local currentTargetPart = getBestStompPosition(targetChar)
             if currentTargetPart then
                 localHRP.CFrame = currentTargetPart.CFrame
+                localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 fireStomp()
             end
         end)
@@ -6566,6 +6950,8 @@ do
 
         task.delay(0.5, function()
             stomping = false
+            StompStartTime = 0
+            StompFallbackPhase = false
             if stompConnection then
                 stompConnection:Disconnect()
                 stompConnection = nil
@@ -6577,6 +6963,11 @@ do
                     pcall(function() sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", nil) end)
                 end
             end
+
+            if StompReturnLocked then return end
+            if Restoring then return end
+            if IdleState ~= "none" then return end
+            if not localHRP or not localHRP.Parent then return end
 
             local safeReturn = findSafeReturnPosition(lastpos.Position)
             pcall(function()
@@ -6811,7 +7202,8 @@ task.spawn(function()
     end
 end)
 
--- RAGEBOT LOGIC
+-- ragebot
+
 
 OrbitEnabled = false
 OrbitConnection = nil
@@ -6821,13 +7213,112 @@ OrbitRadius = 5
 OrbitSpeed = 3
 OrbitHeight = 2
 OrbitAngle = 0
-OrbitOriginalPosition = nil
+
+ReturnCFrame = nil
+ReturnSet = false
+LastRealSelfCFrame = nil
+LastIdleExitTime = 0
+AnchorSaveDelay = 1.4
+
+EngagementActive = false
+Disengaging = false
 OrbitNetworkClaimed = false
 Restoring = false
 _G.OrbitBehavior = 'Orbit'
 
+lastValidTargetPos = nil
+lastValidTargetPosTime = 0
+lastValidTargetCFrame = nil
+
+orbitRandomOffset = nil
+orbitRandomUpdate = 0
+ORBIT_RANDOM_INTERVAL = 0.035
+
+SNAP_INTERVAL = 3.0
+lastSnapTime = 0
+
+RespawnWaitTime = 1.0
+targetRespawnTime = 0
+lastTargetCharacter = nil
+respawnPending = false
+
+DisengageDelay = 0.35
+disengageAt = 0
+
+ReloadingActive = false
+ReloadHoldUntil = 0
+RELOAD_HOLD_TIME = 1.2
+
+VOID_THRESHOLD = 20000
+
+VoidCycle = 0
+VoidCycleTime = 0
+
+VoidCycleInterval = 0.08
+VoidDistance = 500000
+VoidJitterStrength = 25
+VoidJitterRate = 40
+VoidRandomCornerChance = 0.4
+
+VoidCorners = {
+    Vector3.new( VoidDistance,  VoidDistance,  VoidDistance),
+    Vector3.new(-VoidDistance,  VoidDistance,  VoidDistance),
+    Vector3.new( VoidDistance, -VoidDistance,  VoidDistance),
+    Vector3.new( VoidDistance,  VoidDistance, -VoidDistance),
+    Vector3.new(-VoidDistance, -VoidDistance,  VoidDistance),
+    Vector3.new(-VoidDistance,  VoidDistance, -VoidDistance),
+    Vector3.new( VoidDistance, -VoidDistance, -VoidDistance),
+    Vector3.new(-VoidDistance, -VoidDistance, -VoidDistance),
+}
+
 IdleKOEnabled = false
+IdleReloadEnabled = false
 IdleState = "none"
+
+PredictionEnabled = false
+PredictionMultiplier = 1.0
+PingPredictionEnabled = false
+PingPredictionScale = 0.5
+DirectCFramePrediction = false
+ResolverRate = 0.02
+
+predictionLastPos = nil
+predictionLastTime = 0
+predictionVelocity = Vector3.new(0, 0, 0)
+resolverLastRun = 0
+resolvedPredictedPos = nil
+
+PositionResolverSources = {
+    "HumanoidRootPart",
+    "UpperTorso",
+    "LowerTorso",
+    "Torso",
+    "Head",
+    "LeftFoot",
+    "RightFoot",
+    "LeftHand",
+    "RightHand",
+}
+
+function UpdateReloadingState()
+    if _G.IsReloading then
+        ReloadingActive = true
+        ReloadHoldUntil = tick() + RELOAD_HOLD_TIME
+    elseif ReloadingActive then
+        if tick() >= ReloadHoldUntil then
+            ReloadingActive = false
+        end
+    end
+    return ReloadingActive
+end
+
+function IsVoidPosition(pos)
+    if typeof(pos) ~= "Vector3" then return true end
+    if pos.X ~= pos.X or pos.Y ~= pos.Y or pos.Z ~= pos.Z then return true end
+    return math.abs(pos.X) > VOID_THRESHOLD
+        or math.abs(pos.Y) > VOID_THRESHOLD
+        or math.abs(pos.Z) > VOID_THRESHOLD
+end
 
 function SafeSetOwner(hrp, owner)
     if not hrp then return end
@@ -6838,105 +7329,134 @@ function SafeSetOwner(hrp, owner)
     pcall(function() hrp:SetNetworkOwner(owner) end)
 end
 
-function SaveOriginal(hrp)
-    if not hrp then return end
-    if OrbitOriginalPosition then return end
+function IsGrounded(hrp)
+    if not hrp then return false end
+    if not hrp.Parent then return false end
+    local hum = hrp.Parent:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    local st = hum:GetState()
+    if st == Enum.HumanoidStateType.Freefall
+        or st == Enum.HumanoidStateType.Jumping
+        or st == Enum.HumanoidStateType.FallingDown
+        or st == Enum.HumanoidStateType.Swimming then
+        return false
+    end
+    if hum.FloorMaterial == Enum.Material.Air then return false end
+    local v = hrp.AssemblyLinearVelocity
+    if math.abs(v.Y) > 2 then return false end
+    return true
+end
+
+function ProjectToGround(cf)
+    if not cf then return nil end
+    local rp = RaycastParams.new()
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    rp.FilterDescendantsInstances = { _56.Character }
+    local origin = cf.Position + Vector3.new(0, 5, 0)
+    local result = workspace:Raycast(origin, Vector3.new(0, -200, 0), rp)
+    if result then
+        local pos = Vector3.new(cf.Position.X, result.Position.Y + 3, cf.Position.Z)
+        return CFrame.new(pos, pos + cf.LookVector)
+    end
+    return cf
+end
+
+function IsSelfAlive()
+    local char = _56.Character
+    if not char then return false end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    return hum ~= nil and hum.Health > 0
+end
+
+function GetSelfHRP()
+    local char = _56.Character
+    if not char then return nil end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return nil end
+    return char:FindFirstChild("HumanoidRootPart")
+end
+
+function CanSaveAnchor()
+    if Restoring then return false end
+    if IdleState ~= "none" then return false end
+    if tick() - LastIdleExitTime < AnchorSaveDelay then return false end
+    return true
+end
+
+function UpdateSelfAnchor()
     if Restoring then return end
-    OrbitOriginalPosition = hrp.CFrame
+    if IdleState ~= "none" then return end
+    if OrbitEnabled and OrbitTarget then return end
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+    if IsVoidPosition(hrp.Position) then return end
+    if not IsGrounded(hrp) then return end
+    LastRealSelfCFrame = hrp.CFrame
+end
+
+function CaptureReturnPoint()
+    if ReturnSet and ReturnCFrame then return end
+    if not CanSaveAnchor() then return end
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+    if IsVoidPosition(hrp.Position) then
+        if LastRealSelfCFrame then
+            ReturnCFrame = ProjectToGround(LastRealSelfCFrame) or LastRealSelfCFrame
+            ReturnSet = true
+        end
+        return
+    end
+    ReturnCFrame = ProjectToGround(hrp.CFrame) or hrp.CFrame
+    ReturnSet = true
+end
+
+function ForceReturnPoint()
+    if ReturnSet and ReturnCFrame then return end
+    if LastRealSelfCFrame then
+        ReturnCFrame = ProjectToGround(LastRealSelfCFrame) or LastRealSelfCFrame
+        ReturnSet = true
+        return
+    end
+    if not CanSaveAnchor() then return end
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+    if IsVoidPosition(hrp.Position) then return end
+    ReturnCFrame = ProjectToGround(hrp.CFrame) or hrp.CFrame
+    ReturnSet = true
+end
+
+function ClearReturnPoint()
+    ReturnCFrame = nil
+    ReturnSet = false
 end
 
 function ClaimLocal()
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = GetSelfHRP()
     if not hrp then return end
     SafeSetOwner(hrp, _56)
     OrbitNetworkClaimed = true
 end
 
 function ReleaseLocal()
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = GetSelfHRP()
     if hrp then SafeSetOwner(hrp, nil) end
     OrbitNetworkClaimed = false
 end
 
-function RestoreOriginal()
-    if Restoring then return end
-    if not OrbitOriginalPosition then return end
-
-    local saved = OrbitOriginalPosition
-    OrbitOriginalPosition = nil
-    Restoring = true
-
-    local char = _56.Character
-    if not char then Restoring = false return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then Restoring = false return end
-
-    SafeSetOwner(hrp, _56)
-
-    hrp.Anchored = true
-    hrp.CFrame = saved
-    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-    task.wait(0.05)
-
-    if hrp and hrp.Parent then
-        hrp.CFrame = saved
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        task.wait(0.05)
-        hrp.CFrame = saved
-        hrp.Anchored = false
-    end
-
-    task.wait(0.15)
-    Restoring = false
-    ReleaseLocal()
-end
-
-function EnterVoid()
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    hrp.Anchored = true
-    local t = tick()
-    hrp.CFrame = CFrame.new(
-        math.floor((t * 4423) % 999999991) * math.sign(math.sin(t * 7919)),
-        math.floor((t * 6287) % 999999973) * math.sign(math.cos(t * 6421)),
-        math.floor((t * 3499) % 999999937) * math.sign(math.sin(t * 8737))
-    )
-end
-
-function ExitVoid(restore)
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    hrp.Anchored = false
-    if restore and OrbitOriginalPosition then
-        pcall(function()
-            hrp.CFrame = OrbitOriginalPosition
-        end)
-    end
-    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    SafeSetOwner(hrp, _56)
-end
-
-function ReturnToPos()
-    ExitVoid(true)
-    ReleaseLocal()
+function IsTargetKO(target)
+    if not target or not target.Character then return false end
+    if not target.Character.Parent then return false end
+    local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
+    if not be then return false end
+    local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked")
+    return ko ~= nil and ko.Value == true
 end
 
 function _orbitTargetValid(target)
     if not target then return false end
     if not target.Parent then return false end
     if not target.Character then return false end
+    if not target.Character.Parent then return false end
     local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
     if not be then return false end
     local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked")
@@ -6946,94 +7466,390 @@ function _orbitTargetValid(target)
     return true
 end
 
-function IsTargetKO(target)
-    if not target or not target.Character then return false end
-    local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
-    if not be then return false end
-    local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked")
-    return ko and ko.Value == true
+function IsWaitingForRespawn(target)
+    if not target or not target.Character then
+        return false
+    end
+    if lastTargetCharacter == nil then
+        lastTargetCharacter = target.Character
+        respawnPending = false
+        return false
+    end
+    if lastTargetCharacter == target.Character then
+        if respawnPending then
+            if tick() - targetRespawnTime < RespawnWaitTime then
+                return true
+            end
+            respawnPending = false
+        end
+        return false
+    end
+    lastTargetCharacter = target.Character
+    targetRespawnTime = tick()
+    respawnPending = true
+    return true
+end
+
+function GetPingSeconds()
+    if not _56 then return 0 end
+    local ok, ping = pcall(function()
+        return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+    end)
+    if ok and ping then
+        return (ping / 1000) * PingPredictionScale
+    end
+    return 0
+end
+
+function UpdatePrediction(target, resolvedPos)
+    if not PredictionEnabled then
+        predictionVelocity = Vector3.new(0, 0, 0)
+        predictionLastPos = nil
+        predictionLastTime = 0
+        return resolvedPos
+    end
+    local now = tick()
+    if predictionLastPos and predictionLastTime > 0 then
+        local dt = now - predictionLastTime
+        if dt > 0.001 and dt < 0.5 then
+            local newVel = (resolvedPos - predictionLastPos) / dt
+            predictionVelocity = predictionVelocity:Lerp(newVel, 0.35)
+        end
+    end
+    predictionLastPos = resolvedPos
+    predictionLastTime = now
+    local ahead = predictionVelocity * PredictionMultiplier
+    if PingPredictionEnabled then
+        ahead = ahead * (1 + GetPingSeconds())
+    end
+    return resolvedPos + ahead
+end
+
+function ResolveTargetPosition(target)
+    if not target or not target.Character then return nil, nil end
+    local char = target.Character
+    local bestCF
+    for _, name in ipairs(PositionResolverSources) do
+        local part = char:FindFirstChild(name)
+        if part and part:IsA("BasePart") then
+            local pos = part.Position
+            if not IsVoidPosition(pos) then
+                bestCF = part.CFrame
+                break
+            end
+        end
+    end
+    if not bestCF then
+        for _, part in ipairs(char:GetChildren()) do
+            if part:IsA("BasePart") then
+                local pos = part.Position
+                if not IsVoidPosition(pos) then
+                    bestCF = part.CFrame
+                    break
+                end
+            end
+        end
+    end
+    if not bestCF then
+        for _, acc in ipairs(char:GetChildren()) do
+            if acc:IsA("Accessory") then
+                local handle = acc:FindFirstChild("Handle")
+                if handle and handle:IsA("BasePart") then
+                    local pos = handle.Position
+                    if not IsVoidPosition(pos) then
+                        bestCF = handle.CFrame
+                        break
+                    end
+                end
+            end
+        end
+    end
+    if not bestCF then
+        if lastValidTargetCFrame then
+            return lastValidTargetCFrame, lastValidTargetCFrame.Position
+        end
+        return nil, nil
+    end
+    lastValidTargetCFrame = bestCF
+    lastValidTargetPos = bestCF.Position
+    lastValidTargetPosTime = tick()
+    return bestCF, bestCF.Position
+end
+
+function GetOrbitAnchorCFrame(target)
+    local now = tick()
+    if now - resolverLastRun < ResolverRate and resolvedPredictedPos then
+        local cf = lastValidTargetCFrame
+        if cf then
+            return CFrame.new(resolvedPredictedPos, resolvedPredictedPos + cf.LookVector), resolvedPredictedPos
+        end
+        return nil, resolvedPredictedPos
+    end
+    resolverLastRun = now
+    local cf, pos = ResolveTargetPosition(target)
+    if not cf then
+        return nil, resolvedPredictedPos or lastValidTargetPos
+    end
+    local predicted = UpdatePrediction(target, pos)
+    resolvedPredictedPos = predicted
+    if DirectCFramePrediction then
+        local look = cf.LookVector
+        return CFrame.new(predicted, predicted + look), predicted
+    end
+    return cf, predicted
+end
+
+function EnterVoid()
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+    ForceReturnPoint()
+    SafeSetOwner(hrp, _56)
+    hrp.Anchored = true
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+    local now = tick()
+    if now - VoidCycleTime > VoidCycleInterval then
+        if math.random() < VoidRandomCornerChance then
+            VoidCycle = math.random(1, #VoidCorners)
+            VoidCorners[#VoidCorners] = Vector3.new(
+                (math.random() * 2 - 1) * VoidDistance,
+                (math.random() * 2 - 1) * VoidDistance,
+                (math.random() * 2 - 1) * VoidDistance
+            )
+        else
+            VoidCycle = (VoidCycle % #VoidCorners) + 1
+        end
+        VoidCycleTime = now
+    end
+    local base = VoidCorners[VoidCycle] or Vector3.new(VoidDistance, VoidDistance, VoidDistance)
+    local t = now * VoidJitterRate
+    local jitter = Vector3.new(
+        math.sin(t)       * VoidJitterStrength,
+        math.cos(t * 1.3) * VoidJitterStrength,
+        math.sin(t * 0.7) * VoidJitterStrength
+    )
+    hrp.CFrame = CFrame.new(base + jitter)
+end
+
+function ReturnToRealWorld()
+    if Restoring then return end
+    if not IsSelfAlive() then return end
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+
+    ForceReturnPoint()
+    local target = ReturnCFrame or LastRealSelfCFrame
+    if target then
+        target = ProjectToGround(target) or target
+    end
+
+    EngagementActive = false
+    Disengaging = false
+    disengageAt = 0
+
+    if not target then
+        hrp.Anchored = false
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        ClearReturnPoint()
+        ReleaseLocal()
+        return
+    end
+
+    Restoring = true
+    StompReturnLocked = true
+    SafeSetOwner(hrp, _56)
+
+    hrp.Anchored = true
+    hrp.CFrame = target
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+    task.wait(0.05)
+    if hrp.Parent and _56.Character == hrp.Parent then
+        hrp.CFrame = target
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        task.wait(0.05)
+        if hrp.Parent and _56.Character == hrp.Parent then
+            hrp.CFrame = target
+            hrp.Anchored = false
+        end
+    end
+
+    task.wait(0.15)
+    Restoring = false
+    StompReturnLocked = false
+    ReleaseLocal()
+    ClearReturnPoint()
+
+    predictionLastPos = nil
+    predictionLastTime = 0
+    predictionVelocity = Vector3.new(0, 0, 0)
+    resolvedPredictedPos = nil
+end
+
+function ComputeRandomOffset(now)
+    if not orbitRandomOffset or (now - orbitRandomUpdate) > ORBIT_RANDOM_INTERVAL then
+        local theta = math.random() * math.pi * 2
+        local phi   = math.acos(2 * math.random() - 1)
+        local r     = OrbitRadius * (0.25 + math.random() * 0.75)
+        local x = math.sin(phi) * math.cos(theta) * r
+        local y = math.cos(phi) * r + OrbitHeight
+        local z = math.sin(phi) * math.sin(theta) * r
+        orbitRandomOffset = Vector3.new(x, y, z)
+        orbitRandomUpdate = now
+    end
+    return orbitRandomOffset
 end
 
 function OrbitAroundTarget(target)
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = GetSelfHRP()
     if not hrp then return end
-    local targetHRP = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    local targetChar = target.Character
+    local targetHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
     if not targetHRP then return end
 
+    local anchorCF, anchorPos = GetOrbitAnchorCFrame(target)
+    if not anchorPos then return end
+
     local behavior = _G.OrbitBehavior or 'Orbit'
+    local now = tick()
     local targetPos
-    local lookAtPos = targetHRP.Position
 
     if behavior == 'Orbit' then
         OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
-        targetPos = targetHRP.Position + Vector3.new(
+        targetPos = anchorPos + Vector3.new(
             math.cos(OrbitAngle) * OrbitRadius,
             OrbitHeight + math.sin(OrbitAngle * 0.5) * 0.5,
             math.sin(OrbitAngle) * OrbitRadius
         )
     elseif behavior == 'Above' then
-        targetPos = targetHRP.Position + Vector3.new(0, OrbitHeight + 5, 0)
+        targetPos = anchorPos + Vector3.new(0, OrbitHeight + 5, 0)
     elseif behavior == 'Hide' then
-        targetPos = targetHRP.Position + Vector3.new(0, -7, 0)
+        targetPos = anchorPos + Vector3.new(0, -7, 0)
+    elseif behavior == 'Random' then
+        targetPos = anchorPos + ComputeRandomOffset(now)
     else
-        targetPos = targetHRP.Position + Vector3.new(0, OrbitHeight, 0)
+        targetPos = anchorPos + Vector3.new(0, OrbitHeight, 0)
     end
 
-    hrp.CFrame = CFrame.new(targetPos, lookAtPos)
+    if IsVoidPosition(targetPos) then return end
+
+    local lookAt = anchorPos
+    if anchorCF then
+        lookAt = anchorCF.Position + anchorCF.LookVector * 0.001
+    end
+
+    local baseCF = CFrame.new(targetPos, lookAt)
+
+    if behavior == 'Random' then
+        if now - lastSnapTime >= SNAP_INTERVAL then
+            lastSnapTime = now
+            if not IsVoidPosition(targetHRP.Position) then
+                local snapCF = CFrame.new(targetHRP.Position, targetHRP.Position + targetHRP.CFrame.LookVector * 0.001)
+                local snapOffset = Vector3.new(
+                    (math.random() - 0.5) * 2,
+                    OrbitHeight * (0.5 + math.random()),
+                    (math.random() - 0.5) * 2
+                )
+                hrp.CFrame = snapCF + snapOffset
+                hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+                return
+            end
+        end
+    end
+
+    hrp.CFrame = baseCF
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
 function EnterHide()
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hrp = GetSelfHRP()
     if not hrp then return end
-    SaveOriginal(hrp)
+    ForceReturnPoint()
     IdleState = "hiding"
     EnterVoid()
 end
 
 function ExitIdle(restore)
-    if IdleState == "hiding" then
-        ExitVoid(restore)
+    if IdleState ~= "hiding" then
+        IdleState = "none"
+        LastIdleExitTime = tick()
+        return
     end
     if restore then
-        RestoreOriginal()
+        ReturnToRealWorld()
+    else
+        local hrp = GetSelfHRP()
+        if hrp then
+            hrp.Anchored = false
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end
     end
     IdleState = "none"
+    LastIdleExitTime = tick()
 end
 
 function IdleKOStep()
-    if IdleState ~= "hiding" then
-        EnterHide()
-    else
-        EnterVoid()
-    end
+    if IdleState ~= "hiding" then EnterHide() else EnterVoid() end
+end
+
+function StartDisengage()
+    if not EngagementActive then return end
+    if Disengaging then return end
+    Disengaging = true
+    disengageAt = tick() + DisengageDelay
+    ForceReturnPoint()
 end
 
 function HandleTargetLost()
-    if IdleState ~= "none" then
-        ExitIdle(false)
+    if IdleState ~= "none" then ExitIdle(true) end
+
+    if EngagementActive and not Disengaging then
+        Disengaging = true
+        disengageAt = tick() + DisengageDelay
+        ForceReturnPoint()
     end
-    if OrbitOriginalPosition then
-        RestoreOriginal()
-    end
+
     OrbitTarget = nil
     OrbitNetworkClaimed = false
+    lastValidTargetPos = nil
+    lastValidTargetCFrame = nil
+    orbitRandomOffset = nil
+    lastTargetCharacter = nil
+    respawnPending = false
+    lastSnapTime = 0
+    predictionLastPos = nil
+    predictionLastTime = 0
+    predictionVelocity = Vector3.new(0, 0, 0)
+    resolvedPredictedPos = nil
 end
 
 function IdleLoop()
     if Restoring then return end
+    if not OrbitEnabled then
+        if IdleState ~= "none" then ExitIdle(true) end
+        return
+    end
+    if not IsSelfAlive() then
+        if IdleState ~= "none" then ExitIdle(false) end
+        return
+    end
+
+    local reloading = UpdateReloadingState()
 
     local target = _104.targetplayer
-
     if not target or not target.Parent or not target.Character then
-        if IdleState ~= "none" or OrbitOriginalPosition then
-            HandleTargetLost()
-        end
+        if IdleState ~= "none" then HandleTargetLost() end
+        return
+    end
+
+    if IdleReloadEnabled and reloading then
+        if IdleState ~= "hiding" then EnterHide() else EnterVoid() end
         return
     end
 
@@ -7050,19 +7866,13 @@ function IdleLoop()
 end
 
 function StartIdle()
-    if IdleConnection then
-        IdleConnection:Disconnect()
-        IdleConnection = nil
-    end
-    if not IdleKOEnabled then return end
+    if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
+    if not (IdleKOEnabled or IdleReloadEnabled) or not OrbitEnabled then return end
     IdleConnection = RunService.Heartbeat:Connect(IdleLoop)
 end
 
 function StopIdle()
-    if IdleConnection then
-        IdleConnection:Disconnect()
-        IdleConnection = nil
-    end
+    if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
     if IdleState ~= "none" then ExitIdle(true) end
 end
 
@@ -7073,105 +7883,244 @@ function Orbit()
     if _AA_busy then return end
     if stomping then return end
     if grabbing then return end
+    if not IsSelfAlive() then return end
 
-    local target = _104.targetplayer
+    local reloading = UpdateReloadingState()
 
-    if not target or not target.Parent or not target.Character then
-        if IdleState ~= "none" then ExitIdle(false) end
-        if OrbitOriginalPosition then RestoreOriginal() end
-        OrbitTarget = nil
-        OrbitNetworkClaimed = false
-        return
-    end
-
-    if IdleKOEnabled and IdleState ~= "none" then return end
-    if IdleKOEnabled and IsTargetKO(target) then return end
-
-    if not _orbitTargetValid(target) then
-        if OrbitTarget then
-            OrbitTarget = nil
-            if OrbitOriginalPosition then RestoreOriginal() end
+    if Disengaging then
+        if disengageAt > 0 and tick() >= disengageAt then
+            disengageAt = 0
+            Disengaging = false
+            ReturnToRealWorld()
         end
         return
     end
 
-    local char = _56.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if IdleState == "none" then
+        UpdateSelfAnchor()
+    end
+
+    local target = _104.targetplayer
+
+    if not target or not target.Parent then
+        if IdleState ~= "none" then ExitIdle(true) end
+        OrbitTarget = nil
+        OrbitNetworkClaimed = false
+        lastTargetCharacter = nil
+        respawnPending = false
+        StartDisengage()
+        return
+    end
+
+    if not target.Character then
+        return
+    end
+
+    if IdleReloadEnabled and reloading and IdleState ~= "none" then
+        disengageAt = 0
+        return
+    end
+
+    if IdleKOEnabled and IdleState ~= "none" then
+        disengageAt = 0
+        return
+    end
+
+    if IsTargetKO(target) and not IdleKOEnabled then
+        StartDisengage()
+        return
+    end
+
+    if IsTargetKO(target) and IdleKOEnabled then
+        disengageAt = 0
+        return
+    end
+
+    if isDead(target) then
+        StartDisengage()
+        return
+    end
+
+    if not _orbitTargetValid(target) then
+        return
+    end
+
+    disengageAt = 0
+
+    local hrp = GetSelfHRP()
     if not hrp then return end
-    local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
+    local targetChar = target.Character
+    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
     if not targetHRP then return end
 
     if OrbitTarget ~= target then
-        if OrbitOriginalPosition then RestoreOriginal() end
+        if IdleState ~= "none" then ExitIdle(true) end
         if Restoring then return end
         OrbitTarget = target
         OrbitNetworkClaimed = false
+        lastValidTargetPos = nil
+        lastValidTargetCFrame = nil
+        orbitRandomOffset = nil
+        lastTargetCharacter = nil
+        respawnPending = false
+        lastSnapTime = 0
+        predictionLastPos = nil
+        predictionLastTime = 0
+        predictionVelocity = Vector3.new(0, 0, 0)
+        resolvedPredictedPos = nil
     end
 
-    SaveOriginal(hrp)
+    if IsWaitingForRespawn(target) then return end
+    if IdleState ~= "none" then return end
+
+    CaptureReturnPoint()
     ClaimLocal()
-    SafeSetOwner(targetHRP, _56)
+
+    if not IsVoidPosition(targetHRP.Position) then
+        SafeSetOwner(targetHRP, _56)
+    end
+
+    EngagementActive = true
     OrbitAroundTarget(target)
 end
 
 function StartOrbit()
     if Restoring then Restoring = false end
-    if OrbitConnection then
-        OrbitConnection:Disconnect()
-        OrbitConnection = nil
-    end
+    if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     if not OrbitEnabled then return end
+
     OrbitAngle = 0
-    OrbitOriginalPosition = nil
     OrbitNetworkClaimed = false
+    EngagementActive = false
+    Disengaging = false
     IdleState = "none"
     OrbitTarget = nil
+    lastValidTargetPos = nil
+    lastValidTargetCFrame = nil
+    orbitRandomOffset = nil
+    lastTargetCharacter = nil
+    respawnPending = false
+    lastSnapTime = 0
+    disengageAt = 0
+    predictionLastPos = nil
+    predictionLastTime = 0
+    predictionVelocity = Vector3.new(0, 0, 0)
+    resolvedPredictedPos = nil
+    ClearReturnPoint()
+    LastIdleExitTime = 0
+    UpdateSelfAnchor()
+
     OrbitConnection = RunService.Heartbeat:Connect(Orbit)
-    if IdleKOEnabled then
-        StartIdle()
-    end
+    if IdleKOEnabled or IdleReloadEnabled then StartIdle() end
 end
 
 function StopOrbit()
-    if IdleConnection then
-        IdleConnection:Disconnect()
-        IdleConnection = nil
-    end
-    if OrbitConnection then
-        OrbitConnection:Disconnect()
-        OrbitConnection = nil
-    end
-    if IdleState ~= "none" then ExitIdle(false) end
-    if OrbitOriginalPosition then
-        RestoreOriginal()
-    end
+    if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
+    if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
+
+    if IdleState ~= "none" then ExitIdle(true) end
+    if ReturnSet and IsSelfAlive() then ReturnToRealWorld() end
+
+    EngagementActive = false
+    Disengaging = false
     OrbitTarget = nil
     OrbitAngle = 0
     OrbitNetworkClaimed = false
     IdleState = "none"
+    lastValidTargetPos = nil
+    lastValidTargetCFrame = nil
+    orbitRandomOffset = nil
+    lastTargetCharacter = nil
+    respawnPending = false
+    lastSnapTime = 0
+    disengageAt = 0
+    predictionLastPos = nil
+    predictionLastTime = 0
+    predictionVelocity = Vector3.new(0, 0, 0)
+    resolvedPredictedPos = nil
+    ReloadingActive = false
+    ReloadHoldUntil = 0
 end
 
-Options.OBS:OnChanged(function(value) _G.OrbitBehavior = value end)
+Options.OBS:OnChanged(function(value)
+    _G.OrbitBehavior = value
+    orbitRandomOffset = nil
+    lastSnapTime = 0
+end)
 
 Toggles.OrbitToggle:OnChanged(function(value)
     OrbitEnabled = value
-    if value then StartOrbit() else StopOrbit() end
+    if value then
+        StartOrbit()
+        if IdleKOEnabled or IdleReloadEnabled then StartIdle() end
+    else
+        StopOrbit()
+    end
 end)
 
 Options.OrbitKeybind:OnClick(function()
     Toggles.OrbitToggle:SetValue(not Toggles.OrbitToggle.Value)
 end)
 
-Options.OrbitRadius:OnChanged(function(value) OrbitRadius = value end)
+Options.OrbitRadius:OnChanged(function(value)
+    OrbitRadius = value
+    orbitRandomOffset = nil
+end)
+
 Options.OrbitSpeed:OnChanged(function(value) OrbitSpeed = value end)
-Options.OrbitHeight:OnChanged(function(value) OrbitHeight = value end)
+
+Options.OrbitHeight:OnChanged(function(value)
+    OrbitHeight = value
+    orbitRandomOffset = nil
+end)
+
+if Options.RespawnWait then
+    Options.RespawnWait:OnChanged(function(value) RespawnWaitTime = value end)
+end
+
+if Options.ResolverRate then
+    Options.ResolverRate:OnChanged(function(value) ResolverRate = value end)
+end
+
+if Toggles.PredictionToggle then
+    Toggles.PredictionToggle:OnChanged(function(value)
+        PredictionEnabled = value
+        predictionLastPos = nil
+        predictionLastTime = 0
+        predictionVelocity = Vector3.new(0, 0, 0)
+    end)
+end
+
+if Options.PredictionMultiplier then
+    Options.PredictionMultiplier:OnChanged(function(value) PredictionMultiplier = value end)
+end
+
+if Toggles.PingPredictionToggle then
+    Toggles.PingPredictionToggle:OnChanged(function(value) PingPredictionEnabled = value end)
+end
+
+if Options.PingPredictionScale then
+    Options.PingPredictionScale:OnChanged(function(value) PingPredictionScale = value end)
+end
+
+if Toggles.DirectCFramePredictionToggle then
+    Toggles.DirectCFramePredictionToggle:OnChanged(function(value) DirectCFramePrediction = value end)
+end
 
 Toggles.IdleOnKO:OnChanged(function(value)
     IdleKOEnabled = value
-    if value then
+    if value and OrbitEnabled then
         StartIdle()
-    else
+    elseif not IdleReloadEnabled then
+        StopIdle()
+    end
+end)
+
+Toggles.IdleOnReload:OnChanged(function(value)
+    IdleReloadEnabled = value
+    if value and OrbitEnabled then
+        StartIdle()
+    elseif not IdleKOEnabled then
         StopIdle()
     end
 end)
@@ -7184,23 +8133,32 @@ end)
 
 _56.CharacterAdded:Connect(function()
     task.wait(0.5)
-    if IdleConnection then
-        IdleConnection:Disconnect()
-        IdleConnection = nil
-    end
-    if OrbitConnection then
-        OrbitConnection:Disconnect()
-        OrbitConnection = nil
-    end
+    if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
+    if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     Restoring = false
+    EngagementActive = false
+    Disengaging = false
     IdleState = "none"
-    OrbitOriginalPosition = nil
     OrbitNetworkClaimed = false
     OrbitTarget = nil
     OrbitAngle = 0
-    if OrbitEnabled then
-        StartOrbit()
-    end
+    lastValidTargetPos = nil
+    lastValidTargetCFrame = nil
+    orbitRandomOffset = nil
+    lastTargetCharacter = nil
+    respawnPending = false
+    lastSnapTime = 0
+    disengageAt = 0
+    predictionLastPos = nil
+    predictionLastTime = 0
+    predictionVelocity = Vector3.new(0, 0, 0)
+    resolvedPredictedPos = nil
+    ClearReturnPoint()
+    LastRealSelfCFrame = nil
+    LastIdleExitTime = 0
+    ReloadingActive = false
+    ReloadHoldUntil = 0
+    if OrbitEnabled then StartOrbit() end
 end)
 
 _48:OnUnload(function() StopOrbit() end)
@@ -9524,6 +10482,10 @@ if not espToggleOn("ESPEnabled") then
     setAllESPVisible(false)
 end
 
+_52.Heartbeat:Connect(function()
+    _104:CheckHitNotifications()
+end)
+
 _48:OnUnload(function()
     _AR_Running = false
     isRunning = false
@@ -9537,7 +10499,24 @@ _48:OnUnload(function()
     pcall(cleanupCircleVisuals)
     pcall(cleanupAllSkeletons)
 
+    -- Ragebot / Orbit cleanup
     if StopOrbit then pcall(StopOrbit) end
+    OrbitEnabled = false
+    OrbitConnection = nil
+    IdleConnection = nil
+    OrbitTarget = nil
+    OrbitAngle = 0
+    OrbitOriginalPosition = nil
+    OrbitNetworkClaimed = false
+    Restoring = false
+    IdleKOEnabled = false
+    IdleState = "none"
+    lastValidTargetPos = nil
+    lastValidTargetPosTime = 0
+    orbitRandomOffset = nil
+    orbitRandomUpdate = 0
+    VoidCycle = 0
+    VoidCycleTime = 0
 
     if _237 then _237:Disconnect() end
     if _121 then _121:Disconnect() _121 = nil end
