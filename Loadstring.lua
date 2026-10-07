@@ -899,18 +899,26 @@ end)
 
 WeatherSection = WorldTab:AddRightGroupbox('Weather')
 
-_G.weather_part = nil
-_G.weather_particle = nil
+_G.weather_part        = nil
+_G.weather_particle    = nil
+_G.weather_render_conn = nil
+
+_G.weather_base_rate = 2000
+
+_G.weather_type_scale = {
+    ["light rain"] = 0.35,
+    ["rain"]       = 1.00,
+    ["snow"]       = 1.50,
+}
 
 _G.weather_types = {
     ["light rain"] = {
         ["LockedToPart"] = true,
-        ["Rate"] = 500,
         ["Squash"] = NumberSequence.new{
             NumberSequenceKeypoint.new(0, 3),
             NumberSequenceKeypoint.new(1, 3)
         },
-        ["LightInfluence"] = 0.30000001192092896,
+        ["LightInfluence"] = 0.15,
         ["Transparency"] = NumberSequence.new{
             NumberSequenceKeypoint.new(0, 0),
             NumberSequenceKeypoint.new(0.435, 0),
@@ -919,30 +927,29 @@ _G.weather_types = {
         ["Texture"] = "rbxasset://textures/particles/sparkles_main.dds",
         ["Speed"] = NumberRange.new(30, 50),
         ["Lifetime"] = NumberRange.new(9, 9),
-        ["LightEmission"] = 0.5,
-        ["Brightness"] = 2,
+        ["LightEmission"] = 0.9,
+        ["Brightness"] = 3,
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
         ["Size"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.20000000298023224),
-            NumberSequenceKeypoint.new(1, 0.20000000298023224)
+            NumberSequenceKeypoint.new(0, 0.35),
+            NumberSequenceKeypoint.new(1, 0.35)
         }
     },
     ["rain"] = {
         ["Speed"] = NumberRange.new(60, 60),
         ["LockedToPart"] = true,
-        ["Rate"] = 600,
         ["Texture"] = "rbxassetid://1822883048",
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Transparency"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.25, 0.7842668294906616),
-            NumberSequenceKeypoint.new(0.75, 0.7842668294906616),
-            NumberSequenceKeypoint.new(1, 1)
+            NumberSequenceKeypoint.new(0, 0.85),
+            NumberSequenceKeypoint.new(0.25, 0.55),
+            NumberSequenceKeypoint.new(0.75, 0.55),
+            NumberSequenceKeypoint.new(1, 0.85)
         },
-        ["Lifetime"] = NumberRange.new(0.800000011920929, 0.800000011920929),
-        ["LightEmission"] = 0.05000000074505806,
-        ["LightInfluence"] = 0.8999999761581421,
+        ["Lifetime"] = NumberRange.new(0.8, 0.8),
+        ["LightEmission"] = 0.4,
+        ["LightInfluence"] = 0.4,
         ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
         ["Size"] = NumberSequence.new{
             NumberSequenceKeypoint.new(0, 10),
@@ -951,73 +958,115 @@ _G.weather_types = {
     },
     ["snow"] = {
         ["Transparency"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.7374999523162842),
-            NumberSequenceKeypoint.new(0.973, 0.768750011920929),
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(0.973, 0.6),
             NumberSequenceKeypoint.new(1, 1)
         },
         ["Texture"] = "http://www.roblox.com/asset/?id=99851851",
         ["SpreadAngle"] = Vector2.new(50, 50),
         ["Speed"] = NumberRange.new(30, 30),
-        ["LightEmission"] = 0.5,
-        ["Rate"] = 1000,
+        ["LightEmission"] = 0.8,
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Size"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.33096909523010254),
-            NumberSequenceKeypoint.new(0.551, 0.40189146995544434),
-            NumberSequenceKeypoint.new(1, 0.33096909523010254)
+            NumberSequenceKeypoint.new(0, 0.45),
+            NumberSequenceKeypoint.new(0.551, 0.55),
+            NumberSequenceKeypoint.new(1, 0.45)
         }
     }
 }
 
 _G.weather_offset = Vector3.new(0, 20, 0)
 
-_G.updateWeather = function()
-    if not Toggles.WeatherToggle.Value then
-        if _G.weather_part then
-            _G.weather_part:Destroy()
-            _G.weather_part = nil
-            _G.weather_particle = nil
+function _G.get_weather_type()
+    local v = Options.WeatherType and Options.WeatherType.Value or "rain"
+    if type(v) == "table" then v = v[1] end
+    return v or "rain"
+end
+
+function _G.get_scaled_rate(weather_name)
+    local typeScale = _G.weather_type_scale[weather_name] or 1.0
+    local slider    = (Options.WeatherRate and Options.WeatherRate.Value or 100) / 100
+    return math.max(1, math.floor(_G.weather_base_rate * typeScale * slider))
+end
+
+function _G.destroy_weather()
+    if _G.weather_particle then
+        pcall(function() _G.weather_particle:Destroy() end)
+        _G.weather_particle = nil
+    end
+    if _G.weather_part then
+        pcall(function() _G.weather_part:Destroy() end)
+        _G.weather_part = nil
+    end
+end
+
+function _G.build_weather_part()
+    if _G.weather_part then return end
+    _G.weather_part = Instance.new("Part")
+    _G.weather_part.Size = Vector3.new(30, 30, 60)
+    _G.weather_part.CanCollide = false
+    _G.weather_part.Massless = true
+    _G.weather_part.CastShadow = false
+    _G.weather_part.Transparency = 1
+    _G.weather_part.Anchored = true
+    _G.weather_part.Name = "\0"
+    _G.weather_part.Parent = workspace
+end
+
+function _G.rebuild_weather_particle()
+    if _G.weather_particle then
+        pcall(function() _G.weather_particle:Destroy() end)
+        _G.weather_particle = nil
+    end
+
+    if not (Toggles.WeatherToggle and Toggles.WeatherToggle.Value) then return end
+
+    _G.build_weather_part()
+
+    local wtype = _G.get_weather_type()
+    local data  = _G.weather_types[wtype]
+    if not data then return end
+
+    local pe = Instance.new("ParticleEmitter")
+    for k, v in pairs(data) do
+        if k ~= "Rate" then
+            pe[k] = v
         end
+    end
+    pe.Rate  = _G.get_scaled_rate(wtype)
+    pe.Color = ColorSequence.new(Options.WeatherColor and Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
+    pe.Parent = _G.weather_part
+
+    _G.weather_particle = pe
+end
+
+function _G.updateWeather()
+    if not (Toggles.WeatherToggle and Toggles.WeatherToggle.Value) then
+        _G.destroy_weather()
         return
     end
-
-    if not _G.weather_part then
-        _G.weather_part = Instance.new("Part")
-        _G.weather_part.Size = Vector3.new(40, 40, 85)
-        _G.weather_part.CanCollide = false
-        _G.weather_part.Massless = true
-        _G.weather_part.CastShadow = false
-        _G.weather_part.Transparency = 1
-        _G.weather_part.Anchored = true
-        _G.weather_part.Name = "\0"
-        _G.weather_part.Parent = workspace
-    end
-
     if not _G.weather_particle then
-        data = _G.weather_types[Options.WeatherType.Value or "rain"]
-        _G.weather_particle = Instance.new("ParticleEmitter")
-        for key, value in pairs(data) do
-            _G.weather_particle[key] = value
-        end
-        _G.weather_particle.Color = ColorSequence.new(Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
-        _G.weather_particle.Parent = _G.weather_part
+        _G.rebuild_weather_particle()
+    else
+        local wtype = _G.get_weather_type()
+        _G.weather_particle.Rate  = _G.get_scaled_rate(wtype)
+        _G.weather_particle.Color = ColorSequence.new(Options.WeatherColor and Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
     end
 end
 
 WeatherSection:AddToggle('WeatherToggle', {
     Text = 'Weather',
     Default = false,
+}):AddColorPicker('WeatherColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Weather Color',
 })
 
 Toggles.WeatherToggle:OnChanged(function()
     if Toggles.WeatherToggle.Value then
-        _G.updateWeather()
+        _G.rebuild_weather_particle()
     else
-        if _G.weather_part then
-            _G.weather_part:Destroy()
-            _G.weather_part = nil
-            _G.weather_particle = nil
-        end
+        _G.destroy_weather()
     end
 end)
 
@@ -1028,19 +1077,10 @@ WeatherSection:AddDropdown('WeatherType', {
 })
 
 Options.WeatherType:OnChanged(function()
-    if _G.weather_particle then
-        _G.weather_particle:Destroy()
-        _G.weather_particle = nil
-        if Toggles.WeatherToggle.Value then
-            _G.updateWeather()
-        end
+    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
+        _G.rebuild_weather_particle()
     end
 end)
-
-WeatherSection:AddLabel('Weather Color'):AddColorPicker('WeatherColor', {
-    Default = Color3.fromRGB(255, 255, 255),
-    Title = 'Weather Color',
-})
 
 Options.WeatherColor:OnChanged(function()
     if _G.weather_particle then
@@ -1052,29 +1092,35 @@ WeatherSection:AddSlider('WeatherRate', {
     Text = 'Weather Rate',
     Default = 100,
     Min = 1,
-    Max = 100,
+    Max = 500,
     Rounding = 0,
     Suffix = '%',
 })
 
 Options.WeatherRate:OnChanged(function()
-    rate = 1000 * (Options.WeatherRate.Value / 100)
     if _G.weather_particle then
-        _G.weather_particle.Rate = rate
-    end
-    for weather, data in pairs(_G.weather_types) do
-        _G.weather_types[weather].Rate = rate
+        local wtype = _G.get_weather_type()
+        _G.weather_particle.Rate = _G.get_scaled_rate(wtype)
     end
 end)
 
-RunService.Heartbeat:Connect(function()
-    if Toggles.WeatherToggle.Value and _G.weather_part then
-        cam = workspace.CurrentCamera
+if _G.weather_render_conn then
+    pcall(function() _G.weather_render_conn:Disconnect() end)
+    _G.weather_render_conn = nil
+end
+
+_G.weather_render_conn = RunService.Heartbeat:Connect(function()
+    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value and _G.weather_part then
+        local cam = workspace.CurrentCamera
         if cam then
             _G.weather_part.CFrame = CFrame.new(cam.CFrame.Position + _G.weather_offset)
         end
     end
 end)
+
+if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
+    _G.rebuild_weather_particle()
+end
 
 BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
 
@@ -1682,53 +1728,87 @@ Toggles.UnlockCameraDistance:OnChanged(function(value)
 end)
 
 -- Anti Sit
-anti_sit_connection = nil
+anti_sit_connection      = nil
 anti_sit_char_connection = nil
+anti_sit_state_connection = nil
 
-do_anti_sit = function()
+function _anti_sit_stop()
     if anti_sit_connection then
-        anti_sit_connection:Disconnect()
+        pcall(function() anti_sit_connection:Disconnect() end)
         anti_sit_connection = nil
+    end
+    if anti_sit_state_connection then
+        pcall(function() anti_sit_state_connection:Disconnect() end)
+        anti_sit_state_connection = nil
     end
 
     local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChild("Humanoid")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        end)
+        if hum.Sit then
+            pcall(function() hum.Sit = false end)
+        end
+    end
+end
+
+function do_anti_sit()
+    if anti_sit_connection then
+        pcall(function() anti_sit_connection:Disconnect() end)
+        anti_sit_connection = nil
+    end
+    if anti_sit_state_connection then
+        pcall(function() anti_sit_state_connection:Disconnect() end)
+        anti_sit_state_connection = nil
+    end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
 
-    hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    pcall(function()
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    end)
+
+    if hum.Sit then
+        pcall(function() hum.Sit = false end)
+    end
 
     anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
         if hum.Sit then
             hum.Sit = false
         end
     end)
+
+    anti_sit_state_connection = hum.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Seated or newState == Enum.HumanoidStateType.PlatformStanding then
+            hum.Sit = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end)
 end
 
 MovementSection:AddToggle('AntiSit', {
-    Text = 'Anti Sit',
+    Text    = 'Anti Sit',
     Default = false,
+    Tooltip = 'Prevents the game from seating u',
 })
 
 Toggles.AntiSit:OnChanged(function()
-    if anti_sit_connection then
-        anti_sit_connection:Disconnect()
-        anti_sit_connection = nil
-    end
-
     if anti_sit_char_connection then
-        anti_sit_char_connection:Disconnect()
+        pcall(function() anti_sit_char_connection:Disconnect() end)
         anti_sit_char_connection = nil
     end
 
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChild("Humanoid")
-    if hum then
-        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-    end
+    _anti_sit_stop()
 
     if Toggles.AntiSit.Value then
-        anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function()
-            task.wait(0.5)
+        anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            local hum = newChar:WaitForChild("Humanoid", 5)
+            if not hum then return end
+            task.wait(0.25)
             if Toggles.AntiSit.Value then
                 do_anti_sit()
             end
@@ -1777,92 +1857,48 @@ Toggles.ShowChat:OnChanged(function()
 end)
 
 -- Anti Fling
+if _G.antiFlingSteppedConn then
+    pcall(function() _G.antiFlingSteppedConn:Disconnect() end)
+    _G.antiFlingSteppedConn = nil
+end
+
 _G.antiFlingEnabled = true
-_G.antiFlingConnections = {}
+_G.antiFlingConnections = {} -- unused but keepin it jus because
 
 MovementSection:AddToggle('AntiFling', {
     Text = 'Anti-Fling',
     Default = true,
 })
 
-_G.setupCharacterCollision = function(character)
-    local function disableCollide(part)
-        if _G.antiFlingEnabled and part:IsA("BasePart") then
-            part.CanCollide = false
-        end
+_G.setAntiFling = function(value)
+    _G.antiFlingEnabled = value
+
+    if _G.antiFlingSteppedConn then
+        _G.antiFlingSteppedConn:Disconnect()
+        _G.antiFlingSteppedConn = nil
     end
 
-    for _, part in ipairs(character:GetChildren()) do
-        disableCollide(part)
-    end
-
-    local childConn = character.ChildAdded:Connect(disableCollide)
-
-    local steppedConn = game:GetService("RunService").Stepped:Connect(function()
-        if _G.antiFlingEnabled and character.Parent and character:IsDescendantOf(workspace) then
-            for _, part in ipairs(character:GetChildren()) do
-                if part:IsA("BasePart") and part.CanCollide then
-                    part.CanCollide = false
+    if value then
+        _G.antiFlingSteppedConn = game:GetService("RunService").Stepped:Connect(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                local character = player ~= LocalPlayer and player.Character
+                if character then
+                    for _, part in ipairs(character:GetChildren()) do
+                        if part:IsA("BasePart") and part.CanCollide then
+                            part.CanCollide = false
+                        end
+                    end
                 end
             end
-        else
-            if steppedConn then
-                pcall(function() steppedConn:Disconnect() end)
-                steppedConn = nil
-            end
-        end
-    end)
-
-    character.Destroying:Connect(function()
-        if childConn then
-            pcall(function() childConn:Disconnect() end)
-        end
-        if steppedConn then
-            pcall(function() steppedConn:Disconnect() end)
-            steppedConn = nil
-        end
-    end)
-
-    character.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if childConn then
-                pcall(function() childConn:Disconnect() end)
-            end
-            if steppedConn then
-                pcall(function() steppedConn:Disconnect() end)
-                steppedConn = nil
-            end
-        end
-    end)
-end
-
-_G.trackPlayer = function(player)
-    if player == LocalPlayer then return end
-    local charAddedConn = player.CharacterAdded:Connect(_G.setupCharacterCollision)
-    if player.Character then
-        _G.setupCharacterCollision(player.Character)
+        end)
     end
-    return charAddedConn
 end
 
 Toggles.AntiFling:OnChanged(function(value)
-    _G.antiFlingEnabled = value
+    _G.setAntiFling(value)
 end)
 
-for _, player in ipairs(Players:GetPlayers()) do
-    _G.antiFlingConnections[player] = _G.trackPlayer(player)
-end
-
-Players.PlayerAdded:Connect(function(player)
-    _G.antiFlingConnections[player] = _G.trackPlayer(player)
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    if _G.antiFlingConnections[player] then
-        _G.antiFlingConnections[player]:Disconnect()
-        _G.antiFlingConnections[player] = nil
-    end
-end)
+_G.setAntiFling(Toggles.AntiFling.Value)
 
 Misctab = _59:AddTab('Misc')
 Ragebot = _59:AddTab('Rage')
@@ -1872,6 +1908,7 @@ OrbitGroupbox = Ragebot:AddLeftGroupbox('Strafing')
 OrbitToggle = OrbitGroupbox:AddToggle('OrbitToggle', {
     Text = 'Ragebot',
     Default = false,
+    Tooltip = 'Enables ragebot',
 })
 
 OrbitToggle:AddKeyPicker('OrbitKeybind', {
@@ -1889,15 +1926,16 @@ OrbitGroupbox:AddSlider('OrbitRadius', {
     Max = 15,
     Rounding = 1,
     Suffix = ' studs',
+    Tooltip = 'Base distance from the target',
 })
 
-OrbitGroupbox:AddSlider('OrbitSpeed', {
-    Text = 'Speed',
-    Default = 3,
-    Min = 0.5,
+OrbitGroupbox:AddSlider('OrbitRadiusJitter', {
+    Text = 'Radius Jitter',
+    Default = 1.5,
+    Min = 0,
     Max = 10,
-    Rounding = 1,
-    Suffix = 'x',
+    Rounding = 2,
+    Tooltip = 'Randomly varies your orbit distance by up to this amount. Higher values make your position less predictable to enemy aim.',
 })
 
 OrbitGroupbox:AddSlider('OrbitHeight', {
@@ -1907,6 +1945,26 @@ OrbitGroupbox:AddSlider('OrbitHeight', {
     Max = 10,
     Rounding = 1,
     Suffix = ' studs',
+    Tooltip = 'Base vertical offset from the target.',
+})
+
+OrbitGroupbox:AddSlider('OrbitHeightJitter', {
+    Text = 'Height Jitter',
+    Default = 1.0,
+    Min = 0,
+    Max = 10,
+    Rounding = 2,
+    Tooltip = 'Randomly varies your vertical offset.',
+})
+
+OrbitGroupbox:AddSlider('OrbitSpeed', {
+    Text = 'Speed',
+    Default = 3,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = 'x',
+    Tooltip = 'How fast you circle the target.',
 })
 
 OrbitGroupbox:AddSlider('RespawnWait', {
@@ -1916,6 +1974,7 @@ OrbitGroupbox:AddSlider('RespawnWait', {
     Max = 5,
     Rounding = 1,
     Suffix = 's',
+    Tooltip = 'How long to hold off before attacking again',
 })
 
 OrbitGroupbox:AddSlider('ResolverRate', {
@@ -1925,6 +1984,7 @@ OrbitGroupbox:AddSlider('ResolverRate', {
     Max = 0.2,
     Rounding = 3,
     Suffix = 's',
+    Tooltip = 'How often the targets anchor position is recomputed.',
 })
 
 BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
@@ -1938,11 +1998,13 @@ BehaviorB:AddDropdown('OBS', {
 BehaviorB:AddToggle('IdleOnKO', {
     Text = 'Idle on K.O',
     Default = false,
+    Tooltip = 'Void out and idle when the target gets knocked.',
 })
 
 BehaviorB:AddToggle('IdleOnReload', {
     Text = 'Idle on Reload',
     Default = false,
+    Tooltip = 'Void out and idle while you are reloading.',
 })
 
 PredictionB = Ragebot:AddRightGroupbox('Prediction')
@@ -1950,11 +2012,28 @@ PredictionB = Ragebot:AddRightGroupbox('Prediction')
 PredictionB:AddToggle('DirectCFramePredictionToggle', {
     Text = 'Direct position',
     Default = false,
+    Tooltip = 'Uses predicted position directly for your CFrame placement instead of just the look direction.',
+})
+
+PredictionB:AddToggle('Resolver', {
+    Text = 'Velocity Resolver',
+    Default = false,
+    Tooltip = 'Per-target velocity tracking that smooths out positional noise for cleaner prediction.',
+})
+
+PredictionB:AddSlider('ResolverSmoothing', {
+    Text = 'Resolver Smoothing',
+    Default = 0.4,
+    Min = 0.05,
+    Max = 1.0,
+    Rounding = 2,
+    Tooltip = 'how new velocity samples replace the old ones.',
 })
 
 PredictionB:AddToggle('PredictionToggle', {
     Text = 'Prediction',
     Default = false,
+    Tooltip = 'Leads the target based on their movement velocity. Helps hit moving targets.',
 })
 
 PredictionB:AddSlider('PredictionMultiplier', {
@@ -1964,11 +2043,13 @@ PredictionB:AddSlider('PredictionMultiplier', {
     Max = 5.0,
     Rounding = 1,
     Suffix = 'x',
+    Tooltip = 'Multiplier applied to the predicted lead distance.',
 })
 
 PredictionB:AddToggle('PingPredictionToggle', {
     Text = 'Ping Prediction',
     Default = false,
+    Tooltip = 'Scales prediction based on your current ping, compensating for network latency.',
 })
 
 PredictionB:AddSlider('PingPredictionScale', {
@@ -1977,6 +2058,60 @@ PredictionB:AddSlider('PingPredictionScale', {
     Min = 0.0,
     Max = 2.0,
     Rounding = 2,
+    Tooltip = 'How strongly ping is factored into prediction.',
+})
+
+AA = Ragebot:AddLeftGroupbox('Anti-Aim')
+
+AA:AddToggle('AntiAim', {
+    Text = 'Anti Aim',
+    Default = false,
+    Tooltip = 'Rotates your character independently of movement to make your head/HRP hard to resolve for enemy aim.',
+})
+
+AA:AddDropdown('AntiAimMode', {
+    Text = 'Mode',
+    Values = { 'spin', 'jitter', 'static' },
+    Default = 'spin',
+})
+
+AA:AddSlider('AntiAimSpeed', {
+    Text = 'Spin Speed',
+    Default = 12,
+    Min = 1,
+    Max = 60,
+    Rounding = 0,
+    Tooltip = 'Rotation speed used in spin mode.',
+})
+
+AA:AddSlider('AntiAimPitch', {
+    Text = 'Pitch',
+    Default = 0,
+    Min = -89,
+    Max = 89,
+    Rounding = 0,
+    Suffix = '°',
+    Tooltip = 'Vertical tilt applied to your character. Moves the head bone off-axis from a normal aim point.',
+})
+
+AA:AddSlider('AntiAimStaticYaw', {
+    Text = 'Static Yaw',
+    Default = 180,
+    Min = -180,
+    Max = 180,
+    Rounding = 0,
+    Suffix = '°',
+    Tooltip = 'Yaw angle used in static mode.',
+})
+
+AA:AddSlider('AntiAimJitterInterval', {
+    Text = 'Jitter Interval',
+    Default = 0.06,
+    Min = 0.01,
+    Max = 0.5,
+    Rounding = 2,
+    Suffix = 's',
+    Tooltip = 'How often jitter mode re-randomizes your yaw.',
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
@@ -2067,6 +2202,7 @@ _62:AddDropdown('WatermarkPosition', {
 
 local _66 = _60.Main:AddLeftTabbox()
 local _67 = _66:AddTab('Target')
+_G._67 = _67
 
 local _68 = _67:AddToggle('Spectate', {
     Text = 'Spectate Target',
@@ -2129,6 +2265,228 @@ HitNotifyBox:AddDropdown('HitNotifyMode', {
 HitNotifyBox:SetupDependencies({
     { Toggles.HitNotifications, true },
 })
+
+HitEffects = {
+    Enabled = false,
+    Color = Color3.fromRGB(159, 133, 195),
+    Styles = {Particles = true},
+    FloatSpeed = 7,
+    AliveTime = 2.8,
+    AliveScale = 1,
+    Toggle = nil,
+    DepBox = nil,
+    ActivePoses = setmetatable({}, {__mode = "k"}),
+    ActiveParticleCount = 0,
+    ActiveBillboardCount = 0,
+    MaxHitEffects = 45,
+    MaxParticles = 120,
+    MinDist = 5.5,
+    Tracked = setmetatable({}, {__mode = "k"}),
+}
+
+HitEffects.Textures = {
+    Dot     = "rbxassetid://6603835352",
+    Ray     = "rbxassetid://243660364",
+    Electro = "rbxassetid://446111271",
+    Beam    = "rbxassetid://12781852245",
+    Flame   = "rbxassetid://241650108",
+}
+
+HitEffects.Toggle = _67:AddToggle("HitEffects", {
+    Text = "Hit Effects",
+    Default = false,
+})
+
+HitEffects.Toggle:AddColorPicker("HitEffectColorPicker", {
+    Default = HitEffects.Color,
+    Title = "Effect Color",
+})
+
+HitEffects.DepBox = _67:AddDependencyBox()
+
+HitEffects.DepBox:AddSlider("HitEffectFloatSpeed", {
+    Text = "Float Speed",
+    Default = 7,
+    Min = 1,
+    Max = 25,
+    Rounding = 1,
+})
+
+HitEffects.DepBox:AddSlider("HitEffectAliveTime", {
+    Text = "Alive Time",
+    Default = 2.8,
+    Min = 0.5,
+    Max = 8,
+    Rounding = 1,
+    Suffix = "s",
+})
+
+HitEffects.DepBox:SetupDependencies({
+    { HitEffects.Toggle, true },
+})
+
+_67:AddDropdown("HitEffectStyleDropdown", {
+    Text = "Style",
+    Default = {"Particles"},
+    Values = {
+        "Particles", "Fortnite", "Shockwave", "Lightning", "Blood", "Fire",
+        "Ice", "Confetti", "Ripple", "Sparks", "Neon", "Void",
+        "Plasma", "Glitch", "Cosmic Shit",
+    },
+    Multi = true,
+})
+
+Toggles.HitEffects:OnChanged(function(value)
+    HitEffects.Enabled = value
+    if not value and HitEffects.Cleanup then HitEffects.Cleanup() end
+end)
+
+Options.HitEffectColorPicker:OnChanged(function(value)
+    if typeof(value) ~= "Color3" then value = Options.HitEffectColorPicker.Value end
+    if typeof(value) == "Color3" then HitEffects.Color = value end
+end)
+
+Options.HitEffectFloatSpeed:OnChanged(function(value)
+    HitEffects.FloatSpeed = value
+end)
+
+Options.HitEffectAliveTime:OnChanged(function(value)
+    HitEffects.AliveTime = value
+    HitEffects.AliveScale = value / 2.8
+end)
+
+Options.HitEffectStyleDropdown:OnChanged(function(value)
+    HitEffects.Styles = value
+end)
+
+HitEffects.Enabled = Toggles.HitEffects.Value == true
+HitEffects.FloatSpeed = Options.HitEffectFloatSpeed.Value
+HitEffects.AliveTime = Options.HitEffectAliveTime.Value
+HitEffects.AliveScale = HitEffects.AliveTime / 2.8
+HitEffects.Styles = Options.HitEffectStyleDropdown.Value
+if typeof(Options.HitEffectColorPicker.Value) == "Color3" then
+    HitEffects.Color = Options.HitEffectColorPicker.Value
+end
+HitChams = HitChams or {
+    Enabled = false,
+    Animation = "new fade",
+    Type = "neon",
+    Lifetime = 0.8,
+    Color = Color3.fromRGB(142, 242, 255),
+    Transparency = 0.8,
+    LastModel = nil,
+    Toggle = nil,
+    DepBox = nil,
+    OutlineTemplate = nil,
+}
+
+local _HC_uiOk, _HC_uiErr = pcall(function()
+    local targetTab = _G._67
+    if not targetTab then error("_67 tab not available yet") end
+
+    HitChams.Toggle = targetTab:AddToggle("HitChams", {
+        Text = "Hit Chams",
+        Default = false,
+    })
+
+    HitChams.Toggle:AddColorPicker("HitChamsColor", {
+        Default = Color3.fromRGB(142, 242, 255),
+        Title = "Color",
+        Transparency = 0.8,
+    })
+
+    HitChams.DepBox = targetTab:AddDependencyBox()
+
+    HitChams.DepBox:AddDropdown("HitChamsAnimation", {
+        Text = "Animation",
+        Default = "New Fade",
+        Values = { "New Fade", "Fade", "None" },
+    })
+
+    HitChams.DepBox:AddDropdown("HitChamsType", {
+        Text = "Type",
+        Default = "Neon",
+        Values = { "ForceField", "Outline", "Neon" },
+    })
+
+    HitChams.DepBox:AddSlider("HitChamsLifetime", {
+        Text = "Lifetime",
+        Default = 0.8,
+        Min = 0.1,
+        Max = 1.5,
+        Rounding = 1,
+        Suffix = "s",
+    })
+
+    HitChams.DepBox:SetupDependencies({
+        { HitChams.Toggle, true },
+    })
+end)
+
+if not _HC_uiOk then
+    warn("setup skipped: " .. tostring(_HC_uiErr))
+end
+
+pcall(function()
+    if Toggles.HitChams then
+        Toggles.HitChams:OnChanged(function(value)
+            HitChams.Enabled = value
+            if not value and HitChams.LastModel then
+                HitChams.LastModel:Destroy()
+                HitChams.LastModel = nil
+            end
+        end)
+    end
+    if Options.HitChamsAnimation then
+        Options.HitChamsAnimation:OnChanged(function(value)
+            if value == "New Fade" then
+                HitChams.Animation = "new fade"
+            elseif value == "Fade" then
+                HitChams.Animation = "fade"
+            else
+                HitChams.Animation = "none"
+            end
+        end)
+    end
+    if Options.HitChamsType then
+        Options.HitChamsType:OnChanged(function(value)
+            if value == "Neon" then
+                HitChams.Type = "neon"
+            elseif value == "ForceField" then
+                HitChams.Type = "forcefield"
+            else
+                HitChams.Type = "outline"
+            end
+        end)
+    end
+    if Options.HitChamsLifetime then
+        Options.HitChamsLifetime:OnChanged(function(value)
+            HitChams.Lifetime = value
+        end)
+    end
+    if Options.HitChamsColor then
+        Options.HitChamsColor:OnChanged(function(value)
+            HitChams.Color = value
+            if HitChams.OutlineTemplate then
+                HitChams.OutlineTemplate.Color3 = value
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.2) do
+        if Options.HitChamsColor then
+            local t = Options.HitChamsColor.Transparency
+            if typeof(t) == "number" and t ~= HitChams.Transparency then
+                HitChams.Transparency = t
+                if HitChams.OutlineTemplate then
+                    HitChams.OutlineTemplate.Transparency = t
+                end
+            end
+        end
+    end
+end)
 
 _67:AddToggle('WhitelistEnabled', {
     Text = 'Enable Whitelist',
@@ -2551,7 +2909,7 @@ function AS_isBlacklisted(toolName)
 end
 
 do
-    -- Local cache for stim item / tool
+    -- Local cache
     local AS_Cache = {
         item    = nil,   -- shop [Stim]
         tool    = nil,   -- equipped or backpack stim tool
@@ -2934,10 +3292,18 @@ _56.CharacterAdded:Connect(function()
     AS_equippedTool = nil
 end)
 
--- Auto Mask
 AM_busy = false
 AM_shared_lock = false
 AM_equippedTool = nil
+
+AM_Cache = {
+    item    = nil,
+    tool    = nil,
+    worn    = nil,
+    shopRef = nil,
+    folder  = nil,
+    bound   = false,
+}
 
 disabledstupid = {
     [94800144025323] = true,
@@ -2947,195 +3313,183 @@ function AM_isDisabled()
     return disabledstupid[game.PlaceId] == true
 end
 
-do
-    local AM_Cache = {
-        item    = nil,   -- [Surgeon Mask] - $27
-        tool    = nil,   -- the tool
-        worn    = nil,   -- In-gameMask
-        shopRef = nil,   -- shop instance
-        folder  = nil,   -- workspace.Players[LocalName]
-        bound   = false, -- not important :)
-    }
+function AM_shop()
+    local ignored = workspace:FindFirstChild("Ignored")
+    if not ignored then return nil end
+    return ignored:FindFirstChild("Shop")
+end
 
-    local function _AM_shop()
-        local ignored = workspace:FindFirstChild("Ignored")
-        if not ignored then return nil end
-        return ignored:FindFirstChild("Shop")
+function AM_scanMaskItem()
+    if AM_isDisabled() then return nil end
+    local shop = AM_shop()
+    if not shop then return nil end
+
+    local exact = shop:FindFirstChild("[Surgeon Mask] - $27")
+    if exact and exact:FindFirstChild("ClickDetector") then
+        return exact
     end
-
-    local function _AM_scanMaskItem()
-        if AM_isDisabled() then return nil end
-        local shop = _AM_shop()
-        if not shop then return nil end
-
-        local exact = shop:FindFirstChild("[Surgeon Mask] - $27")
-        if exact and exact:FindFirstChild("ClickDetector") then
-            return exact
-        end
-        for _, item in ipairs(shop:GetChildren()) do
-            if item.Name:find("Surgeon Mask")
-               and item:FindFirstChild("ClickDetector") then
-                return item
-            end
-        end
-        for _, item in ipairs(shop:GetChildren()) do
-            if item.Name:lower():find("mask")
-               and item:FindFirstChild("ClickDetector") then
-                return item
-            end
-        end
-        return nil
-    end
-
-    local function _AM_scanMaskTool()
-        if AM_isDisabled() then return nil end
-        local char = _56.Character
-        if char then
-            for _, v in ipairs(char:GetChildren()) do
-                if v:IsA("Tool") and v.Name:lower():find("mask") then
-                    return v
-                end
-            end
-        end
-        local bp = _56.Backpack
-        if bp then
-            for _, v in ipairs(bp:GetChildren()) do
-                if v:IsA("Tool") and v.Name:lower():find("mask") then
-                    return v
-                end
-            end
-        end
-        local pf = workspace:FindFirstChild("Players")
-        local lf = pf and pf:FindFirstChild(_56.Name)
-        if lf then
-            for _, v in ipairs(lf:GetChildren()) do
-                if v:IsA("Tool") and v.Name:lower():find("mask") then
-                    return v
-                end
-            end
-        end
-        return nil
-    end
-
-    local function _AM_bind()
-        function AM_Cache.clear()
-            AM_Cache.item    = nil
-            AM_Cache.tool    = nil
-            AM_Cache.worn    = nil
-            AM_Cache.folder  = nil
-            AM_Cache.shopRef = nil
-        end
-
-        if AM_Cache.bound then return end
-        AM_Cache.bound = true
-
-        local function bindChar(char)
-            if not char then return end
-            char.ChildAdded:Connect(function(c)
-                if c:IsA("Tool") and c.Name:lower():find("mask") then
-                    AM_Cache.tool = c
-                end
-            end)
-            char.ChildRemoved:Connect(function(c)
-                if c == AM_Cache.tool then AM_Cache.tool = nil end
-            end)
-        end
-        local function bindBackpack(bp)
-            if not bp then return end
-            bp.ChildAdded:Connect(function(c)
-                if c:IsA("Tool") and c.Name:lower():find("mask") then
-                    AM_Cache.tool = c
-                end
-            end)
-            bp.ChildRemoved:Connect(function(c)
-                if c == AM_Cache.tool then AM_Cache.tool = nil end
-            end)
-        end
-
-        bindChar(_56.Character)
-        bindBackpack(_56.Backpack)
-        _56.CharacterAdded:Connect(function(char)
-            AM_Cache.tool = nil
-            AM_Cache.worn = nil
-            AM_Cache.folder = nil
-            task.wait(0.3)
-            bindChar(char)
-            bindBackpack(_56.Backpack)
-        end)
-
-        local function bindLocalFolder(folder)
-            if not folder then return end
-            AM_Cache.folder = folder
-            local m = folder:FindFirstChild("In-gameMask")
-            if m then AM_Cache.worn = m end
-            folder.ChildAdded:Connect(function(c)
-                if c.Name == "In-gameMask" then AM_Cache.worn = c end
-            end)
-            folder.ChildRemoved:Connect(function(c)
-                if c == AM_Cache.worn then AM_Cache.worn = nil end
-            end)
-        end
-
-        local pf = workspace:FindFirstChild("Players")
-        if pf then
-            bindLocalFolder(pf:FindFirstChild(_56.Name))
-            pf.ChildAdded:Connect(function(c)
-                if c.Name == _56.Name then bindLocalFolder(c) end
-            end)
+    for _, item in ipairs(shop:GetChildren()) do
+        if item.Name:find("Surgeon Mask")
+           and item:FindFirstChild("ClickDetector") then
+            return item
         end
     end
-
-    _AM_bind()
-
-    function ClearAMCache()
-        AM_Cache.clear()
+    for _, item in ipairs(shop:GetChildren()) do
+        if item.Name:lower():find("mask")
+           and item:FindFirstChild("ClickDetector") then
+            return item
+        end
     end
+    return nil
+end
 
-    task.spawn(function()
-        while task.wait(5) do
-            if not (AM_busy or AM_shared_lock) then
-                if AM_Cache.item and not AM_Cache.item.Parent then AM_Cache.item = nil end
-                if AM_Cache.tool and not AM_Cache.tool.Parent then AM_Cache.tool = nil end
-                if AM_Cache.worn and not AM_Cache.worn.Parent then AM_Cache.worn = nil end
-                if AM_Cache.folder and not AM_Cache.folder.Parent then AM_Cache.folder = nil end
+function AM_scanMaskTool()
+    if AM_isDisabled() then return nil end
+    local char = _56.Character
+    if char then
+        for _, v in ipairs(char:GetChildren()) do
+            if v:IsA("Tool") and v.Name:lower():find("mask") then
+                return v
             end
+        end
+    end
+    local bp = _56.Backpack
+    if bp then
+        for _, v in ipairs(bp:GetChildren()) do
+            if v:IsA("Tool") and v.Name:lower():find("mask") then
+                return v
+            end
+        end
+    end
+    local pf = workspace:FindFirstChild("Players")
+    local lf = pf and pf:FindFirstChild(_56.Name)
+    if lf then
+        for _, v in ipairs(lf:GetChildren()) do
+            if v:IsA("Tool") and v.Name:lower():find("mask") then
+                return v
+            end
+        end
+    end
+    return nil
+end
+
+function AM_CacheClear()
+    AM_Cache.item    = nil
+    AM_Cache.tool    = nil
+    AM_Cache.worn    = nil
+    AM_Cache.folder  = nil
+    AM_Cache.shopRef = nil
+end
+
+function AM_bindChar(char)
+    if not char then return end
+    char.ChildAdded:Connect(function(c)
+        if c:IsA("Tool") and c.Name:lower():find("mask") then
+            AM_Cache.tool = c
         end
     end)
+    char.ChildRemoved:Connect(function(c)
+        if c == AM_Cache.tool then AM_Cache.tool = nil end
+    end)
+end
 
-    function AM_getMaskItem()
-        if AM_isDisabled() then return nil end
-        local cached = AM_Cache.item
-        if cached and cached.Parent then return cached end
-        AM_Cache.item = _AM_scanMaskItem()
-        return AM_Cache.item
-    end
-
-    function AM_getMaskTool()
-        if AM_isDisabled() then return nil end
-        local cached = AM_Cache.tool
-        if cached and cached.Parent then return cached end
-        AM_Cache.tool = _AM_scanMaskTool()
-        return AM_Cache.tool
-    end
-
-    function AM_hasMaskOn()
-        if AM_isDisabled() then return false end
-        local cached = AM_Cache.worn
-        if cached and cached.Parent then return true end
-        local pf = workspace:FindFirstChild("Players")
-        local lf = pf and pf:FindFirstChild(_56.Name)
-        if lf then
-            local m = lf:FindFirstChild("In-gameMask")
-            if m then
-                AM_Cache.worn = m
-                return true
-            end
+function AM_bindBackpack(bp)
+    if not bp then return end
+    bp.ChildAdded:Connect(function(c)
+        if c:IsA("Tool") and c.Name:lower():find("mask") then
+            AM_Cache.tool = c
         end
-        AM_Cache.worn = nil
-        return false
-    end
+    end)
+    bp.ChildRemoved:Connect(function(c)
+        if c == AM_Cache.tool then AM_Cache.tool = nil end
+    end)
+end
 
-    local shop = _AM_shop()
+function AM_bindLocalFolder(folder)
+    if not folder then return end
+    AM_Cache.folder = folder
+    local m = folder:FindFirstChild("In-gameMask")
+    if m then AM_Cache.worn = m end
+    folder.ChildAdded:Connect(function(c)
+        if c.Name == "In-gameMask" then AM_Cache.worn = c end
+    end)
+    folder.ChildRemoved:Connect(function(c)
+        if c == AM_Cache.worn then AM_Cache.worn = nil end
+    end)
+end
+
+function AM_bind()
+    if AM_Cache.bound then return end
+    AM_Cache.bound = true
+
+    AM_bindChar(_56.Character)
+    AM_bindBackpack(_56.Backpack)
+    _56.CharacterAdded:Connect(function(char)
+        AM_Cache.tool = nil
+        AM_Cache.worn = nil
+        AM_Cache.folder = nil
+        task.wait(0.3)
+        AM_bindChar(char)
+        AM_bindBackpack(_56.Backpack)
+    end)
+
+    local pf = workspace:FindFirstChild("Players")
+    if pf then
+        AM_bindLocalFolder(pf:FindFirstChild(_56.Name))
+        pf.ChildAdded:Connect(function(c)
+            if c.Name == _56.Name then AM_bindLocalFolder(c) end
+        end)
+    end
+end
+
+AM_bind()
+
+task.spawn(function()
+    while task.wait(5) do
+        if not (AM_busy or AM_shared_lock) then
+            if AM_Cache.item and not AM_Cache.item.Parent then AM_Cache.item = nil end
+            if AM_Cache.tool and not AM_Cache.tool.Parent then AM_Cache.tool = nil end
+            if AM_Cache.worn and not AM_Cache.worn.Parent then AM_Cache.worn = nil end
+            if AM_Cache.folder and not AM_Cache.folder.Parent then AM_Cache.folder = nil end
+        end
+    end
+end)
+
+function AM_getMaskItem()
+    if AM_isDisabled() then return nil end
+    local cached = AM_Cache.item
+    if cached and cached.Parent then return cached end
+    AM_Cache.item = AM_scanMaskItem()
+    return AM_Cache.item
+end
+
+function AM_getMaskTool()
+    if AM_isDisabled() then return nil end
+    local cached = AM_Cache.tool
+    if cached and cached.Parent then return cached end
+    AM_Cache.tool = AM_scanMaskTool()
+    return AM_Cache.tool
+end
+
+function AM_hasMaskOn()
+    if AM_isDisabled() then return false end
+    local cached = AM_Cache.worn
+    if cached and cached.Parent then return true end
+    local pf = workspace:FindFirstChild("Players")
+    local lf = pf and pf:FindFirstChild(_56.Name)
+    if lf then
+        local m = lf:FindFirstChild("In-gameMask")
+        if m then
+            AM_Cache.worn = m
+            return true
+        end
+    end
+    AM_Cache.worn = nil
+    return false
+end
+
+function AM_watchShop()
+    local shop = AM_shop()
     if shop then
         shop.ChildAdded:Connect(function() AM_Cache.item = nil end)
         shop.ChildRemoved:Connect(function() AM_Cache.item = nil end)
@@ -3143,7 +3497,7 @@ do
     workspace.ChildAdded:Connect(function(c)
         if c.Name == "Ignored" then
             task.wait(0.1)
-            local s = _AM_shop()
+            local s = AM_shop()
             if s then
                 s.ChildAdded:Connect(function() AM_Cache.item = nil end)
                 s.ChildRemoved:Connect(function() AM_Cache.item = nil end)
@@ -3151,6 +3505,8 @@ do
         end
     end)
 end
+
+AM_watchShop()
 
 function AM_useMask()
     if AM_isDisabled() then return false end
@@ -3596,6 +3952,7 @@ end)
 -- China hat core
 ChinaHat = {}
 enabled = false
+enabledSelf = false
 c1 = Color3.fromRGB(255, 0, 0)
 c2 = Color3.fromRGB(0, 255, 0)
 c3 = Color3.fromRGB(0, 0, 255)
@@ -3608,7 +3965,9 @@ lineTrs = 1
 speed = 0.2
 offsetY = 0.5
 CH_drawings = {}
+CH_drawingsSelf = {}
 CH_connection = nil
+CH_selfConnection = nil
 Players = game:GetService("Players")
 LocalPlayer = Players.LocalPlayer
 cam = workspace.CurrentCamera
@@ -3634,17 +3993,98 @@ function CH_setVisibility(visible)
     end
 end
 
+function CH_setSelfVisibility(visible)
+    for _, d in ipairs(CH_drawingsSelf) do
+        if d[1] then d[1].Visible = visible end
+        if d[2] then d[2].Visible = visible end
+    end
+end
+
 function CH_cleanup()
     if CH_connection then CH_connection:Disconnect() CH_connection = nil end
+    if CH_selfConnection then CH_selfConnection:Disconnect() CH_selfConnection = nil end
     for _, d in ipairs(CH_drawings) do
         pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
     end
+    for _, d in ipairs(CH_drawingsSelf) do
+        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+    end
     CH_drawings = {}
+    CH_drawingsSelf = {}
+end
+
+function CH_renderSelf()
+    if not enabledSelf then CH_setSelfVisibility(false) return end
+
+    local char = LocalPlayer.Character
+    local head = char and char:FindFirstChild('Head')
+    local hum = char and char:FindFirstChildOfClass('Humanoid')
+    if not char or not head or not hum or hum.Health <= 0 then
+        CH_setSelfVisibility(false)
+        return
+    end
+
+    local headScreen = cam:WorldToViewportPoint(head.Position)
+    if headScreen.Z <= 0 then
+        CH_setSelfVisibility(false)
+        return
+    end
+
+    local needed = sides
+    if #CH_drawingsSelf ~= needed then
+        for _, d in ipairs(CH_drawingsSelf) do
+            pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+        end
+        CH_drawingsSelf = {}
+        for _ = 1, needed do
+            local line = Drawing.new('Line')
+            local triangle = Drawing.new('Triangle')
+            line.ZIndex = 2 line.Thickness = 1
+            triangle.ZIndex = 1 triangle.Filled = true
+            table.insert(CH_drawingsSelf, {line, triangle})
+        end
+    end
+
+    local time = tick()
+    local fullCircle = math.pi * 2
+    local topPos = head.Position + Vector3.new(0, offsetY + height, 0)
+    local basePos = head.Position + Vector3.new(0, offsetY, 0)
+
+    for i = 1, sides do
+        local line, triangle = CH_drawingsSelf[i][1], CH_drawingsSelf[i][2]
+        local progress1 = i / sides
+        local angle1 = progress1 * fullCircle
+        local angle2 = ((i % sides) + 1) / sides * fullCircle
+        local point1 = basePos + Vector3.new(math.cos(angle1), 0, math.sin(angle1)) * radius
+        local point2 = basePos + Vector3.new(math.cos(angle2), 0, math.sin(angle2)) * radius
+        local screen1 = cam:WorldToViewportPoint(point1)
+        local screen2 = cam:WorldToViewportPoint(point2)
+        local screenTop = cam:WorldToViewportPoint(topPos)
+        local col = getColor(progress1, time)
+
+        if screen1.Z > 0 and screen2.Z > 0 and screenTop.Z > 0 then
+            line.From = Vector2.new(screen1.X, screen1.Y)
+            line.To = Vector2.new(screen2.X, screen2.Y)
+            line.Color = col
+            line.Transparency = lineTrs
+            line.Visible = true
+
+            triangle.PointA = Vector2.new(screenTop.X, screenTop.Y)
+            triangle.PointB = line.From
+            triangle.PointC = line.To
+            triangle.Color = col
+            triangle.Transparency = hatTrs
+            triangle.Visible = true
+        else
+            line.Visible = false
+            triangle.Visible = false
+        end
+    end
 end
 
 function render()
     if not enabled then CH_setVisibility(false) return end
-    
+
     local visibleCount = 0
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
@@ -3659,9 +4099,9 @@ function render()
             end
         end
     end
-    
+
     if visibleCount == 0 then CH_setVisibility(false) return end
-    
+
     local needed = visibleCount * sides
     if #CH_drawings ~= needed then
         for _, d in ipairs(CH_drawings) do
@@ -3676,24 +4116,24 @@ function render()
             table.insert(CH_drawings, {line, triangle})
         end
     end
-    
+
     local time = tick()
     local fullCircle = math.pi * 2
     local drawIndex = 0
-    
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             local char = player.Character
             local head = char and char:FindFirstChild('Head')
             local hum = char and char:FindFirstChildOfClass('Humanoid')
-            
+
             if char and head and hum and hum.Health > 0 then
                 local headScreen = cam:WorldToViewportPoint(head.Position)
                 if headScreen.Z <= 0 then continue end
-                
+
                 local topPos = head.Position + Vector3.new(0, offsetY + height, 0)
                 local basePos = head.Position + Vector3.new(0, offsetY, 0)
-                
+
                 for i = 1, sides do
                     drawIndex = drawIndex + 1
                     local line, triangle = CH_drawings[drawIndex][1], CH_drawings[drawIndex][2]
@@ -3706,14 +4146,14 @@ function render()
                     local screen2 = cam:WorldToViewportPoint(point2)
                     local screenTop = cam:WorldToViewportPoint(topPos)
                     local col = getColor(progress1, time)
-                    
+
                     if screen1.Z > 0 and screen2.Z > 0 and screenTop.Z > 0 then
                         line.From = Vector2.new(screen1.X, screen1.Y)
                         line.To = Vector2.new(screen2.X, screen2.Y)
                         line.Color = col
                         line.Transparency = lineTrs
                         line.Visible = true
-                        
+
                         triangle.PointA = Vector2.new(screenTop.X, screenTop.Y)
                         triangle.PointB = line.From
                         triangle.PointC = line.To
@@ -3728,7 +4168,7 @@ function render()
             end
         end
     end
-    
+
     for i = drawIndex + 1, #CH_drawings do
         if CH_drawings[i][1] then CH_drawings[i][1].Visible = false end
         if CH_drawings[i][2] then CH_drawings[i][2].Visible = false end
@@ -3745,13 +4185,23 @@ function ChinaHat:setEnabled(val)
     end
 end
 
+function ChinaHat:setSelfEnabled(val)
+    enabledSelf = val
+    if enabledSelf then
+        if not CH_selfConnection then CH_selfConnection = game:GetService("RunService").RenderStepped:Connect(CH_renderSelf) end
+    else
+        CH_setSelfVisibility(false)
+        if CH_selfConnection then CH_selfConnection:Disconnect() CH_selfConnection = nil end
+    end
+end
+
 function ChinaHat:setColor1(c) c1 = c end
 function ChinaHat:setColor2(c) c2 = c end
 function ChinaHat:setColor3(c) c3 = c end
 function ChinaHat:setColor4(c) c4 = c end
 function ChinaHat:setHeight(h) height = h end
 function ChinaHat:setRadius(r) radius = r end
-function ChinaHat:setSides(s) sides = s CH_drawings = {} end
+function ChinaHat:setSides(s) sides = s CH_drawings = {} CH_drawingsSelf = {} end
 function ChinaHat:setHatTransparency(t) hatTrs = t end
 function ChinaHat:setLineTransparency(t) lineTrs = t end
 function ChinaHat:setSpeed(s) speed = s end
@@ -3772,6 +4222,11 @@ _78:AddToggle("ChinaHatEnabled", {
 }):AddColorPicker("ChinaHatColor4", {
     Default = Color3.fromRGB(255, 255, 0),
     Title = "Color 4",
+})
+
+_78:AddToggle("ChinaHatSelfEnabled", {
+    Text = "Self China Hat",
+    Default = false,
 })
 
 _78:AddSlider("ChinaHatRadius", {
@@ -3810,6 +4265,10 @@ Toggles.ChinaHatEnabled:OnChanged(function(value)
     ChinaHat:setEnabled(value)
 end)
 
+Toggles.ChinaHatSelfEnabled:OnChanged(function(value)
+    ChinaHat:setSelfEnabled(value)
+end)
+
 Options.ChinaHatColor1:OnChanged(function(value)
     ChinaHat:setColor1(value)
 end)
@@ -3842,268 +4301,7 @@ Options.ChinaHatSpeed:OnChanged(function(value)
     ChinaHat:setSpeed(value)
 end)
 
--- Character Material / Self Charms Core
-SelfChams = {}
-SC_lp = game:GetService("Players").LocalPlayer
-SC_loopManager = _52
-SC_enabled = false
-SC_color = Color3.fromRGB(155, 125, 175)
-SC_transparency = 0
-SC_reflectance = 0
-SC_material = 'ForceField'
-SC_effect = 'none'
-SC_addEffect = 'none'
-SC_particleColor = Color3.fromRGB(255, 255, 255)
-SC_particleTransparency = 0
-SC_heatTime = 0
-SC_charConnection = nil
-SC_cachedData = { parts = {}, clothing = {}, bodyColors = nil }
-SC_lastHeatTick = 0
-SC_heatConnection = nil
 
-SC_r15Parts = {
-    'LeftFoot', 'LeftLowerLeg', 'LeftUpperLeg',
-    'RightFoot', 'RightLowerLeg', 'RightUpperLeg',
-    'LeftHand', 'LeftLowerArm', 'LeftUpperArm',
-    'RightHand', 'RightLowerArm', 'RightUpperArm',
-    'LowerTorso', 'UpperTorso', 'Head'
-}
-
-SC_heatMap = {
-    LeftFoot = 0.7, LeftLowerLeg = 0.3, LeftUpperLeg = 0.5,
-    RightFoot = 0.7, RightLowerLeg = 0.3, RightUpperLeg = 0.5,
-    LeftHand = 0.7, LeftLowerArm = 0.3, LeftUpperArm = 0.5,
-    RightHand = 0.7, RightLowerArm = 0.3, RightUpperArm = 0.5,
-    LowerTorso = 0.3, UpperTorso = 0.5, Head = 0.5,
-}
-
-SC_partSet = {}
-for _, name in ipairs(SC_r15Parts) do SC_partSet[name] = true end
-
-function SC_isR15Part(name) return SC_partSet[name] == true end
-
-function SC_cacheCharacter(char)
-    if not char then return end
-    SC_cachedData.parts = {}
-    SC_cachedData.clothing = {}
-    SC_cachedData.bodyColors = nil
-    
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
-            SC_cachedData.parts[part.Name] = {
-                Material = part.Material, Color = part.Color,
-                Transparency = part.Transparency, Reflectance = part.Reflectance,
-                TextureID = part:IsA('MeshPart') and part.TextureID or nil,
-            }
-        end
-    end
-    
-    for _, desc in ipairs(char:GetDescendants()) do
-        if desc:IsA('Shirt') then SC_cachedData.clothing.Shirt = desc.ShirtTemplate
-        elseif desc:IsA('Pants') then SC_cachedData.clothing.Pants = desc.PantsTemplate end
-    end
-end
-
-function SC_removeParticles(char)
-    if not char then return end
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) then
-            local stars = part:FindFirstChild('stars')
-            local specks = part:FindFirstChild('Specks')
-            if stars then pcall(function() stars:Destroy() end) end
-            if specks then pcall(function() specks:Destroy() end) end
-        end
-    end
-end
-
-function SC_applyStars(char)
-    if not char then return end
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
-            local existing = part:FindFirstChild('stars')
-            if existing then existing:Destroy() end
-            pcall(function()
-                local stars = Instance.new('ParticleEmitter')
-                stars.Name = 'stars'
-                stars.Lifetime = NumberRange.new(0.45, 0.9)
-                stars.LockedToPart = true
-                stars.LightEmission = 1
-                stars.Drag = 5
-                stars.Squash = NumberSequence.new(-0.1)
-                stars.Speed = NumberRange.new(0.001, 0.001)
-                stars.Brightness = 3
-                stars.ZOffset = 1
-                stars.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.508, 0.05, 0.05), NumberSequenceKeypoint.new(1, 0)})
-                stars.Rate = 150
-                stars.Texture = 'rbxassetid://1084996976'
-                stars.EmissionDirection = Enum.NormalId.Bottom
-                stars.Color = ColorSequence.new(SC_particleColor)
-                stars.Transparency = NumberSequence.new(SC_particleTransparency)
-                stars.Parent = part
-            end)
-        end
-    end
-end
-
-function SC_applyParticles(char)
-    if not char then return end
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
-            local existing = part:FindFirstChild('Specks')
-            if existing then existing:Destroy() end
-            pcall(function()
-                local specks = Instance.new('ParticleEmitter')
-                specks.Name = 'Specks'
-                specks.Lifetime = NumberRange.new(0.22, 0.22)
-                specks.SpreadAngle = Vector2.new(90, 90)
-                local t = SC_particleTransparency
-                specks.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, math.min(1, t + 0.8)), NumberSequenceKeypoint.new(0.25, math.max(0, t - 0.1)), NumberSequenceKeypoint.new(1, math.min(1, t + 0.8))})
-                specks.LightEmission = 1
-                specks.Color = ColorSequence.new(SC_particleColor)
-                specks.Drag = 5
-                specks.Squash = NumberSequence.new(0)
-                specks.Speed = NumberRange.new(1, 1)
-                specks.Brightness = 4.2
-                specks.Size = NumberSequence.new(0.15)
-                specks.Acceleration = Vector3.new(0, -15, 0)
-                specks.RotSpeed = NumberRange.new(-45, 45)
-                specks.Rate = 100
-                specks.Texture = 'rbxassetid://7216849703'
-                specks.Parent = part
-            end)
-        end
-    end
-end
-
-function SC_applyChams(char, heatPulse, skipParticles)
-    if not char then return end
-    
-    for _, desc in ipairs(char:GetDescendants()) do
-        if desc:IsA('Pants') or desc:IsA('Shirt') then
-            pcall(function() desc:Destroy() end)
-        end
-    end
-    
-    local mat = SC_material == 'Neon' and Enum.Material.Neon or SC_material == 'Glass' and Enum.Material.Glass or Enum.Material.ForceField
-    
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) then
-            local trans = SC_transparency
-            if SC_effect == 'heat' and SC_heatMap[part.Name] then
-                local base = SC_heatMap[part.Name]
-                if heatPulse then trans = base + (math.min(base + 0.2, 1) - base) * heatPulse
-                else trans = base end
-            end
-            
-            if part:IsA('MeshPart') then
-                pcall(function() part.Material = mat part.Color = SC_color part.Transparency = trans part.Reflectance = SC_reflectance part.TextureID = '' end)
-            elseif part:IsA('BasePart') then
-                pcall(function() part.Material = mat part.Color = SC_color part.Reflectance = SC_reflectance if part.Transparency < 1 then part.Transparency = trans end end)
-            end
-        end
-    end
-    
-    if not skipParticles then
-        if SC_addEffect == 'stars' then SC_applyStars(char)
-        elseif SC_addEffect == 'particles' then SC_applyParticles(char)
-        else SC_removeParticles(char) end
-    end
-end
-
-function SC_restoreCharacter(char)
-    if not char then return end
-    SC_removeParticles(char)
-    
-    for _, part in ipairs(char:GetChildren()) do
-        if SC_isR15Part(part.Name) and SC_cachedData.parts[part.Name] then
-            local data = SC_cachedData.parts[part.Name]
-            pcall(function()
-                part.Material = data.Material part.Color = data.Color
-                part.Transparency = data.Transparency part.Reflectance = data.Reflectance
-                if part:IsA('MeshPart') and data.TextureID then part.TextureID = data.TextureID end
-            end)
-        end
-    end
-    
-    if SC_cachedData.clothing.Shirt then
-        pcall(function() local shirt = Instance.new('Shirt') shirt.ShirtTemplate = SC_cachedData.clothing.Shirt shirt.Parent = char end)
-    end
-    if SC_cachedData.clothing.Pants then
-        pcall(function() local pants = Instance.new('Pants') pants.PantsTemplate = SC_cachedData.clothing.Pants pants.Parent = char end)
-    end
-end
-
-function SC_stopHeatLoop()
-    if SC_heatConnection then SC_heatConnection:Disconnect() SC_heatConnection = nil end
-    SC_heatTime = 0 SC_lastHeatTick = 0
-end
-
-function SC_startHeatLoop()
-    SC_stopHeatLoop()
-    SC_lastHeatTick = tick()
-    SC_heatConnection = SC_loopManager.Heartbeat:Connect(function()
-        if not SC_enabled or SC_effect ~= 'heat' then SC_stopHeatLoop() return end
-        local char = SC_lp.Character
-        if not char then return end
-        local now = tick()
-        local dt = now - SC_lastHeatTick
-        SC_lastHeatTick = now
-        SC_heatTime = SC_heatTime + dt
-        local pulse = math.sin(SC_heatTime * 2) * 0.5 + 0.5
-        SC_applyChams(char, pulse, true)
-    end)
-end
-
-function SelfChams:setEnabled(val)
-    SC_enabled = val
-    local char = SC_lp.Character
-    
-    if SC_enabled then
-        SC_cacheCharacter(char)
-        SC_applyChams(char)
-        if SC_effect == 'heat' then SC_startHeatLoop() end
-        
-        if SC_charConnection then SC_charConnection:Disconnect() end
-        SC_charConnection = SC_lp.CharacterAdded:Connect(function(newChar)
-            newChar:WaitForChild('Humanoid')
-            task.wait(1.1)
-            if SC_enabled then
-                SC_cacheCharacter(newChar)
-                SC_applyChams(newChar)
-                if SC_effect == 'heat' then SC_startHeatLoop() end
-                task.wait(0.5)
-                SC_applyChams(newChar)
-            end
-        end)
-    else
-        SC_stopHeatLoop()
-        if SC_charConnection then SC_charConnection:Disconnect() SC_charConnection = nil end
-        SC_restoreCharacter(char)
-    end
-end
-
-function SelfChams:setColor(c) SC_color = c if SC_enabled then SC_applyChams(SC_lp.Character) end end
-function SelfChams:setTransparency(t) SC_transparency = t if SC_enabled then SC_applyChams(SC_lp.Character) end end
-function SelfChams:setReflectance(r) SC_reflectance = r if SC_enabled then SC_applyChams(SC_lp.Character) end end
-function SelfChams:setMaterial(m) SC_material = m if SC_enabled then SC_applyChams(SC_lp.Character) end end
-function SelfChams:setEffect(e)
-    SC_effect = e
-    if SC_enabled then
-        if e == 'heat' then SC_startHeatLoop()
-        else SC_stopHeatLoop() SC_applyChams(SC_lp.Character) end
-    end
-end
-function SelfChams:setAddEffect(e)
-    SC_addEffect = e
-    if SC_enabled then
-        SC_removeParticles(SC_lp.Character)
-        if e == 'stars' then SC_applyStars(SC_lp.Character)
-        elseif e == 'particles' then SC_applyParticles(SC_lp.Character) end
-    end
-end
-
-function SelfChams:setParticleColor(c) SC_particleColor = c if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
-function SelfChams:setParticleTransparency(t) SC_particleTransparency = t if SC_enabled then SelfChams:setAddEffect(SC_addEffect) end end
 
 -- bullet tracers
 BT_Beams = {
@@ -4588,6 +4786,391 @@ _48:OnUnload(function()
     RestoreOriginalAnimations()
 end)
 
+-- Character Material / Self Charms Core
+SelfChams = {}
+SC_lp = game:GetService("Players").LocalPlayer
+SC_loopManager = _52
+SC_enabled = false
+SC_color = Color3.fromRGB(155, 125, 175)
+SC_transparency = 0
+SC_reflectance = 0
+SC_material = 'ForceField'
+SC_effect = 'none'
+SC_addEffect = 'none'
+SC_particleColor = Color3.fromRGB(255, 255, 255)
+SC_particleTransparency = 0
+SC_particleLifetime = 2.0
+SC_particleRate = 60
+SC_heatTime = 0
+SC_charConnection = nil
+SC_cachedData = { parts = {}, clothing = {}, bodyColors = nil, appearance = {}, variants = {} }
+SC_lastHeatTick = 0
+SC_heatConnection = nil
+SC_guards = {} -- part -> { connections } that keep the chams material from being undone
+
+SC_r15Parts = {
+    'LeftFoot', 'LeftLowerLeg', 'LeftUpperLeg',
+    'RightFoot', 'RightLowerLeg', 'RightUpperLeg',
+    'LeftHand', 'LeftLowerArm', 'LeftUpperArm',
+    'RightHand', 'RightLowerArm', 'RightUpperArm',
+    'LowerTorso', 'UpperTorso', 'Head'
+}
+
+SC_heatMap = {
+    LeftFoot = 0.7, LeftLowerLeg = 0.3, LeftUpperLeg = 0.5,
+    RightFoot = 0.7, RightLowerLeg = 0.3, RightUpperLeg = 0.5,
+    LeftHand = 0.7, LeftLowerArm = 0.3, LeftUpperArm = 0.5,
+    RightHand = 0.7, RightLowerArm = 0.3, RightUpperArm = 0.5,
+    LowerTorso = 0.3, UpperTorso = 0.5, Head = 0.5,
+}
+
+SC_partSet = {}
+for _, name in ipairs(SC_r15Parts) do SC_partSet[name] = true end
+
+function SC_isR15Part(name) return SC_partSet[name] == true end
+
+function SC_getMaterial()
+    if SC_material == 'Neon' then return Enum.Material.Neon end
+    if SC_material == 'Glass' then return Enum.Material.Glass end
+    return Enum.Material.ForceField
+end
+
+function SC_cacheCharacter(char)
+    if not char then return end
+    SC_cachedData.parts = {}
+    SC_cachedData.clothing = {}
+    SC_cachedData.bodyColors = nil
+    SC_cachedData.appearance = {}
+    SC_cachedData.variants = {}
+
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            SC_cachedData.parts[part.Name] = {
+                Material = part.Material, Color = part.Color,
+                Transparency = part.Transparency, Reflectance = part.Reflectance,
+                TextureID = part:IsA('MeshPart') and part.TextureID or nil,
+            }
+        end
+    end
+
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA('Shirt') then SC_cachedData.clothing.Shirt = desc.ShirtTemplate
+        elseif desc:IsA('Pants') then SC_cachedData.clothing.Pants = desc.PantsTemplate end
+    end
+end
+
+-- Things that override a part's Material/Color: SurfaceAppearance (dynamic heads and
+-- bundle bodies use it) and MaterialVariant. They get set aside and put back on restore.
+function SC_stripOverrides(part)
+    for _, child in ipairs(part:GetChildren()) do
+        if child:IsA('SurfaceAppearance') then
+            SC_cachedData.appearance[child] = part
+            pcall(function() child.Parent = nil end)
+        end
+    end
+    pcall(function()
+        if part.MaterialVariant ~= '' then
+            SC_cachedData.variants[part] = part.MaterialVariant
+            part.MaterialVariant = ''
+        end
+    end)
+end
+
+-- Keeps the material/color on the part if the game (or an animation/morph script) resets it.
+function SC_guardPart(part)
+    if SC_guards[part] then return end
+    local conns = {}
+
+    table.insert(conns, part:GetPropertyChangedSignal('Material'):Connect(function()
+        if not SC_enabled then return end
+        local want = SC_getMaterial()
+        if part.Material ~= want then pcall(function() part.Material = want end) end
+    end))
+
+    table.insert(conns, part:GetPropertyChangedSignal('Color'):Connect(function()
+        if not SC_enabled then return end
+        if part.Color ~= SC_color then pcall(function() part.Color = SC_color end) end
+    end))
+
+    table.insert(conns, part.ChildAdded:Connect(function(child)
+        if not SC_enabled then return end
+        if child:IsA('SurfaceAppearance') then
+            task.defer(function()
+                if SC_enabled and child.Parent == part then SC_stripOverrides(part) end
+            end)
+        end
+    end))
+
+    SC_guards[part] = conns
+end
+
+function SC_clearGuards()
+    for _, conns in pairs(SC_guards) do
+        for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+    end
+    SC_guards = {}
+end
+
+function SC_removeParticles(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) then
+            local stars = part:FindFirstChild('stars')
+            local specks = part:FindFirstChild('Specks')
+            if stars then pcall(function() stars:Destroy() end) end
+            if specks then pcall(function() specks:Destroy() end) end
+        end
+    end
+end
+
+function SC_applyStars(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            local stars = part:FindFirstChild('stars')
+            if not stars then
+                stars = Instance.new('ParticleEmitter')
+                stars.Name = 'stars'
+                stars.Parent = part
+                pcall(function()
+                    stars.LockedToPart = true
+                    stars.LightEmission = 1
+                    stars.Drag = 5
+                    stars.Squash = NumberSequence.new(-0.1)
+                    stars.Speed = NumberRange.new(0.001, 0.001)
+                    stars.Brightness = 3
+                    stars.ZOffset = 1
+                    stars.Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.508, 0.05, 0.05), NumberSequenceKeypoint.new(1, 0)})
+                    stars.Texture = 'rbxassetid://1084996976'
+                    stars.EmissionDirection = Enum.NormalId.Bottom
+                end)
+            end
+            pcall(function()
+                stars.Lifetime = NumberRange.new(SC_particleLifetime, SC_particleLifetime * 1.5)
+                stars.Rate = SC_particleRate
+                stars.Color = ColorSequence.new(SC_particleColor)
+                stars.Transparency = NumberSequence.new(SC_particleTransparency)
+            end)
+        end
+    end
+end
+
+function SC_applyParticles(char)
+    if not char then return end
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and (part:IsA('MeshPart') or part:IsA('BasePart')) then
+            local specks = part:FindFirstChild('Specks')
+            if not specks then
+                specks = Instance.new('ParticleEmitter')
+                specks.Name = 'Specks'
+                specks.Parent = part
+                pcall(function()
+                    specks.SpreadAngle = Vector2.new(90, 90)
+                    specks.LightEmission = 1
+                    specks.Drag = 3
+                    specks.Squash = NumberSequence.new(0)
+                    specks.Speed = NumberRange.new(1, 2)
+                    specks.Brightness = 4.2
+                    specks.Size = NumberSequence.new(0.15)
+                    specks.Acceleration = Vector3.new(0, -6, 0)
+                    specks.RotSpeed = NumberRange.new(-45, 45)
+                    specks.Texture = 'rbxassetid://7216849703'
+                end)
+            end
+            pcall(function()
+                specks.Lifetime = NumberRange.new(SC_particleLifetime, SC_particleLifetime * 1.5)
+                specks.Rate = SC_particleRate
+                local t = SC_particleTransparency
+                specks.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, math.min(1, t + 0.8)), NumberSequenceKeypoint.new(0.25, math.max(0, t - 0.1)), NumberSequenceKeypoint.new(1, math.min(1, t + 0.8))})
+                specks.Color = ColorSequence.new(SC_particleColor)
+            end)
+        end
+    end
+end
+
+function SC_applyChams(char, heatPulse, skipParticles)
+    if not char then return end
+
+    for _, desc in ipairs(char:GetDescendants()) do
+        if desc:IsA('Pants') or desc:IsA('Shirt') then
+            pcall(function() desc:Destroy() end)
+        end
+    end
+
+    local mat = SC_getMaterial()
+
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) then
+            local trans = SC_transparency
+            if SC_effect == 'heat' and SC_heatMap[part.Name] then
+                local base = SC_heatMap[part.Name]
+                if heatPulse then trans = base + (math.min(base + 0.2, 1) - base) * heatPulse
+                else trans = base end
+            end
+
+            -- the heat loop calls this every frame; only do the heavier cleanup on real applies
+            if not heatPulse then SC_stripOverrides(part) end
+
+            if part:IsA('MeshPart') then
+                pcall(function() part.Material = mat part.Color = SC_color part.Transparency = trans part.Reflectance = SC_reflectance part.TextureID = '' end)
+            elseif part:IsA('BasePart') then
+                pcall(function() part.Material = mat part.Color = SC_color part.Reflectance = SC_reflectance if part.Transparency < 1 then part.Transparency = trans end end)
+            end
+
+            SC_guardPart(part)
+        end
+    end
+
+    if not skipParticles then
+        if SC_addEffect == 'stars' then
+            SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then
+            SC_applyParticles(char)
+        end
+    end
+end
+
+function SC_restoreCharacter(char)
+    -- guards first, otherwise they would fight the restore
+    SC_clearGuards()
+    if not char then return end
+    SC_removeParticles(char)
+
+    for _, part in ipairs(char:GetChildren()) do
+        if SC_isR15Part(part.Name) and SC_cachedData.parts[part.Name] then
+            local data = SC_cachedData.parts[part.Name]
+            pcall(function()
+                part.Material = data.Material part.Color = data.Color
+                part.Transparency = data.Transparency part.Reflectance = data.Reflectance
+                if part:IsA('MeshPart') and data.TextureID then part.TextureID = data.TextureID end
+            end)
+        end
+    end
+
+    for inst, part in pairs(SC_cachedData.appearance) do
+        if part and part.Parent then pcall(function() inst.Parent = part end) end
+    end
+    SC_cachedData.appearance = {}
+    for part, variant in pairs(SC_cachedData.variants) do
+        if part and part.Parent then pcall(function() part.MaterialVariant = variant end) end
+    end
+    SC_cachedData.variants = {}
+
+    if SC_cachedData.clothing.Shirt then
+        pcall(function() local shirt = Instance.new('Shirt') shirt.ShirtTemplate = SC_cachedData.clothing.Shirt shirt.Parent = char end)
+    end
+    if SC_cachedData.clothing.Pants then
+        pcall(function() local pants = Instance.new('Pants') pants.PantsTemplate = SC_cachedData.clothing.Pants pants.Parent = char end)
+    end
+end
+
+function SC_stopHeatLoop()
+    if SC_heatConnection then SC_heatConnection:Disconnect() SC_heatConnection = nil end
+    SC_heatTime = 0 SC_lastHeatTick = 0
+end
+
+function SC_startHeatLoop()
+    SC_stopHeatLoop()
+    SC_lastHeatTick = tick()
+    SC_heatConnection = SC_loopManager.Heartbeat:Connect(function()
+        if not SC_enabled or SC_effect ~= 'heat' then SC_stopHeatLoop() return end
+        local char = SC_lp.Character
+        if not char then return end
+        local now = tick()
+        local dt = now - SC_lastHeatTick
+        SC_lastHeatTick = now
+        SC_heatTime = SC_heatTime + dt
+        local pulse = math.sin(SC_heatTime * 2) * 0.5 + 0.5
+        SC_applyChams(char, pulse, true)
+    end)
+end
+
+function SelfChams:setEnabled(val)
+    SC_enabled = val
+    local char = SC_lp.Character
+
+    if SC_enabled then
+        SC_cacheCharacter(char)
+        SC_applyChams(char)
+        if SC_effect == 'heat' then SC_startHeatLoop() end
+
+        if SC_charConnection then SC_charConnection:Disconnect() end
+        SC_charConnection = SC_lp.CharacterAdded:Connect(function(newChar)
+            SC_clearGuards() -- old character's parts are gone
+            newChar:WaitForChild('Humanoid')
+            task.wait(1.1)
+            if SC_enabled then
+                SC_cacheCharacter(newChar)
+                SC_applyChams(newChar)
+                if SC_effect == 'heat' then SC_startHeatLoop() end
+                task.wait(0.5)
+                SC_applyChams(newChar)
+            end
+        end)
+    else
+        SC_stopHeatLoop()
+        if SC_charConnection then SC_charConnection:Disconnect() SC_charConnection = nil end
+        SC_restoreCharacter(char)
+    end
+end
+
+function SelfChams:setColor(c) SC_color = c if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setTransparency(t) SC_transparency = t if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setReflectance(r) SC_reflectance = r if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setMaterial(m) SC_material = m if SC_enabled then SC_applyChams(SC_lp.Character) end end
+function SelfChams:setEffect(e)
+    SC_effect = e
+    if SC_enabled then
+        if e == 'heat' then SC_startHeatLoop()
+        else SC_stopHeatLoop() SC_applyChams(SC_lp.Character) end
+    end
+end
+function SelfChams:setAddEffect(e)
+    if e == SC_addEffect and SC_enabled then return end
+    SC_addEffect = e
+    if SC_enabled then
+        SC_removeParticles(SC_lp.Character)
+        if e == 'stars' then SC_applyStars(SC_lp.Character)
+        elseif e == 'particles' then SC_applyParticles(SC_lp.Character) end
+    end
+end
+
+function SelfChams:setParticleColor(c)
+    SC_particleColor = c
+    if SC_enabled then
+        local char = SC_lp.Character
+        if SC_addEffect == 'stars' then SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then SC_applyParticles(char) end
+    end
+end
+
+function SelfChams:setParticleTransparency(t)
+    SC_particleTransparency = t
+    if SC_enabled then
+        local char = SC_lp.Character
+        if SC_addEffect == 'stars' then SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then SC_applyParticles(char) end
+    end
+end
+
+function SelfChams:setParticleLifetime(l)
+    SC_particleLifetime = l
+    if SC_enabled then
+        local char = SC_lp.Character
+        if SC_addEffect == 'stars' then SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then SC_applyParticles(char) end
+    end
+end
+
+function SelfChams:setParticleRate(r)
+    SC_particleRate = r
+    if SC_enabled then
+        local char = SC_lp.Character
+        if SC_addEffect == 'stars' then SC_applyStars(char)
+        elseif SC_addEffect == 'particles' then SC_applyParticles(char) end
+    end
+end
+
 -- UI
 _78:AddDivider()
 
@@ -4601,25 +5184,21 @@ SC_Toggle:AddColorPicker("SelfChamsColor", {
     Title = "Cham Color",
 })
 
-_78:AddDropdown("SelfChamsMaterial", {
+SC_DepBox = _78:AddDependencyBox()
+
+SC_DepBox:AddDropdown("SelfChamsMaterial", {
     Text = "Material",
     Values = {"ForceField", "Neon", "Glass"},
     Default = "ForceField",
 })
 
-_78:AddDropdown("SelfChamsEffect", {
+SC_DepBox:AddDropdown("SelfChamsEffect", {
     Text = "Effect",
     Values = {"None", "Heat"},
     Default = "None",
 })
 
-_78:AddDropdown("SelfChamsAddEffect", {
-    Text = "Add Effect",
-    Values = {"None", "Stars", "Particles"},
-    Default = "None",
-})
-
-_78:AddSlider("SelfChamsTransparency", {
+SC_DepBox:AddSlider("SelfChamsTransparency", {
     Text = "Transparency",
     Default = 0,
     Min = 0,
@@ -4627,7 +5206,7 @@ _78:AddSlider("SelfChamsTransparency", {
     Rounding = 2,
 })
 
-_78:AddSlider("SelfChamsReflectance", {
+SC_DepBox:AddSlider("SelfChamsReflectance", {
     Text = "Reflectance",
     Default = 0,
     Min = 0,
@@ -4635,15 +5214,89 @@ _78:AddSlider("SelfChamsReflectance", {
     Rounding = 2,
 })
 
+SC_DepBox:AddDropdown("SelfChamsAddEffect", {
+    Text = "Particle Style",
+    Values = {"None", "Stars", "Particles"},
+    Default = "None",
+})
+
+SC_ParticleToggle = SC_DepBox:AddToggle("SelfChamsParticlesEnabled", {
+    Text = "Particle Settings",
+    Default = false,
+})
+
+SC_ParticleToggle:AddColorPicker("SelfChamsParticleColor", {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = "Particle Color",
+})
+
+SC_ParticleDepBox = SC_DepBox:AddDependencyBox()
+
+SC_ParticleDepBox:AddSlider("SelfChamsParticleLifetime", {
+    Text = "Particle Lifetime",
+    Default = 2.0,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = "s",
+})
+
+SC_ParticleDepBox:AddSlider("SelfChamsParticleRate", {
+    Text = "Particle Rate",
+    Default = 60,
+    Min = 5,
+    Max = 300,
+    Rounding = 0,
+})
+
+SC_ParticleDepBox:AddSlider("SelfChamsParticleTransparency", {
+    Text = "Particle Transparency",
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+SC_DepBox:SetupDependencies({
+    { SC_Toggle, true },
+})
+
+SC_ParticleDepBox:SetupDependencies({
+    { SC_ParticleToggle, true },
+})
+
 Toggles.SelfChamsToggle:OnChanged(function(value) SelfChams:setEnabled(value) end)
 Options.SelfChamsColor:OnChanged(function(value) SelfChams:setColor(value) end)
 Options.SelfChamsMaterial:OnChanged(function(value) SelfChams:setMaterial(value) end)
 Options.SelfChamsEffect:OnChanged(function(value) SelfChams:setEffect(value:lower()) end)
-Options.SelfChamsAddEffect:OnChanged(function(value) SelfChams:setAddEffect(value:lower()) end)
 Options.SelfChamsTransparency:OnChanged(function(value) SelfChams:setTransparency(value) end)
 Options.SelfChamsReflectance:OnChanged(function(value) SelfChams:setReflectance(value) end)
+Options.SelfChamsParticleLifetime:OnChanged(function(value) SelfChams:setParticleLifetime(value) end)
+Options.SelfChamsParticleRate:OnChanged(function(value) SelfChams:setParticleRate(value) end)
+Options.SelfChamsParticleTransparency:OnChanged(function(value) SelfChams:setParticleTransparency(value) end)
+Options.SelfChamsParticleColor:OnChanged(function(value) SelfChams:setParticleColor(value) end)
 
--- Cleanup
+Options.SelfChamsAddEffect:OnChanged(function(value)
+    local v = tostring(value):lower()
+    if v == "none" then
+        SelfChams:setAddEffect("none")
+    elseif Toggles.SelfChamsParticlesEnabled and Toggles.SelfChamsParticlesEnabled.Value then
+        SelfChams:setAddEffect(v)
+    end
+end)
+
+Toggles.SelfChamsParticlesEnabled:OnChanged(function(value)
+    if value then
+        local style = (Options.SelfChamsAddEffect and Options.SelfChamsAddEffect.Value) or "None"
+        local v = tostring(style):lower()
+        if v ~= "none" then
+            SelfChams:setAddEffect(v)
+        end
+    else
+        SelfChams:setAddEffect("none")
+    end
+end)
+
 _48:OnUnload(function()
     SelfChams:setEnabled(false)
 end)
@@ -5463,8 +6116,22 @@ function _104:GetClosestBodyPartName(target, worldPos)
     return closestName
 end
 
+function _104:GetEffectBodyPart(target)
+    if not target or not target.Character then return nil end
+    for _, name in ipairs({"UpperTorso", "LowerTorso", "Torso", "HumanoidRootPart", "Head"}) do
+        local part = target.Character:FindFirstChild(name)
+        if part and part:IsA("BasePart") then
+            return part
+        end
+    end
+    return nil
+end
+
 function _104:CheckHitNotifications()
-    if not (Toggles.HitNotifications and Toggles.HitNotifications.Value) then return end
+    local notifOn = Toggles.HitNotifications and Toggles.HitNotifications.Value
+    local effectsOn = HitEffects and HitEffects.Enabled
+    local chamsOn = HitChams and HitChams.Enabled
+    if not notifOn and not effectsOn and not chamsOn then return end
 
     local target = self.targetplayer
     if not target or not target.Character or not target.Character.Parent then
@@ -5504,33 +6171,988 @@ function _104:CheckHitNotifications()
     local arHit = armorDelta > 0.5
 
     if hpHit or arHit then
-        local mode = (Options.HitNotifyMode and Options.HitNotifyMode.Value) or { Both = true }
-        local showHP = mode.HP == true
-        local showArmor = mode.Armor == true
+        if notifOn then
+            local mode = (Options.HitNotifyMode and Options.HitNotifyMode.Value) or { Both = true }
+            local showHP = mode.HP == true
+            local showArmor = mode.Armor == true
 
-        local rootPos = hum.RootPart and hum.RootPart.Position or target.Character:GetPivot().Position
-        local partName = self:GetClosestBodyPartName(target, rootPos)
-        local displayName = target.DisplayName or target.Name
-        local msg
+            local rootPos = hum.RootPart and hum.RootPart.Position or target.Character:GetPivot().Position
+            local partName = self:GetClosestBodyPartName(target, rootPos)
+            local displayName = target.DisplayName or target.Name
+            local msg
 
-        if (hpHit and arHit) and showHP and showArmor then
-            msg = string.format("%s hit for %d hp / %d armor in the %s",
-                displayName, math.floor(healthDelta), math.floor(armorDelta), partName)
-        elseif hpHit and showHP then
-            msg = string.format("%s hit for %d hp in the %s",
-                displayName, math.floor(healthDelta), partName)
-        elseif arHit and showArmor then
-            msg = string.format("%s hit for %d armor in the %s",
-                displayName, math.floor(armorDelta), partName)
-        else
-            msg = string.format("%s hit in the %s", displayName, partName)
+            if (hpHit and arHit) and showHP and showArmor then
+                msg = string.format("%s hit for %d hp / %d armor in the %s",
+                    displayName, math.floor(healthDelta), math.floor(armorDelta), partName)
+            elseif hpHit and showHP then
+                msg = string.format("%s hit for %d hp in the %s",
+                    displayName, math.floor(healthDelta), partName)
+            elseif arHit and showArmor then
+                msg = string.format("%s hit for %d armor in the %s",
+                    displayName, math.floor(armorDelta), partName)
+            else
+                msg = string.format("%s hit in the %s", displayName, partName)
+            end
+
+            pcall(function() Library:Notify(msg, 3) end)
         end
 
-        pcall(function() Library:Notify(msg, 3) end)
+        if effectsOn then
+            local effectPart = self:GetEffectBodyPart(target)
+            if effectPart then
+                local text = ""
+                if hpHit then
+                    text = tostring(math.floor(healthDelta))
+                elseif arHit then
+                    text = tostring(math.floor(armorDelta))
+                end
+                HitEffects.Run(effectPart, text)
+            end
+        end
+
+        if chamsOn then
+            HitChams.Run(target)
+        end
     end
 
     self.hitNotifyLastHealth[target] = curHealth
     self.hitNotifyLastArmor[target] = curArmor
+end
+
+local T = HitEffects.Textures
+
+local function getCamera()
+    return workspace.CurrentCamera
+end
+
+local function track(inst, lifetime, onDone)
+    HitEffects.Tracked[inst] = true
+    task.delay(lifetime, function()
+        HitEffects.Tracked[inst] = nil
+        if inst and inst.Parent then inst:Destroy() end
+        if onDone then onDone() end
+    end)
+end
+
+function HitEffects.Cleanup()
+    for inst in pairs(HitEffects.Tracked) do
+        if inst and inst.Parent then inst:Destroy() end
+    end
+    table.clear(HitEffects.Tracked)
+    table.clear(HitEffects.ActivePoses)
+    HitEffects.ActiveParticleCount = 0
+    HitEffects.ActiveBillboardCount = 0
+end
+
+function HitEffects.GetPart(adornee)
+    if typeof(adornee) ~= "Instance" then return nil end
+    if adornee:IsA("BasePart") then
+        return adornee
+    elseif adornee:IsA("Attachment") then
+        return adornee.Parent
+    elseif adornee:IsA("Model") then
+        return adornee.PrimaryPart
+            or adornee:FindFirstChild("HumanoidRootPart")
+            or adornee:FindFirstChildWhichIsA("BasePart")
+    end
+end
+
+function HitEffects.Blend(base, amount)
+    return base:Lerp(Color3.new(1, 1, 1), math.clamp(amount or 0.35, 0, 1))
+end
+
+function HitEffects.Darken(base, amount)
+    return base:Lerp(Color3.new(0, 0, 0), math.clamp(amount or 0.45, 0, 1))
+end
+
+function HitEffects.ShiftHue(base, shift)
+    local h, s, v = base:ToHSV()
+    return Color3.fromHSV((h + shift) % 1, s, v)
+end
+
+function HitEffects.ScaleDuration(seconds)
+    return seconds * HitEffects.AliveScale
+end
+
+function HitEffects.RandFloat(min, max)
+    return min + math.random() * (max - min)
+end
+
+function HitEffects.EachStyle(callback)
+    local styles = HitEffects.Styles
+    if type(styles) ~= "table" then
+        if styles then callback(styles) end
+        return
+    end
+    for key, val in pairs(styles) do
+        local styleName
+        if type(key) == "number" and type(val) == "string" then
+            styleName = val
+        elseif val == true then
+            styleName = key
+        end
+        if styleName then callback(styleName) end
+    end
+end
+
+function HitEffects.SpawnRing(targetPart, color, config)
+    config = config or {}
+    local ring = Instance.new("Part")
+    ring.Name = config.Name or "HitRing"
+    ring.Shape = Enum.PartType.Cylinder
+    ring.Anchored = true
+    ring.CanCollide = false
+    ring.CanQuery = false
+    ring.CanTouch = false
+    ring.Material = config.Material or Enum.Material.Neon
+    ring.Color = color
+    ring.Transparency = config.StartTransparency or 0.35
+    local startSize = config.StartSize or 0.35
+    ring.Size = Vector3.new(0.05, startSize, startSize)
+    ring.CFrame = targetPart.CFrame * CFrame.Angles(0, 0, math.rad(90))
+    ring.Parent = getCamera()
+
+    local endSize = config.EndSize or 5
+    local duration = HitEffects.ScaleDuration(config.Duration or 0.55)
+    TweenService:Create(ring, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = Vector3.new(0.05, endSize, endSize),
+        Transparency = 1,
+    }):Play()
+    track(ring, duration + 0.1)
+    return ring
+end
+
+function HitEffects.SpawnFlash(targetPart, color, brightness, range, duration)
+    duration = HitEffects.ScaleDuration(duration or 0.35)
+    local light = Instance.new("PointLight")
+    light.Name = "HitFlash"
+    light.Color = color
+    light.Brightness = brightness or 6
+    light.Range = range or 14
+    light.Parent = targetPart
+    TweenService:Create(light, TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Brightness = 0,
+        Range = 0,
+    }):Play()
+    track(light, duration + 0.05)
+end
+
+function HitEffects.SpawnEmitter(targetPart, config)
+    if HitEffects.ActiveParticleCount >= HitEffects.MaxParticles then
+        return nil
+    end
+
+    local emitter = Instance.new("ParticleEmitter")
+    emitter.Name = config.Name or "HitEffect"
+    emitter.Texture = config.Texture or T.Dot
+    if typeof(config.Color) == "ColorSequence" then
+        emitter.Color = config.Color
+    else
+        emitter.Color = ColorSequence.new(config.Color or HitEffects.Color)
+    end
+    emitter.LightEmission = config.LightEmission or 1
+    emitter.Brightness = config.Brightness or 3
+    emitter.LightInfluence = config.LightInfluence or 0
+    emitter.Orientation = config.Orientation or Enum.ParticleOrientation.FacingCamera
+    emitter.LockedToPart = config.LockedToPart or false
+    emitter.Size = config.Size or NumberSequence.new(0.12)
+    emitter.Transparency = config.Transparency or NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0),
+        NumberSequenceKeypoint.new(1, 1),
+    })
+    emitter.Speed = config.Speed or NumberRange.new(12, 18)
+    emitter.SpreadAngle = config.SpreadAngle or Vector2.new(120, 120)
+    emitter.EmissionDirection = config.EmissionDirection or Enum.NormalId.Top
+    local lifetime = config.Lifetime or NumberRange.new(0.6, 1.2)
+    local scale = HitEffects.AliveScale
+    emitter.Lifetime = NumberRange.new(lifetime.Min * scale, lifetime.Max * scale)
+    emitter.Drag = config.Drag or 2
+    emitter.Acceleration = config.Acceleration or Vector3.new(0, 4, 0)
+    emitter.RotSpeed = config.RotSpeed or NumberRange.new(0, 0)
+    emitter.Rate = 0
+    emitter.Enabled = true
+    emitter.Parent = targetPart
+    emitter:Emit(config.EmitCount or 48)
+
+    HitEffects.ActiveParticleCount = HitEffects.ActiveParticleCount + 1
+    track(emitter, HitEffects.ScaleDuration(config.Cleanup or 4), function()
+        HitEffects.ActiveParticleCount = math.max(0, HitEffects.ActiveParticleCount - 1)
+    end)
+    return emitter
+end
+
+function HitEffects.PickPos(key)
+    local occupied = HitEffects.ActivePoses[key] or {}
+    local best, bestDist = nil, -1
+
+    for _ = 1, 60 do
+        local candidate = Vector3.new(
+            HitEffects.RandFloat(-10, 10),
+            HitEffects.RandFloat(1, 8),
+            HitEffects.RandFloat(-4, 4)
+        )
+        local minDist = math.huge
+        for _, pos in ipairs(occupied) do
+            local d = (candidate - pos).Magnitude
+            if d < minDist then minDist = d end
+        end
+        if minDist >= HitEffects.MinDist then
+            return candidate
+        end
+        if minDist > bestDist then
+            bestDist = minDist
+            best = candidate
+        end
+    end
+    return best
+end
+
+function HitEffects.Particles(part, color)
+    HitEffects.SpawnEmitter(part, {
+        Name = "TinyGlowingDots",
+        Texture = T.Dot,
+        Color = color,
+        Brightness = 3,
+        EmitCount = 64,
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.09),
+            NumberSequenceKeypoint.new(0.5, 0.135),
+            NumberSequenceKeypoint.new(1, 0.068),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(0.25, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Speed = NumberRange.new(22, 29),
+        SpreadAngle = Vector2.new(130, 130),
+        Lifetime = NumberRange.new(4, 4.1),
+        Drag = 3.2,
+        Acceleration = Vector3.new(0, 5, 0),
+        Cleanup = 5,
+    })
+end
+
+function HitEffects.Fortnite(part, color, damageText)
+    if HitEffects.ActiveBillboardCount >= HitEffects.MaxHitEffects then return end
+
+    local key = part
+    HitEffects.ActivePoses[key] = HitEffects.ActivePoses[key] or {}
+
+    local offset = HitEffects.PickPos(key)
+    local aliveDuration = HitEffects.AliveTime
+    local endOffset = offset + Vector3.new(0, HitEffects.FloatSpeed, 0)
+    table.insert(HitEffects.ActivePoses[key], offset)
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "FortniteDamageNumber"
+    bb.Size = UDim2.new(0, 70, 0, 40)
+    bb.StudsOffset = offset
+    bb.AlwaysOnTop = true
+    bb.LightInfluence = 0
+    bb.Adornee = part
+    bb.Parent = getCamera()
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = tostring(damageText or "")
+    lbl.TextColor3 = color
+    lbl.TextTransparency = 1
+    lbl.TextStrokeColor3 = Color3.new(0, 0, 0)
+    lbl.TextStrokeTransparency = 1
+    lbl.TextScaled = true
+    lbl.Font = Enum.Font.GothamBold
+    lbl.ZIndex = 1
+    lbl.Parent = bb
+
+    HitEffects.ActiveBillboardCount = HitEffects.ActiveBillboardCount + 1
+
+    local fadeOutTime = HitEffects.ScaleDuration(0.5)
+    TweenService:Create(lbl, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        TextTransparency = 0,
+        TextStrokeTransparency = 0.55,
+    }):Play()
+    TweenService:Create(bb, TweenInfo.new(aliveDuration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        StudsOffset = endOffset,
+    }):Play()
+
+    task.delay(aliveDuration, function()
+        if bb and bb.Parent then
+            TweenService:Create(lbl, TweenInfo.new(fadeOutTime, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                TextTransparency = 1,
+                TextStrokeTransparency = 1,
+            }):Play()
+        end
+    end)
+
+    track(bb, aliveDuration + fadeOutTime + 0.02, function()
+        HitEffects.ActiveBillboardCount = math.max(0, HitEffects.ActiveBillboardCount - 1)
+        local poses = HitEffects.ActivePoses[key]
+        if poses then
+            for i, pos in ipairs(poses) do
+                if pos == offset then
+                    table.remove(poses, i)
+                    break
+                end
+            end
+            if #poses == 0 then
+                HitEffects.ActivePoses[key] = nil
+            end
+        end
+    end)
+end
+
+function HitEffects.Shockwave(part, color)
+    HitEffects.SpawnFlash(part, color, 8, 18, 0.4)
+    HitEffects.SpawnRing(part, color, {Name = "ShockwaveRing", StartSize = 0.5, EndSize = 7, Duration = 0.5})
+    HitEffects.SpawnRing(part, HitEffects.Blend(color, 0.3), {Name = "ShockwaveRing2", StartSize = 0.25, EndSize = 5, Duration = 0.35, StartTransparency = 0.55})
+    HitEffects.SpawnEmitter(part, {
+        Name = "ShockwaveBurst",
+        Texture = T.Ray,
+        Color = color,
+        EmitCount = 28,
+        Speed = NumberRange.new(14, 24),
+        SpreadAngle = Vector2.new(180, 180),
+        EmissionDirection = Enum.NormalId.Front,
+        Lifetime = NumberRange.new(0.25, 0.45),
+        Drag = 5,
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.35),
+            NumberSequenceKeypoint.new(1, 0.05),
+        }),
+        Cleanup = 1.5,
+    })
+end
+
+function HitEffects.Lightning(part, color)
+    local bolt = HitEffects.Blend(color, 0.75)
+    HitEffects.SpawnFlash(part, bolt, 12, 22, 0.2)
+    HitEffects.SpawnEmitter(part, {
+        Name = "LightningCore",
+        Texture = T.Electro,
+        Color = bolt,
+        Brightness = 4,
+        EmitCount = 22,
+        Speed = NumberRange.new(32, 48),
+        SpreadAngle = Vector2.new(18, 18),
+        Lifetime = NumberRange.new(0.08, 0.22),
+        Drag = 0.2,
+        Acceleration = Vector3.new(0, -20, 0),
+        Cleanup = 1,
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "LightningArcs",
+        Texture = T.Beam,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, bolt),
+            ColorSequenceKeypoint.new(0.5, color),
+            ColorSequenceKeypoint.new(1, bolt),
+        }),
+        Brightness = 4,
+        EmitCount = 40,
+        Speed = NumberRange.new(20, 38),
+        SpreadAngle = Vector2.new(120, 120),
+        Lifetime = NumberRange.new(0.12, 0.35),
+        Drag = 1,
+        Acceleration = Vector3.new(0, -14, 0),
+        Cleanup = 1.5,
+    })
+end
+
+function HitEffects.Blood(part, color)
+    local blood = HitEffects.Darken(color, 0.25)
+    HitEffects.SpawnEmitter(part, {
+        Name = "BloodSplatter",
+        Texture = T.Ray,
+        Color = blood,
+        LightEmission = 0.2,
+        Brightness = 1.5,
+        EmitCount = 70,
+        Speed = NumberRange.new(12, 28),
+        SpreadAngle = Vector2.new(175, 175),
+        Lifetime = NumberRange.new(0.7, 1.3),
+        Drag = 5,
+        Acceleration = Vector3.new(0, -22, 0),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.22),
+            NumberSequenceKeypoint.new(0.6, 0.14),
+            NumberSequenceKeypoint.new(1, 0.04),
+        }),
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "BloodMist",
+        Texture = T.Dot,
+        Color = HitEffects.Darken(color, 0.5),
+        LightEmission = 0,
+        Brightness = 1.5,
+        EmitCount = 20,
+        Speed = NumberRange.new(4, 10),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.4, 0.8),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.35),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Size = NumberSequence.new(0.5),
+        Cleanup = 2,
+    })
+end
+
+function HitEffects.Fire(part, color)
+    local core = HitEffects.Blend(color, 0.7)
+    HitEffects.SpawnFlash(part, color, 10, 16, 0.45)
+    HitEffects.SpawnEmitter(part, {
+        Name = "FireFlames",
+        Texture = T.Flame,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, core),
+            ColorSequenceKeypoint.new(0.45, color),
+            ColorSequenceKeypoint.new(1, HitEffects.Darken(color, 0.6)),
+        }),
+        EmitCount = 55,
+        Speed = NumberRange.new(8, 18),
+        SpreadAngle = Vector2.new(70, 70),
+        Lifetime = NumberRange.new(0.45, 0.95),
+        Acceleration = Vector3.new(0, 14, 0),
+        Brightness = 3,
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(1, 0.05),
+        }),
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "FireEmbers",
+        Texture = T.Beam,
+        Color = color,
+        EmitCount = 25,
+        Speed = NumberRange.new(14, 26),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.6, 1.1),
+        Drag = 2,
+        Acceleration = Vector3.new(0, 6, 0),
+        Cleanup = 2.5,
+    })
+end
+
+function HitEffects.Ice(part, color)
+    local ice = HitEffects.Blend(color, 0.45)
+    HitEffects.SpawnFlash(part, ice, 6, 12, 0.35)
+    HitEffects.SpawnEmitter(part, {
+        Name = "IceShards",
+        Texture = T.Ray,
+        Color = ice,
+        Brightness = 2,
+        EmitCount = 48,
+        Speed = NumberRange.new(10, 20),
+        SpreadAngle = Vector2.new(110, 110),
+        Lifetime = NumberRange.new(0.9, 1.5),
+        Drag = 1.5,
+        RotSpeed = NumberRange.new(-180, 180),
+        Acceleration = Vector3.new(0, -6, 0),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.28),
+            NumberSequenceKeypoint.new(1, 0.06),
+        }),
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "IceFrost",
+        Texture = T.Dot,
+        Color = HitEffects.Blend(color, 0.85),
+        EmitCount = 24,
+        Speed = NumberRange.new(2, 6),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(1.2, 1.8),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Size = NumberSequence.new(0.4),
+        Cleanup = 2.5,
+    })
+end
+
+function HitEffects.Confetti(part, color)
+    local c2 = HitEffects.ShiftHue(color, 0.33)
+    local c3 = HitEffects.ShiftHue(color, 0.66)
+    HitEffects.SpawnEmitter(part, {
+        Name = "ConfettiHit",
+        Texture = T.Ray,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, color),
+            ColorSequenceKeypoint.new(0.33, c2),
+            ColorSequenceKeypoint.new(0.66, c3),
+            ColorSequenceKeypoint.new(1, color),
+        }),
+        Brightness = 2,
+        EmitCount = 80,
+        Speed = NumberRange.new(14, 30),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(1.4, 2.4),
+        Drag = 2.5,
+        Acceleration = Vector3.new(0, -10, 0),
+        RotSpeed = NumberRange.new(-420, 420),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.22),
+            NumberSequenceKeypoint.new(1, 0.08),
+        }),
+    })
+end
+
+function HitEffects.Ripple(part, color)
+    HitEffects.SpawnRing(part, color, {Name = "RippleHit1", StartSize = 0.3, EndSize = 4.5, Duration = 0.45, StartTransparency = 0.3})
+    task.delay(0.12, function()
+        if part and part.Parent then
+            HitEffects.SpawnRing(part, HitEffects.Blend(color, 0.25), {Name = "RippleHit2", StartSize = 0.2, EndSize = 6.5, Duration = 0.65, StartTransparency = 0.5})
+        end
+    end)
+    HitEffects.SpawnEmitter(part, {
+        Name = "RippleDroplets",
+        Texture = T.Dot,
+        Color = color,
+        EmitCount = 16,
+        Speed = NumberRange.new(6, 12),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.5, 0.9),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.2),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Size = NumberSequence.new(0.12),
+        Cleanup = 2,
+    })
+end
+
+function HitEffects.Sparks(part, color)
+    HitEffects.SpawnFlash(part, color, 9, 12, 0.25)
+    HitEffects.SpawnEmitter(part, {
+        Name = "SparksHit",
+        Texture = T.Beam,
+        Color = color,
+        Brightness = 4,
+        EmitCount = 65,
+        Speed = NumberRange.new(22, 42),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.18, 0.5),
+        Drag = 4,
+        Acceleration = Vector3.new(0, -16, 0),
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "SparksGlow",
+        Texture = T.Dot,
+        Color = HitEffects.Blend(color, 0.4),
+        EmitCount = 12,
+        Speed = NumberRange.new(4, 8),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.35, 0.6),
+        Size = NumberSequence.new(0.25),
+        Cleanup = 1.5,
+    })
+end
+
+function HitEffects.Neon(part, color)
+    HitEffects.SpawnFlash(part, color, 14, 20, 0.5)
+    HitEffects.SpawnRing(part, color, {Name = "NeonPulseRing", StartSize = 0.15, EndSize = 4, Duration = 0.35, StartTransparency = 0.15})
+    HitEffects.SpawnEmitter(part, {
+        Name = "NeonPulseCore",
+        Texture = T.Dot,
+        Color = color,
+        Brightness = 4,
+        EmitCount = 50,
+        Speed = NumberRange.new(4, 10),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.5, 0.9),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.6),
+            NumberSequenceKeypoint.new(0.5, 0.35),
+            NumberSequenceKeypoint.new(1, 0),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+    })
+end
+
+function HitEffects.Void(part, color)
+    HitEffects.SpawnEmitter(part, {
+        Name = "VoidRiftCore",
+        Texture = T.Ray,
+        Color = HitEffects.Darken(color, 0.6),
+        LightEmission = 0.2,
+        Brightness = 1.5,
+        EmitCount = 35,
+        Speed = NumberRange.new(2, 8),
+        SpreadAngle = Vector2.new(180, 180),
+        EmissionDirection = Enum.NormalId.Bottom,
+        Lifetime = NumberRange.new(0.8, 1.4),
+        Drag = 3,
+        Acceleration = Vector3.new(0, -14, 0),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.5),
+            NumberSequenceKeypoint.new(1, 0.1),
+        }),
+    })
+    HitEffects.SpawnEmitter(part, {
+        Name = "VoidRiftEdge",
+        Texture = T.Electro,
+        Color = color,
+        Brightness = 3.5,
+        EmitCount = 45,
+        Speed = NumberRange.new(10, 22),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.4, 0.85),
+        RotSpeed = NumberRange.new(-300, 300),
+        Cleanup = 2,
+    })
+end
+
+function HitEffects.Plasma(part, color)
+    local second = HitEffects.Blend(HitEffects.ShiftHue(color, 0.12), 0.2)
+    HitEffects.SpawnFlash(part, color, 12, 18, 0.35)
+    HitEffects.SpawnEmitter(part, {
+        Name = "PlasmaCore",
+        Texture = T.Electro,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, color),
+            ColorSequenceKeypoint.new(0.5, second),
+            ColorSequenceKeypoint.new(1, color),
+        }),
+        Brightness = 4,
+        EmitCount = 55,
+        Speed = NumberRange.new(6, 16),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(0.35, 0.7),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.55),
+            NumberSequenceKeypoint.new(1, 0.08),
+        }),
+    })
+    HitEffects.SpawnRing(part, second, {Name = "PlasmaRing", StartSize = 0.4, EndSize = 5.5, Duration = 0.4, StartTransparency = 0.25})
+end
+
+function HitEffects.Glitch(part, color)
+    local alt = HitEffects.Blend(color, 0.5)
+    for i = 1, 6 do
+        HitEffects.SpawnEmitter(part, {
+            Name = "GlitchShard" .. i,
+            Texture = T.Ray,
+            Color = (i % 2 == 0) and color or alt,
+            Brightness = 3,
+            EmitCount = 8,
+            Speed = NumberRange.new(18, 32),
+            SpreadAngle = Vector2.new(40, 40),
+            EmissionDirection = Enum.NormalId.Top,
+            Lifetime = NumberRange.new(0.1, 0.25),
+            Drag = 0,
+            RotSpeed = NumberRange.new(-500, 500),
+            Size = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.35),
+                NumberSequenceKeypoint.new(1, 0.1),
+            }),
+            Transparency = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, math.random() * 0.4),
+                NumberSequenceKeypoint.new(1, 1),
+            }),
+            Cleanup = 0.8,
+        })
+    end
+    HitEffects.SpawnFlash(part, alt, 8, 10, 0.15)
+end
+
+function HitEffects.Cosmic(part, color)
+    HitEffects.SpawnFlash(part, HitEffects.Blend(color, 0.25), 5, 16, 0.6)
+    HitEffects.SpawnEmitter(part, {
+        Name = "CosmicDust",
+        Texture = T.Dot,
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, HitEffects.Blend(color, 0.8)),
+            ColorSequenceKeypoint.new(0.4, color),
+            ColorSequenceKeypoint.new(1, HitEffects.Darken(color, 0.3)),
+        }),
+        Brightness = 3,
+        EmitCount = 60,
+        Speed = NumberRange.new(3, 14),
+        SpreadAngle = Vector2.new(180, 180),
+        Lifetime = NumberRange.new(1.2, 2),
+        Drag = 0.5,
+        Acceleration = Vector3.new(0, 2, 0),
+        RotSpeed = NumberRange.new(-80, 80),
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.08),
+            NumberSequenceKeypoint.new(0.5, 0.18),
+            NumberSequenceKeypoint.new(1, 0.04),
+        }),
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.1),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+    })
+    HitEffects.SpawnRing(part, HitEffects.Blend(color, 0.15), {Name = "CosmicRing", StartSize = 0.2, EndSize = 3.5, Duration = 0.8, StartTransparency = 0.65, Material = Enum.Material.Glass})
+end
+
+HitEffects.Handlers = {
+    Particles = HitEffects.Particles,
+    Fortnite = HitEffects.Fortnite,
+    Shockwave = HitEffects.Shockwave,
+    Lightning = HitEffects.Lightning,
+    Blood = HitEffects.Blood,
+    Fire = HitEffects.Fire,
+    Ice = HitEffects.Ice,
+    Confetti = HitEffects.Confetti,
+    Ripple = HitEffects.Ripple,
+    Sparks = HitEffects.Sparks,
+    Neon = HitEffects.Neon,
+    Void = HitEffects.Void,
+    Plasma = HitEffects.Plasma,
+    Glitch = HitEffects.Glitch,
+    ["Cosmic Shit"] = HitEffects.Cosmic,
+}
+
+function HitEffects.Run(adornee, damageText)
+    if not HitEffects.Enabled then return end
+    local part = HitEffects.GetPart(adornee)
+    if not part or not part.Parent then return end
+
+    local color = HitEffects.Color
+    HitEffects.EachStyle(function(style)
+        local handler = HitEffects.Handlers[style]
+        if handler then
+            local ok, err = pcall(handler, part, color, damageText)
+            if not ok then warn("[HitEffects] " .. tostring(style) .. ": " .. tostring(err)) end
+        end
+    end)
+end
+
+if _48 and _48.OnUnload then
+    _48:OnUnload(HitEffects.Cleanup)
+end
+
+local _HC_outlineTemplate = Instance.new("SelectionBox")
+_HC_outlineTemplate.LineThickness = 0.01
+_HC_outlineTemplate.Color3 = HitChams.Color or Color3.fromRGB(142, 242, 255)
+_HC_outlineTemplate.Transparency = HitChams.Transparency or 0.8
+_HC_outlineTemplate.Name = "\0"
+_HC_outlineTemplate.Adornee = nil
+HitChams.OutlineTemplate = _HC_outlineTemplate
+
+function HitChams.GetMaterial()
+    if HitChams.Type == "neon" then
+        return Enum.Material.Neon
+    else
+        return Enum.Material.ForceField
+    end
+end
+
+function HitChams.DestroyNone(model)
+    if model then model:Destroy() end
+end
+
+function HitChams.DestroyFade(model)
+    if not model then return end
+    local children = model:GetChildren()
+    local elapsed = 0
+    local startTrans = HitChams.Transparency
+
+    local step
+    step = RunService.Heartbeat:Connect(function(dt)
+        if not model or not model.Parent then
+            step:Disconnect()
+            return
+        end
+        elapsed = elapsed + dt
+        local alpha = math.clamp(elapsed / 0.25, 0, 1)
+        local eased = TweenService:GetValue(alpha, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local transparency = startTrans + (1 - startTrans) * eased
+        for i = 1, #children do
+            local child = children[i]
+            if child and child.Parent then
+                local ct = child.Transparency
+                if ct ~= transparency and ct ~= 1 then
+                    child.Transparency = transparency
+                end
+            end
+        end
+    end)
+
+    task.delay(0.25, function()
+        if step then step:Disconnect() end
+        if model and model.Parent then model:Destroy() end
+    end)
+end
+
+function HitChams.DestroyNewFade(model)
+    if not model then return end
+    local children = model:GetChildren()
+    local elapsed = 0
+    local startTrans = HitChams.Transparency
+    local oldSizes = {}
+    local head = nil
+
+    for i = 1, #children do
+        local child = children[i]
+        if child.ClassName == "MeshPart" then
+            oldSizes[child] = child.Size
+        end
+        if child.Name == "Head" then
+            head = child
+        end
+    end
+
+    if not head then return end
+
+    local sizeAdd = Vector3.new(1, 1, 1)
+
+    local step
+    step = RunService.Heartbeat:Connect(function(dt)
+        if not model or not model.Parent then
+            step:Disconnect()
+            return
+        end
+        elapsed = elapsed + dt
+        local alpha = math.clamp(elapsed / 0.15, 0, 1)
+        local eased = TweenService:GetValue(alpha, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local transparency = startTrans + (1 - startTrans) * eased
+        for i = 1, #children do
+            local child = children[i]
+            if child and child.Parent and child.Transparency ~= 1 then
+                child.Transparency = transparency
+                local oldSize = oldSizes[child]
+                if oldSize then
+                    child.Size = oldSize + sizeAdd * transparency
+                end
+            end
+        end
+    end)
+
+    task.delay(0.25, function()
+        if step then step:Disconnect() end
+        if model and model.Parent then model:Destroy() end
+    end)
+end
+
+function HitChams.DestroyByAnimation(model)
+    local anim = HitChams.Animation
+    if anim == "new fade" then
+        HitChams.DestroyNewFade(model)
+    elseif anim == "fade" then
+        HitChams.DestroyFade(model)
+    else
+        HitChams.DestroyNone(model)
+    end
+end
+
+function HitChams.BuildModel(player)
+    local character = player.Character
+    if not character then return end
+
+    character.Archivable = true
+    local newModel = character:Clone()
+    character.Archivable = false
+    newModel.Name = "\0"
+
+    local material = HitChams.GetMaterial()
+    local children = newModel:GetChildren()
+
+    for i = 1, #children do
+        local part = children[i]
+        if part.ClassName == "MeshPart" then
+            part.Material = material
+            part.Color = HitChams.Color
+            part.Transparency = HitChams.Transparency
+            part.TextureID = ""
+            part.CanCollide = false
+            part.Anchored = true
+
+            if part.Name == "Head" then
+                local face = part:FindFirstChildOfClass("Decal")
+                if face then face:Destroy() end
+            end
+        elseif part.ClassName == "Accessory" then
+            local hat = part:FindFirstChildOfClass("MeshPart")
+            if hat then
+                hat.Material = material
+                hat.Color = HitChams.Color
+                hat.Transparency = HitChams.Transparency
+                hat.TextureID = ""
+                hat.CanCollide = false
+                hat.Anchored = true
+                hat.Parent = newModel
+                part:Destroy()
+            end
+        else
+            part:Destroy()
+        end
+    end
+
+    return newModel
+end
+
+function HitChams.BuildOutlineModel(player)
+    local character = player.Character
+    if not character then return end
+
+    character.Archivable = true
+    local newModel = character:Clone()
+    character.Archivable = false
+    newModel.Name = "\0"
+
+    local children = newModel:GetChildren()
+
+    for i = 1, #children do
+        local part = children[i]
+        local isHead = part.Name == "Head"
+        if isHead or part.ClassName == "MeshPart" then
+            local partName = part.Name
+            part.Transparency = 1
+            part.CanCollide = false
+            part.Anchored = true
+            local outline = HitChams.OutlineTemplate:Clone()
+            outline.Name = partName
+            part.Name = "\0"
+            outline.Parent = newModel
+            outline.Adornee = part
+
+            if isHead then
+                local face = part:FindFirstChild("face")
+                if face then face:Destroy() end
+            end
+        else
+            part:Destroy()
+        end
+    end
+
+    return newModel
+end
+
+function HitChams.Run(player)
+    if not HitChams.Enabled then return end
+    if not player or not player.Character then return end
+
+    if HitChams.LastModel and HitChams.OnlyLastHit then
+        HitChams.LastModel:Destroy()
+    end
+    HitChams.LastModel = nil
+
+    local newModel
+    if HitChams.Type == "outline" then
+        newModel = HitChams.BuildOutlineModel(player)
+    else
+        newModel = HitChams.BuildModel(player)
+    end
+
+    if not newModel then return end
+
+    HitChams.LastModel = newModel
+    newModel.Parent = workspace
+    task.delay(HitChams.Lifetime, HitChams.DestroyByAnimation, newModel)
+end
+
+function HitChams.Cleanup()
+    if HitChams.LastModel then
+        HitChams.LastModel:Destroy()
+        HitChams.LastModel = nil
+    end
 end
 
 local function _isMode(mode)
@@ -7249,27 +8871,16 @@ ReloadingActive = false
 ReloadHoldUntil = 0
 RELOAD_HOLD_TIME = 1.2
 
-VOID_THRESHOLD = 20000
+VOID_THRESHOLD = 1000000
 
-VoidCycle = 0
+VoidBasePos = nil
 VoidCycleTime = 0
 
-VoidCycleInterval = 0.08
-VoidDistance = 500000
-VoidJitterStrength = 25
-VoidJitterRate = 40
-VoidRandomCornerChance = 0.4
-
-VoidCorners = {
-    Vector3.new( VoidDistance,  VoidDistance,  VoidDistance),
-    Vector3.new(-VoidDistance,  VoidDistance,  VoidDistance),
-    Vector3.new( VoidDistance, -VoidDistance,  VoidDistance),
-    Vector3.new( VoidDistance,  VoidDistance, -VoidDistance),
-    Vector3.new(-VoidDistance, -VoidDistance,  VoidDistance),
-    Vector3.new(-VoidDistance,  VoidDistance, -VoidDistance),
-    Vector3.new( VoidDistance, -VoidDistance, -VoidDistance),
-    Vector3.new(-VoidDistance, -VoidDistance, -VoidDistance),
-}
+VoidCycleInterval = 0.05
+VoidDistance = 50000000
+VoidJitterStrength = 4
+VoidJitterRate = 60
+VoidRandomCornerChance = 0.1
 
 IdleKOEnabled = false
 IdleReloadEnabled = false
@@ -7299,6 +8910,90 @@ PositionResolverSources = {
     "LeftHand",
     "RightHand",
 }
+
+ResolverEnabled   = false
+ResolverSmoothing = 0.4
+ResolverMaxSpeed  = 200
+ResolverStates    = {}
+
+function ResolverUpdate(target, pos)
+    if not ResolverEnabled or not target then return pos end
+    local now = tick()
+    local st = ResolverStates[target]
+    if not st then
+        ResolverStates[target] = { lastPos = pos, lastTime = now, velocity = Vector3.new() }
+        return pos
+    end
+    local dt = now - st.lastTime
+    if dt > 0.001 and dt < 0.5 then
+        local instVel = (pos - st.lastPos) / dt
+        if instVel.Magnitude > ResolverMaxSpeed then
+            instVel = instVel.Unit * ResolverMaxSpeed
+        end
+        st.velocity = st.velocity:Lerp(instVel, ResolverSmoothing)
+    end
+    st.lastPos  = pos
+    st.lastTime = now
+    return pos
+end
+
+function ResolverGetVelocity(target)
+    local st = ResolverStates[target]
+    return st and st.velocity or Vector3.new()
+end
+
+function ResolverClear(target)
+    if target then ResolverStates[target] = nil else ResolverStates = {} end
+end
+
+AntiAimEnabled        = false
+AntiAimMode           = "spin"
+AntiAimYaw            = 0
+AntiAimPitch          = 0
+AntiAimSpeed          = 12
+AntiAimJitterMin      = -80
+AntiAimJitterMax      = 80
+AntiAimJitterInterval = 0.06
+AntiAimLastJitter     = 0
+AntiAimStaticYaw      = 180
+
+function AntiAimComputeAngle(dt)
+    local now = tick()
+    if AntiAimMode == "spin" then
+        AntiAimYaw = AntiAimYaw + AntiAimSpeed * dt
+        if AntiAimYaw > math.pi * 2 then AntiAimYaw = AntiAimYaw - math.pi * 2 end
+        return AntiAimYaw, math.rad(AntiAimPitch)
+    elseif AntiAimMode == "jitter" then
+        if now - AntiAimLastJitter >= AntiAimJitterInterval then
+            AntiAimLastJitter = now
+            local r = math.random()
+            AntiAimYaw = math.rad(AntiAimJitterMin + r * (AntiAimJitterMax - AntiAimJitterMin))
+        end
+        return AntiAimYaw, math.rad(AntiAimPitch)
+    elseif AntiAimMode == "static" then
+        return math.rad(AntiAimStaticYaw), math.rad(AntiAimPitch)
+    end
+    return 0, 0
+end
+
+function AntiAimApply(baseCF, dt)
+    if not AntiAimEnabled or not baseCF then return baseCF end
+    local yaw, pitch = AntiAimComputeAngle(dt or 0.05)
+    return baseCF * CFrame.Angles(pitch, yaw, 0)
+end
+
+OrbitRadiusJitter = 1.5
+OrbitHeightJitter = 1.0
+
+function ComputeJitteredOrbit(anchorPos, now)
+    local phase  = math.noise(now * 0.3, 0) * math.pi * 2
+    local radius = OrbitRadius + math.noise(now * 0.7, 0) * OrbitRadiusJitter
+    local height = OrbitHeight + math.noise(0, now * 0.9) * OrbitHeightJitter
+    local x = math.cos(OrbitAngle + phase) * radius
+    local z = math.sin(OrbitAngle + phase) * radius
+    local y = height
+    return anchorPos + Vector3.new(x, y, z)
+end
 
 function UpdateReloadingState()
     if _G.IsReloading then
@@ -7508,16 +9203,25 @@ function UpdatePrediction(target, resolvedPos)
         predictionLastTime = 0
         return resolvedPos
     end
-    local now = tick()
-    if predictionLastPos and predictionLastTime > 0 then
-        local dt = now - predictionLastTime
-        if dt > 0.001 and dt < 0.5 then
-            local newVel = (resolvedPos - predictionLastPos) / dt
-            predictionVelocity = predictionVelocity:Lerp(newVel, 0.35)
+
+    if ResolverEnabled and target then
+        local rvel = ResolverGetVelocity(target)
+        if rvel.Magnitude > 0.01 then
+            predictionVelocity = rvel
         end
+    else
+        local now2 = tick()
+        if predictionLastPos and predictionLastTime > 0 then
+            local dt = now2 - predictionLastTime
+            if dt > 0.001 and dt < 0.5 then
+                local newVel = (resolvedPos - predictionLastPos) / dt
+                predictionVelocity = predictionVelocity:Lerp(newVel, 0.35)
+            end
+        end
+        predictionLastPos  = resolvedPos
+        predictionLastTime = now2
     end
-    predictionLastPos = resolvedPos
-    predictionLastTime = now
+
     local ahead = predictionVelocity * PredictionMultiplier
     if PingPredictionEnabled then
         ahead = ahead * (1 + GetPingSeconds())
@@ -7573,6 +9277,9 @@ function ResolveTargetPosition(target)
     lastValidTargetCFrame = bestCF
     lastValidTargetPos = bestCF.Position
     lastValidTargetPosTime = tick()
+
+    ResolverUpdate(target, bestCF.Position)
+
     return bestCF, bestCF.Position
 end
 
@@ -7599,6 +9306,18 @@ function GetOrbitAnchorCFrame(target)
     return cf, predicted
 end
 
+function PickVoidBase()
+    local side = math.random(0, 7)
+    local function axis(bit)
+        return (bit == 1) and VoidDistance or -VoidDistance
+    end
+    return Vector3.new(
+        axis(math.floor(side / 4) % 2),
+        axis(math.floor(side / 2) % 2),
+        axis(side % 2)
+    )
+end
+
 function EnterVoid()
     local hrp = GetSelfHRP()
     if not hrp then return end
@@ -7607,28 +9326,31 @@ function EnterVoid()
     hrp.Anchored = true
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
     local now = tick()
-    if now - VoidCycleTime > VoidCycleInterval then
+    if not VoidBasePos or (now - VoidCycleTime) > VoidCycleInterval then
         if math.random() < VoidRandomCornerChance then
-            VoidCycle = math.random(1, #VoidCorners)
-            VoidCorners[#VoidCorners] = Vector3.new(
+            VoidBasePos = Vector3.new(
                 (math.random() * 2 - 1) * VoidDistance,
                 (math.random() * 2 - 1) * VoidDistance,
                 (math.random() * 2 - 1) * VoidDistance
             )
         else
-            VoidCycle = (VoidCycle % #VoidCorners) + 1
+            VoidBasePos = PickVoidBase()
         end
         VoidCycleTime = now
     end
-    local base = VoidCorners[VoidCycle] or Vector3.new(VoidDistance, VoidDistance, VoidDistance)
+
     local t = now * VoidJitterRate
     local jitter = Vector3.new(
-        math.sin(t)       * VoidJitterStrength,
-        math.cos(t * 1.3) * VoidJitterStrength,
-        math.sin(t * 0.7) * VoidJitterStrength
+        math.sin(t)       * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength,
+        math.cos(t * 1.3) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength,
+        math.sin(t * 0.7) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength
     )
-    hrp.CFrame = CFrame.new(base + jitter)
+
+    hrp.CFrame = CFrame.new(VoidBasePos + jitter)
+    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
 function ReturnToRealWorld()
@@ -7719,11 +9441,7 @@ function OrbitAroundTarget(target)
 
     if behavior == 'Orbit' then
         OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
-        targetPos = anchorPos + Vector3.new(
-            math.cos(OrbitAngle) * OrbitRadius,
-            OrbitHeight + math.sin(OrbitAngle * 0.5) * 0.5,
-            math.sin(OrbitAngle) * OrbitRadius
-        )
+        targetPos = ComputeJitteredOrbit(anchorPos, now)
     elseif behavior == 'Above' then
         targetPos = anchorPos + Vector3.new(0, OrbitHeight + 5, 0)
     elseif behavior == 'Hide' then
@@ -7742,6 +9460,7 @@ function OrbitAroundTarget(target)
     end
 
     local baseCF = CFrame.new(targetPos, lookAt)
+    baseCF = AntiAimApply(baseCF, 0.05)
 
     if behavior == 'Random' then
         if now - lastSnapTime >= SNAP_INTERVAL then
@@ -7753,7 +9472,8 @@ function OrbitAroundTarget(target)
                     OrbitHeight * (0.5 + math.random()),
                     (math.random() - 0.5) * 2
                 )
-                hrp.CFrame = snapCF + snapOffset
+                local snapFinal = AntiAimApply(snapCF + snapOffset, 0.05)
+                hrp.CFrame = snapFinal
                 hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 return
@@ -7771,6 +9491,7 @@ function EnterHide()
     if not hrp then return end
     ForceReturnPoint()
     IdleState = "hiding"
+    VoidBasePos = nil
     EnterVoid()
 end
 
@@ -7792,6 +9513,7 @@ function ExitIdle(restore)
     end
     IdleState = "none"
     LastIdleExitTime = tick()
+    VoidBasePos = nil
 end
 
 function IdleKOStep()
@@ -7827,6 +9549,8 @@ function HandleTargetLost()
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
     resolvedPredictedPos = nil
+
+    if ResolverStates then ResolverClear() end
 end
 
 function IdleLoop()
@@ -8006,6 +9730,7 @@ function StartOrbit()
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
     resolvedPredictedPos = nil
+    VoidBasePos = nil
     ClearReturnPoint()
     LastIdleExitTime = 0
     UpdateSelfAnchor()
@@ -8040,6 +9765,9 @@ function StopOrbit()
     resolvedPredictedPos = nil
     ReloadingActive = false
     ReloadHoldUntil = 0
+    VoidBasePos = nil
+
+    if ResolverStates then ResolverClear() end
 end
 
 Options.OBS:OnChanged(function(value)
@@ -8067,10 +9795,20 @@ Options.OrbitRadius:OnChanged(function(value)
     orbitRandomOffset = nil
 end)
 
+Options.OrbitRadiusJitter:OnChanged(function(value)
+    OrbitRadiusJitter = value
+    orbitRandomOffset = nil
+end)
+
 Options.OrbitSpeed:OnChanged(function(value) OrbitSpeed = value end)
 
 Options.OrbitHeight:OnChanged(function(value)
     OrbitHeight = value
+    orbitRandomOffset = nil
+end)
+
+Options.OrbitHeightJitter:OnChanged(function(value)
+    OrbitHeightJitter = value
     orbitRandomOffset = nil
 end)
 
@@ -8125,10 +9863,46 @@ Toggles.IdleOnReload:OnChanged(function(value)
     end
 end)
 
+if Toggles.Resolver then
+    Toggles.Resolver:OnChanged(function(v)
+        ResolverEnabled = v
+        if not v then ResolverClear() end
+    end)
+end
+
+if Options.ResolverSmoothing then
+    Options.ResolverSmoothing:OnChanged(function(v) ResolverSmoothing = v end)
+end
+
+if Toggles.AntiAim then
+    Toggles.AntiAim:OnChanged(function(v) AntiAimEnabled = v end)
+end
+
+if Options.AntiAimMode then
+    Options.AntiAimMode:OnChanged(function(v) AntiAimMode = v end)
+end
+
+if Options.AntiAimSpeed then
+    Options.AntiAimSpeed:OnChanged(function(v) AntiAimSpeed = v end)
+end
+
+if Options.AntiAimJitterInterval then
+    Options.AntiAimJitterInterval:OnChanged(function(v) AntiAimJitterInterval = v end)
+end
+
+if Options.AntiAimPitch then
+    Options.AntiAimPitch:OnChanged(function(v) AntiAimPitch = v end)
+end
+
+if Options.AntiAimStaticYaw then
+    Options.AntiAimStaticYaw:OnChanged(function(v) AntiAimStaticYaw = v end)
+end
+
 _51.PlayerRemoving:Connect(function(player)
     if OrbitTarget == player or _104.targetplayer == player then
         HandleTargetLost()
     end
+    ResolverClear(player)
 end)
 
 _56.CharacterAdded:Connect(function()
@@ -8153,11 +9927,13 @@ _56.CharacterAdded:Connect(function()
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
     resolvedPredictedPos = nil
+    VoidBasePos = nil
     ClearReturnPoint()
     LastRealSelfCFrame = nil
     LastIdleExitTime = 0
     ReloadingActive = false
     ReloadHoldUntil = 0
+    if ResolverStates then ResolverClear() end
     if OrbitEnabled then StartOrbit() end
 end)
 
@@ -9608,6 +11384,7 @@ end
 
 skeletonLines = {}
 skeletonConnections = {}
+
 bones = {
     {"Head", "UpperTorso"},
     {"UpperTorso", "LowerTorso"},
@@ -9626,7 +11403,7 @@ bones = {
 }
 
 partNames = {
-    "Head", "UpperTorso", "LowerTorso", 
+    "Head", "UpperTorso", "LowerTorso",
     "LeftUpperArm", "LeftLowerArm", "LeftHand",
     "RightUpperArm", "RightLowerArm", "RightHand",
     "LeftUpperLeg", "LeftLowerLeg", "LeftFoot",
@@ -9663,23 +11440,62 @@ function createSkeletonLine(color)
     return line
 end
 
-function updateSkeleton(player)
+function hideSkeleton(player)
     local lines = skeletonLines[player]
+    if not lines then return end
+    for _, line in ipairs(lines) do
+        line.Visible = false
+    end
+end
 
+function cleanupSkeleton(player)
+    local lines = skeletonLines[player]
+    if not lines then return end
+    skeletonLines[player] = nil
+    for _, line in ipairs(lines) do
+        pcall(function() line:Remove() end)
+    end
+end
+
+function cleanupAllSkeletons()
+    for player in pairs(skeletonLines) do
+        cleanupSkeleton(player)
+    end
+    skeletonLines = {}
+
+    for player, conn in pairs(skeletonConnections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    skeletonConnections = {}
+
+    if skeletonRenderConnection then
+        pcall(function() skeletonRenderConnection:Disconnect() end)
+        skeletonRenderConnection = nil
+    end
+
+    if skeletonPlayerRemovingConnection then
+        pcall(function() skeletonPlayerRemovingConnection:Disconnect() end)
+        skeletonPlayerRemovingConnection = nil
+    end
+end
+
+function updateSkeleton(player)
     if not Toggles.ESPShowSkeleton.Value then
-        if lines then
-            for _, line in ipairs(lines) do
-                line.Visible = false
-            end
-        end
+        hideSkeleton(player)
         return
     end
 
     local character = player.Character
-    if not character then return end
+    if not character then
+        hideSkeleton(player)
+        return
+    end
 
     local joints = getJoints(character)
-    if not next(joints) then return end
+    if not next(joints) then
+        hideSkeleton(player)
+        return
+    end
 
     local camera = workspace.CurrentCamera
     if not camera then return end
@@ -9690,17 +11506,14 @@ function updateSkeleton(player)
     if rootPart then
         local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
         if not onScreen or not isOnScreen(rootPos) then
-            if lines then
-                for _, line in ipairs(lines) do
-                    line.Visible = false
-                end
-            end
+            hideSkeleton(player)
             return
         end
     end
 
     local color = Options.SkeletonColor.Value
 
+    local lines = skeletonLines[player]
     if not lines then
         lines = {}
         for i = 1, #bones do
@@ -9721,8 +11534,8 @@ function updateSkeleton(player)
             if (onScreen1 or onScreen2) and (isOnScreen(pos1) or isOnScreen(pos2)) then
                 line.From = Vector2.new(pos1.X, pos1.Y)
                 line.To = Vector2.new(pos2.X, pos2.Y)
-                line.Visible = true
                 line.Color = color
+                line.Visible = true
             else
                 line.Visible = false
             end
@@ -9732,56 +11545,16 @@ function updateSkeleton(player)
     end
 end
 
-function cleanupSkeleton(player)
-    local lines = skeletonLines[player]
-    if lines then
-        for _, line in ipairs(lines) do
-            line:Remove()
-        end
-        skeletonLines[player] = nil
-    end
-end
-
-function cleanupAllSkeletons()
-    for player, lines in pairs(skeletonLines) do
-        for _, line in ipairs(lines) do
-            line:Remove()
-        end
-    end
-    skeletonLines = {}
-
-    for player, conn in pairs(skeletonConnections) do
-        if conn then
-            conn:Disconnect()
-        end
-    end
-    skeletonConnections = {}
-
-    if skeletonRenderConnection then
-        skeletonRenderConnection:Disconnect()
-        skeletonRenderConnection = nil
-    end
-
-    if skeletonPlayerRemovingConnection then
-        skeletonPlayerRemovingConnection:Disconnect()
-        skeletonPlayerRemovingConnection = nil
-    end
-end
-
 Toggles.ESPShowSkeleton:OnChanged(function(value)
-    if not value then
-        for _, lines in pairs(skeletonLines) do
-            for _, line in ipairs(lines) do
-                line.Visible = false
-            end
-        end
-    end
+    if value then return end
+    cleanupAllSkeletons()
 end)
 
 Options.SkeletonColor:OnChanged(function()
+    local color = Options.SkeletonColor.Value
     for _, lines in pairs(skeletonLines) do
         for _, line in ipairs(lines) do
-            line.Color = Options.SkeletonColor.Value
+            line.Color = color
         end
     end
 end)
@@ -9792,24 +11565,15 @@ skeletonRenderConnection = _52.RenderStepped:Connect(function()
     local camera = workspace.CurrentCamera
     if not camera then return end
 
+    screenSize = camera.ViewportSize
+
     for _, player in ipairs(_51:GetPlayers()) do
         if player ~= _56 then
             local character = player.Character
-            if character then
-                local rootPart = character:FindFirstChild("HumanoidRootPart")
-                if rootPart then
-                    local rootPos, onScreen = camera:WorldToViewportPoint(rootPart.Position)
-                    if onScreen and isOnScreen(rootPos) then
-                        updateSkeleton(player)
-                    else
-                        local lines = skeletonLines[player]
-                        if lines then
-                            for _, line in ipairs(lines) do
-                                line.Visible = false
-                            end
-                        end
-                    end
-                end
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                updateSkeleton(player)
+            else
+                hideSkeleton(player)
             end
         end
     end
@@ -10483,7 +12247,9 @@ if not espToggleOn("ESPEnabled") then
 end
 
 _52.Heartbeat:Connect(function()
-    _104:CheckHitNotifications()
+    if _104 and _104.CheckHitNotifications then
+        _104:CheckHitNotifications()
+    end
 end)
 
 _48:OnUnload(function()
@@ -10499,7 +12265,6 @@ _48:OnUnload(function()
     pcall(cleanupCircleVisuals)
     pcall(cleanupAllSkeletons)
 
-    -- Ragebot / Orbit cleanup
     if StopOrbit then pcall(StopOrbit) end
     OrbitEnabled = false
     OrbitConnection = nil
@@ -10668,6 +12433,34 @@ _48:OnUnload(function()
     if DefenseCircleConnection then DefenseCircleConnection:Disconnect() DefenseCircleConnection = nil end
     if DefenseCircleVisualConnection then DefenseCircleVisualConnection:Disconnect() DefenseCircleVisualConnection = nil end
 
+    if ChinaHat then ChinaHat:setEnabled(false) end
+    if ChinaHat and ChinaHat.setSelfEnabled then ChinaHat:setSelfEnabled(false) end
+
+    if HitEffects then
+        if HitEffects.ActivePoses then
+            for _, positions in pairs(HitEffects.ActivePoses) do
+                table.clear(positions)
+            end
+            table.clear(HitEffects.ActivePoses)
+        end
+        HitEffects.ActiveParticleCount = 0
+        HitEffects.Enabled = false
+
+        local camera = workspace.CurrentCamera
+        if camera then
+            for _, child in ipairs(camera:GetChildren()) do
+                if child:IsA("BillboardGui") and child.Name == "FortniteDamageNumber" then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+            for _, child in ipairs(camera:GetChildren()) do
+                if child:IsA("Part") and (child.Name == "HitRing" or child.Name:find("Ring") or child.Name:find("Ripple")) then
+                    pcall(function() child:Destroy() end)
+                end
+            end
+        end
+    end
+
     table.clear(_G.b8n4v6d2)
     table.clear(_G.j2h5g8f1)
     table.clear(_G.lastNotifyTime)
@@ -10770,6 +12563,7 @@ task.spawn(function()
     end
 end)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
+
 _AA_cache = nil
 _AA_busy = false
 _AA_connections = {}
@@ -10872,7 +12666,7 @@ do
         return true
     end
 
-    local function _AA_parsePrice(item)
+    function _AA_parsePrice(item)
         local pr = item:FindFirstChild("Price")
         if pr and pr:IsA("ValueBase") then return pr.Value end
         local iv = item:FindFirstChild("IntValue")
@@ -10882,7 +12676,7 @@ do
         return 0
     end
 
-    local function _AA_scanBest()
+    function _AA_scanBest()
         local shop = _AA_shop()
         if shop then
             local ba, bs = nil, -math.huge
