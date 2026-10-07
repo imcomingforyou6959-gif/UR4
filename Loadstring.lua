@@ -140,7 +140,7 @@ local function forceReset()
     end
 end
 
-local function checkHealth()
+function checkHealth()
     if not _ForceRestEnabled then return end
     local character = _FRPlayer.Character
     if not character then return end
@@ -11040,11 +11040,11 @@ Options.BlacklistPlayers:OnChanged(function()
     end
 end)
 
-local function _cleanupPlayerFromDropdowns(plr)
-    local function removeFromSelected(toggleName, dropdownName)
-        local map = Options[dropdownName] and Options[dropdownName].Value
+function _cleanupPlayerFromDropdowns(plr)
+    function removeFromSelected(toggleName, dropdownName)
+        map = Options[dropdownName] and Options[dropdownName].Value
         if type(map) == "table" then
-            local formatted = string.format("%s (%s)", plr.DisplayName, plr.Name)
+            formatted = string.format("%s (%s)", plr.DisplayName, plr.Name)
             if map[plr.Name] then map[plr.Name] = nil end
             if map[plr.DisplayName] then map[plr.DisplayName] = nil end
             if map[formatted] then map[formatted] = nil end
