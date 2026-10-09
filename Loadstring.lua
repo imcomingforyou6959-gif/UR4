@@ -104,21 +104,33 @@ if (identifyexecutor() == "AWP" or identifyexecutor() == "Nihon") then
     cleardrawcache()
 end
 
+isnetworkowner = isnetworkowner or (function()
+    local executor_name = identifyexecutor and select(1, identifyexecutor())
+    local KNOWN = { AWP = true, Nihon = true }
+    if executor_name and KNOWN[executor_name] then
+        return isnetworkowner
+    end
+    return function() return true end
+end)()
+
 workspace.FallenPartsDestroyHeight = -0 / 0
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
+
+if not cloneref then cloneref = function(x) return x end end
+
+local Players = cloneref(game:GetService("Players"))
+local HttpService = cloneref(game:GetService("HttpService"))
+local UserInputService = cloneref(game:GetService("UserInputService"))
 local LocalPlayer = Players.LocalPlayer
-Workspace = game:GetService('Workspace')
-Lighting = game:GetService('Lighting')
-MaterialService = game:GetService('MaterialService')
-RunService = game:GetService('RunService')
-GuiService = game:GetService("GuiService")
-TextChatService = game:GetService("TextChatService")
-TweenService = game:GetService("TweenService")
-Stats = game:GetService('Stats')
-Debris = game:GetService('Debris')
-Backpack = game:GetService('Backpack')
+Workspace = cloneref(game:GetService("Workspace"))
+Lighting = cloneref(game:GetService("Lighting"))
+MaterialService = cloneref(game:GetService("MaterialService"))
+RunService = cloneref(game:GetService("RunService"))
+GuiService = cloneref(game:GetService("GuiService"))
+TextChatService = cloneref(game:GetService("TextChatService"))
+TweenService = cloneref(game:GetService("TweenService"))
+Stats = cloneref(game:GetService("Stats"))
+Debris = cloneref(game:GetService("Debris"))
+Backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or cloneref(Players:FindFirstChild("Backpack"))
 
 if not LocalPlayer then
     return
@@ -381,12 +393,12 @@ Library:Notify('Thanks for using rawr <3')
 Library:Notify('I LOVE U')
 Library:Notify('Remember this is built for da hood rip offs...')
 
-local _51 = game:GetService("Players")
-local _52 = game:GetService("RunService")
-local _53 = game:GetService("Workspace")
-local _54 = game:GetService("UserInputService")
-local _55 = game:GetService("ReplicatedStorage")
-RunService = game:GetService('RunService')
+local _51 = cloneref(game:GetService("Players"))
+local _52 = cloneref(game:GetService("RunService"))
+local _53 = cloneref(game:GetService("Workspace"))
+local _54 = cloneref(game:GetService("UserInputService"))
+local _55 = cloneref(game:GetService("ReplicatedStorage"))
+RunService = cloneref(game:GetService('RunService'))
 
 local _56 = _51.LocalPlayer
 if not _56 then
@@ -691,7 +703,7 @@ _G.PlayEmote = function(name, speed)
     Char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     Hum = Char:WaitForChild("Humanoid", 5)
     if not Hum then return end
-    Animator = Hum:FindFirstChildOfClass("Animator")
+    Animator = Hum:WaitForChild("Animator", 5)
     if not Animator then return end
     if _G.Emotes.CurrentAnimation then
         pcall(function() _G.Emotes.CurrentAnimation:Stop() end)
@@ -699,11 +711,11 @@ _G.PlayEmote = function(name, speed)
     end
     Id = _G.Emotes.Anims[name]
     if not Id then return end
-    
+
     local success, objects = pcall(function()
         return game:GetObjects("rbxassetid://" .. tostring(Id))
     end)
-    
+
     if success and objects and #objects > 0 then
         local animObject = objects[1]
         if animObject:IsA("Animation") then
@@ -716,7 +728,7 @@ _G.PlayEmote = function(name, speed)
             return
         end
     end
-    
+
     Anim = Instance.new("Animation")
     Anim.AnimationId = "rbxassetid://" .. tostring(Id)
     Track = Animator:LoadAnimation(Anim)
@@ -755,9 +767,9 @@ EmoteTab:AddSlider('EmoteSpeed', {
 
 Toggles.EmotesEnabled:OnChanged(function()
     _G.Emotes.Enabled = Toggles.EmotesEnabled.Value
-    if not _G.Emotes.Enabled then 
-        _G.StopEmote() 
-        return 
+    if not _G.Emotes.Enabled then
+        _G.StopEmote()
+        return
     end
     Spd = (Options.EmoteSpeed.Value or 10) / 10
     _G.PlayEmote(Options.EmoteSelect.Value, Spd > 0 and Spd or 1)
@@ -781,6 +793,18 @@ LocalPlayer.CharacterAdded:Connect(function()
     if _G.Emotes.Enabled then
         Spd = (Options.EmoteSpeed.Value or 10) / 10
         _G.PlayEmote(Options.EmoteSelect.Value, Spd > 0 and Spd or 1)
+    end
+end)
+
+task.spawn(function()
+    task.wait(2)
+    if Toggles.EmotesEnabled.Value then
+        _G.Emotes.Enabled = true
+        local cur = _G.Emotes.CurrentAnimation
+        if not (cur and cur.IsPlaying) then
+            Spd = (Options.EmoteSpeed.Value or 10) / 10
+            _G.PlayEmote(Options.EmoteSelect.Value, Spd > 0 and Spd or 1)
+        end
     end
 end)
 
@@ -899,6 +923,12 @@ end)
 
 WeatherSection = WorldTab:AddRightGroupbox('Weather')
 
+if _G.weather_render_conn then
+    pcall(function() _G.weather_render_conn:Disconnect() end)
+    _G.weather_render_conn = nil
+end
+if _G.destroy_weather then pcall(_G.destroy_weather) end
+
 _G.weather_part        = nil
 _G.weather_particle    = nil
 _G.weather_render_conn = nil
@@ -990,6 +1020,10 @@ function _G.get_scaled_rate(weather_name)
 end
 
 function _G.destroy_weather()
+    if _G.weather_render_conn then
+        pcall(function() _G.weather_render_conn:Disconnect() end)
+        _G.weather_render_conn = nil
+    end
     if _G.weather_particle then
         pcall(function() _G.weather_particle:Destroy() end)
         _G.weather_particle = nil
@@ -1011,6 +1045,14 @@ function _G.build_weather_part()
     _G.weather_part.Anchored = true
     _G.weather_part.Name = "\0"
     _G.weather_part.Parent = workspace
+
+    _G.weather_render_conn = RunService.Heartbeat:Connect(function()
+        local part = _G.weather_part
+        local cam = workspace.CurrentCamera
+        if part and cam then
+            part.CFrame = CFrame.new(cam.CFrame.Position + _G.weather_offset)
+        end
+    end)
 end
 
 function _G.rebuild_weather_particle()
@@ -1101,26 +1143,21 @@ Options.WeatherRate:OnChanged(function()
     if _G.weather_particle then
         local wtype = _G.get_weather_type()
         _G.weather_particle.Rate = _G.get_scaled_rate(wtype)
+    elseif Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
+        _G.rebuild_weather_particle()
     end
 end)
 
-if _G.weather_render_conn then
-    pcall(function() _G.weather_render_conn:Disconnect() end)
-    _G.weather_render_conn = nil
-end
-
-_G.weather_render_conn = RunService.Heartbeat:Connect(function()
-    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value and _G.weather_part then
-        local cam = workspace.CurrentCamera
-        if cam then
-            _G.weather_part.CFrame = CFrame.new(cam.CFrame.Position + _G.weather_offset)
-        end
+task.spawn(function()
+    task.wait(2)
+    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
+        _G.rebuild_weather_particle()
     end
 end)
 
-if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
-    _G.rebuild_weather_particle()
-end
+_48:OnUnload(function()
+    _G.destroy_weather()
+end)
 
 BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
 
@@ -1923,7 +1960,7 @@ OrbitGroupbox:AddSlider('OrbitRadius', {
     Text = 'Radius',
     Default = 5,
     Min = 1,
-    Max = 15,
+    Max = 200,
     Rounding = 1,
     Suffix = ' studs',
     Tooltip = 'Base distance from the target',
@@ -1933,7 +1970,7 @@ OrbitGroupbox:AddSlider('OrbitRadiusJitter', {
     Text = 'Radius Jitter',
     Default = 1.5,
     Min = 0,
-    Max = 10,
+    Max = 30,
     Rounding = 2,
     Tooltip = 'Randomly varies your orbit distance by up to this amount. Higher values make your position less predictable to enemy aim.',
 })
@@ -1942,7 +1979,7 @@ OrbitGroupbox:AddSlider('OrbitHeight', {
     Text = 'Height',
     Default = 2,
     Min = 0,
-    Max = 10,
+    Max = 25,
     Rounding = 1,
     Suffix = ' studs',
     Tooltip = 'Base vertical offset from the target.',
@@ -1952,7 +1989,7 @@ OrbitGroupbox:AddSlider('OrbitHeightJitter', {
     Text = 'Height Jitter',
     Default = 1.0,
     Min = 0,
-    Max = 10,
+    Max = 50,
     Rounding = 2,
     Tooltip = 'Randomly varies your vertical offset.',
 })
@@ -1961,7 +1998,7 @@ OrbitGroupbox:AddSlider('OrbitSpeed', {
     Text = 'Speed',
     Default = 3,
     Min = 0.5,
-    Max = 10,
+    Max = 150,
     Rounding = 1,
     Suffix = 'x',
     Tooltip = 'How fast you circle the target.',
@@ -1985,6 +2022,81 @@ OrbitGroupbox:AddSlider('ResolverRate', {
     Rounding = 3,
     Suffix = 's',
     Tooltip = 'How often the targets anchor position is recomputed.',
+})
+
+-- sender rate
+SenderRateGroup = Ragebot:AddRightGroupbox('Sender Rates')
+
+SenderRateGroup:AddToggle('SenderRateValue', {
+    Text = 'Physics Sender Rate',
+    Default = false,
+    Tooltip = 'Overrides S2PhysicsSenderRate.',
+})
+
+SenderRatePhysicsDep = SenderRateGroup:AddDependencyBox()
+
+SenderRatePhysicsDep:AddDropdown('SenderRateValueType', {
+    Text = 'Physics Mode',
+    Values = { 'custom', 'automatic' },
+    Default = 'custom',
+    Tooltip = 'Custom = use the slider buddy. Automatic = follow your FPS.',
+})
+
+SenderRatePhysicsSliderDep = SenderRatePhysicsDep:AddDependencyBox()
+
+SenderRatePhysicsSliderDep:AddSlider('SenderRateValueRate', {
+    Text = 'Physics Rate',
+    Default = 15,
+    Min = 1,
+    Max = 240,
+    Rounding = 0,
+    Suffix = ' Hz',
+    Tooltip = 'Physics updates per second sent to server.',
+})
+
+SenderRatePhysicsDep:SetupDependencies({
+    { Toggles.SenderRateValue, true }
+})
+
+SenderRatePhysicsSliderDep:SetupDependencies({
+    { Options.SenderRateValueType, 'custom' }
+})
+
+SenderRateGroup:AddDivider()
+
+SenderRateGroup:AddToggle('DataSenderRateValue', {
+    Text = 'Data Sender Rate',
+    Default = false,
+    Tooltip = 'Overrides DFIntDataSenderRate.',
+})
+
+SenderRateDataDep = SenderRateGroup:AddDependencyBox()
+
+SenderRateDataDep:AddDropdown('DataSenderRateValueType', {
+    Text = 'Data Mode',
+    Values = { 'custom', 'automatic' },
+    Default = 'custom',
+    Tooltip = 'Custom = use the slider pal. Automatic = follow your FPS.',
+})
+
+SenderRateDataSliderDep = SenderRateDataDep:AddDependencyBox()
+
+SenderRateDataSliderDep:AddSlider('DataSenderRateValueRate', {
+    Text = 'Data Rate',
+    Default = 15,
+    Min = 1,
+    Max = 240,
+    Rounding = 0,
+    Suffix = ' Hz',
+    Tooltip = 'Data updates per second sent to server.',
+})
+
+SenderRateDataDep:SetupDependencies({
+    { Toggles.DataSenderRateValue, true }
+})
+
+SenderRateDataSliderDep:SetupDependencies({
+    { Options.DataSenderRateValueType, 'custom' }
 })
 
 BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
@@ -4621,7 +4733,7 @@ end)
 -- Animation Changer
 AnimationSection = Misctab:AddRightGroupbox('Animations')
 
-local ASSET = 'http://www.roblox.com/asset/?id='
+ASSET = 'http://www.roblox.com/asset/?id='
 
 AnimationSets = {
     Ninja     = {idle1="656117400",  idle2="656118341",  walk="656121766",  run="656118852",  jump="656117878",  climb="656114359",  fall="656115606"},
@@ -4639,7 +4751,7 @@ AnimationSets = {
     Toy       = {idle1="782841498",  idle2="782845736",  walk="782843345",  run="782842708",  jump="782847020",  climb="782843869",  fall="782846423"},
 }
 
-local AnimSlots = {
+AnimSlots = {
     {key = 'idle1', folder = 'idle',  name = 'Animation1'},
     {key = 'idle2', folder = 'idle',  name = 'Animation2'},
     {key = 'walk',  folder = 'walk',  name = 'WalkAnim'},
@@ -4649,62 +4761,75 @@ local AnimSlots = {
     {key = 'fall',  folder = 'fall',  name = 'FallAnim'},
 }
 
-AnimChangerEnabled = false
+AnimChangerEnabled  = false
+AnimCharConn        = nil
+AnimDebounceRunning = false
+AnimPendingSet      = nil
+AnimDebounceDelay   = 0.08
+OriginalAnims       = setmetatable({}, {__mode = 'k'})
+CachedAnimate       = setmetatable({}, {__mode = 'k'})
 
-local OriginalAnims = setmetatable({}, {__mode = 'k'})
-
-function getSlotObject(Animate, slot)
+function AnimGetSlotObject(Animate, slot)
     local folder = Animate:FindFirstChild(slot.folder)
     return folder and folder:FindFirstChild(slot.name)
 end
 
-function waitForAnimate(char)
+function AnimWaitForAnimate(char)
     if not char then return nil end
-    local Animate = char:FindFirstChild('Animate') or char:WaitForChild('Animate', 10)
+    local cached = CachedAnimate[char]
+    if cached and cached.Parent then return cached end
+
+    local Animate = char:FindFirstChild('Animate') or char:WaitForChild('Animate', 5)
     if not Animate then return nil end
-    for _, slot in ipairs(AnimSlots) do
-        local folder = Animate:FindFirstChild(slot.folder) or Animate:WaitForChild(slot.folder, 5)
-        if folder then folder:WaitForChild(slot.name, 5) end
-    end
+
+    CachedAnimate[char] = Animate
     return Animate
 end
 
-function captureOriginals(char, Animate)
+function AnimCaptureOriginals(char, Animate)
     if OriginalAnims[char] then return end
     local saved = {}
     for _, slot in ipairs(AnimSlots) do
-        local obj = getSlotObject(Animate, slot)
+        local obj = AnimGetSlotObject(Animate, slot)
         if obj then saved[slot.key] = obj.AnimationId end
     end
     OriginalAnims[char] = saved
 end
 
-function reloadAnimate(char, Animate)
-    local hum = char:FindFirstChildOfClass('Humanoid')
-    Animate.Disabled = true
-    if hum then
-        local animator = hum:FindFirstChildOfClass('Animator')
-        local ok, tracks = pcall(function()
-            return (animator or hum):GetPlayingAnimationTracks()
+function AnimKillAllTracks(char)
+    local hum = char and char:FindFirstChildOfClass('Humanoid')
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass('Animator')
+    if not animator then return end
+    local ok, tracks = pcall(function() return animator:GetPlayingAnimationTracks() end)
+    if not ok then return end
+    for _, track in ipairs(tracks) do
+        pcall(function()
+            track:Stop(0)
+            track:Destroy()
         end)
-        if ok then
-            for _, track in ipairs(tracks) do track:Stop(0) end
-        end
     end
-    task.wait()
-    Animate.Disabled = false
 end
 
-function notify(msg)
+function AnimReloadAnimate(char, Animate)
+    AnimKillAllTracks(char)
+    Animate.Disabled = true
+    task.wait(0)
+    if Animate.Parent then
+        Animate.Disabled = false
+    end
+end
+
+function AnimNotify(msg)
     pcall(function() Library:Notify(msg, 4) end)
 end
 
-function applyAnimationSet(setName)
+function AnimApplySet(setName)
     local char = _56.Character
     if not char then return end
-    local Animate = waitForAnimate(char)
+    local Animate = AnimWaitForAnimate(char)
     if not Animate or not char.Parent then return end
-    captureOriginals(char, Animate)
+    AnimCaptureOriginals(char, Animate)
 
     local ids = {}
     if setName and setName ~= 'Default' then
@@ -4712,7 +4837,7 @@ function applyAnimationSet(setName)
         if not data then return end
         local hum = char:FindFirstChildOfClass('Humanoid')
         if hum and hum.RigType == Enum.HumanoidRigType.R6 then
-            notify(setName .. ' is R15 only - this character is R6 :(')
+            AnimNotify(setName .. ' is R15 only - this character is R6 :(')
             return
         end
         for _, slot in ipairs(AnimSlots) do ids[slot.key] = ASSET .. data[slot.key] end
@@ -4721,30 +4846,46 @@ function applyAnimationSet(setName)
     end
 
     for _, slot in ipairs(AnimSlots) do
-        local obj = getSlotObject(Animate, slot)
+        local obj = AnimGetSlotObject(Animate, slot)
         if obj and ids[slot.key] then obj.AnimationId = ids[slot.key] end
     end
-    reloadAnimate(char, Animate)
+    AnimReloadAnimate(char, Animate)
 end
 
-function RestoreOriginalAnimations()
-    applyAnimationSet('Default')
+function AnimScheduleApply(setName)
+    AnimPendingSet = setName
+    if AnimDebounceRunning then return end
+    AnimDebounceRunning = true
+    task.spawn(function()
+        while AnimPendingSet do
+            local set = AnimPendingSet
+            AnimPendingSet = nil
+            AnimApplySet(set)
+            task.wait(AnimDebounceDelay)
+        end
+        AnimDebounceRunning = false
+    end)
+end
+
+function AnimRestoreOriginal()
+    AnimApplySet('Default')
 end
 
 if _56.Character then
     task.spawn(function()
-        local Animate = waitForAnimate(_56.Character)
-        if Animate then captureOriginals(_56.Character, Animate) end
+        local Animate = AnimWaitForAnimate(_56.Character)
+        if Animate then AnimCaptureOriginals(_56.Character, Animate) end
     end)
 end
 
-_56.CharacterAdded:Connect(function(char)
-    local Animate = waitForAnimate(char)
+if AnimCharConn then AnimCharConn:Disconnect() end
+AnimCharConn = _56.CharacterAdded:Connect(function(char)
+    local Animate = AnimWaitForAnimate(char)
     if not Animate then return end
-    captureOriginals(char, Animate)
-    task.wait(0.5)
+    AnimCaptureOriginals(char, Animate)
+    task.wait(0.3)
     if AnimChangerEnabled then
-        applyAnimationSet(Options.AnimSet.Value or 'Default')
+        AnimApplySet(Options.AnimSet.Value or 'Default')
     end
 end)
 
@@ -4769,21 +4910,22 @@ AnimationSection:AddDropdown('AnimSet', {
 Toggles.AnimSetEnabled:OnChanged(function(value)
     AnimChangerEnabled = value
     if value then
-        applyAnimationSet(Options.AnimSet.Value or 'Default')
+        AnimScheduleApply(Options.AnimSet.Value or 'Default')
     else
-        RestoreOriginalAnimations()
+        AnimRestoreOriginal()
     end
 end)
 
 Options.AnimSet:OnChanged(function(value)
     if AnimChangerEnabled then
-        applyAnimationSet(value)
+        AnimScheduleApply(value)
     end
 end)
 
 _48:OnUnload(function()
     AnimChangerEnabled = false
-    RestoreOriginalAnimations()
+    if AnimCharConn then AnimCharConn:Disconnect() AnimCharConn = nil end
+    AnimRestoreOriginal()
 end)
 
 -- Character Material / Self Charms Core
@@ -4859,8 +5001,6 @@ function SC_cacheCharacter(char)
     end
 end
 
--- Things that override a part's Material/Color: SurfaceAppearance (dynamic heads and
--- bundle bodies use it) and MaterialVariant. They get set aside and put back on restore.
 function SC_stripOverrides(part)
     for _, child in ipairs(part:GetChildren()) do
         if child:IsA('SurfaceAppearance') then
@@ -4876,7 +5016,6 @@ function SC_stripOverrides(part)
     end)
 end
 
--- Keeps the material/color on the part if the game (or an animation/morph script) resets it.
 function SC_guardPart(part)
     if SC_guards[part] then return end
     local conns = {}
@@ -5007,8 +5146,7 @@ function SC_applyChams(char, heatPulse, skipParticles)
                 if heatPulse then trans = base + (math.min(base + 0.2, 1) - base) * heatPulse
                 else trans = base end
             end
-
-            -- the heat loop calls this every frame; only do the heavier cleanup on real applies
+            
             if not heatPulse then SC_stripOverrides(part) end
 
             if part:IsA('MeshPart') then
@@ -5031,7 +5169,6 @@ function SC_applyChams(char, heatPulse, skipParticles)
 end
 
 function SC_restoreCharacter(char)
-    -- guards first, otherwise they would fight the restore
     SC_clearGuards()
     if not char then return end
     SC_removeParticles(char)
@@ -6068,8 +6205,6 @@ setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
 setfflag("DFIntRuntimeConcurrency", "4")
 setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
 setfflag("DFIntConnectionMTUSize", "1472")
-setfflag("DFIntS2PhysicsSenderRate", "15")
-setfflag("DFIntDataSenderRate", "15")
 
 local _104 = {
     enabled = false,
@@ -8911,17 +9046,46 @@ PositionResolverSources = {
     "RightHand",
 }
 
-ResolverEnabled   = false
-ResolverSmoothing = 0.4
-ResolverMaxSpeed  = 200
-ResolverStates    = {}
+PositionSourceWeights = {
+    HumanoidRootPart = 1.00,
+    UpperTorso       = 0.95,
+    LowerTorso       = 0.90,
+    Torso            = 0.85,
+    Head             = 0.80,
+    LeftUpperArm     = 0.50,
+    RightUpperArm    = 0.50,
+    LeftHand         = 0.35,
+    RightHand        = 0.35,
+    LeftUpperLeg     = 0.45,
+    RightUpperLeg    = 0.45,
+    LeftFoot         = 0.25,
+    RightFoot        = 0.25,
+}
+
+OUTLIER_THRESHOLD  = 15
+AnchorSmoothRate   = 0.35
+LastAnchorPos      = nil
+LastAnchorLook     = nil
+
+ResolverEnabled        = false
+ResolverSmoothing      = 0.4
+ResolverMaxSpeed       = 200
+ResolverAccelSmoothing = 0.25
+ResolverMaxAccel       = 500
+ResolverStates         = {}
 
 function ResolverUpdate(target, pos)
     if not ResolverEnabled or not target then return pos end
     local now = tick()
     local st = ResolverStates[target]
     if not st then
-        ResolverStates[target] = { lastPos = pos, lastTime = now, velocity = Vector3.new() }
+        ResolverStates[target] = {
+            lastPos = pos,
+            lastTime = now,
+            velocity = Vector3.new(),
+            prevVelocity = Vector3.new(),
+            accel = Vector3.new(),
+        }
         return pos
     end
     local dt = now - st.lastTime
@@ -8931,6 +9095,13 @@ function ResolverUpdate(target, pos)
             instVel = instVel.Unit * ResolverMaxSpeed
         end
         st.velocity = st.velocity:Lerp(instVel, ResolverSmoothing)
+
+        local instAccel = (st.velocity - st.prevVelocity) / dt
+        if instAccel.Magnitude > ResolverMaxAccel then
+            instAccel = instAccel.Unit * ResolverMaxAccel
+        end
+        st.accel = st.accel:Lerp(instAccel, ResolverAccelSmoothing)
+        st.prevVelocity = st.velocity
     end
     st.lastPos  = pos
     st.lastTime = now
@@ -8940,6 +9111,11 @@ end
 function ResolverGetVelocity(target)
     local st = ResolverStates[target]
     return st and st.velocity or Vector3.new()
+end
+
+function ResolverGetAcceleration(target)
+    local st = ResolverStates[target]
+    return st and st.accel or Vector3.new()
 end
 
 function ResolverClear(target)
@@ -8982,16 +9158,42 @@ function AntiAimApply(baseCF, dt)
     return baseCF * CFrame.Angles(pitch, yaw, 0)
 end
 
-OrbitRadiusJitter = 1.5
-OrbitHeightJitter = 1.0
+OrbitRadiusJitter    = 1.5
+OrbitHeightJitter    = 1.0
+OrbitNoiseSeedX      = math.random() * 1000
+OrbitNoiseSeedY      = math.random() * 1000
+OrbitNoiseSeedZ      = math.random() * 1000
+OrbitLastRadius      = nil
+OrbitLastHeight      = nil
+ORBIT_SMOOTH_RATE    = 0.15
 
 function ComputeJitteredOrbit(anchorPos, now)
-    local phase  = math.noise(now * 0.3, 0) * math.pi * 2
-    local radius = OrbitRadius + math.noise(now * 0.7, 0) * OrbitRadiusJitter
-    local height = OrbitHeight + math.noise(0, now * 0.9) * OrbitHeightJitter
-    local x = math.cos(OrbitAngle + phase) * radius
-    local z = math.sin(OrbitAngle + phase) * radius
-    local y = height
+    local phase = math.noise(now * 0.3, OrbitNoiseSeedX) * math.pi * 2
+
+    local rNoise1 = math.noise(now * 0.7, OrbitNoiseSeedY)
+    local rNoise2 = math.noise(now * 1.9, OrbitNoiseSeedY + 17) * 0.35
+    local rawRadius = OrbitRadius + (rNoise1 + rNoise2) * OrbitRadiusJitter
+
+    local hNoise1 = math.noise(0, now * 0.9 + OrbitNoiseSeedZ)
+    local hNoise2 = math.noise(0, now * 2.3 + OrbitNoiseSeedZ + 31) * 0.25
+    local rawHeight = OrbitHeight + (hNoise1 + hNoise2) * OrbitHeightJitter
+
+    if OrbitLastRadius then
+        OrbitLastRadius = OrbitLastRadius + (rawRadius - OrbitLastRadius) * ORBIT_SMOOTH_RATE
+        OrbitLastHeight = OrbitLastHeight + (rawHeight - OrbitLastHeight) * ORBIT_SMOOTH_RATE
+    else
+        OrbitLastRadius = rawRadius
+        OrbitLastHeight = rawHeight
+    end
+
+    local angle = OrbitAngle + phase
+    local x = math.cos(angle) * OrbitLastRadius
+    local z = math.sin(angle) * OrbitLastRadius
+
+    local bob   = math.sin(now * 1.6 + OrbitNoiseSeedX) * 0.35
+    local drift = math.noise(now * 0.15, OrbitNoiseSeedZ + 7) * 0.5
+    local y     = OrbitLastHeight + bob + drift
+
     return anchorPos + Vector3.new(x, y, z)
 end
 
@@ -9162,9 +9364,7 @@ function _orbitTargetValid(target)
 end
 
 function IsWaitingForRespawn(target)
-    if not target or not target.Character then
-        return false
-    end
+    if not target or not target.Character then return false end
     if lastTargetCharacter == nil then
         lastTargetCharacter = target.Character
         respawnPending = false
@@ -9172,9 +9372,7 @@ function IsWaitingForRespawn(target)
     end
     if lastTargetCharacter == target.Character then
         if respawnPending then
-            if tick() - targetRespawnTime < RespawnWaitTime then
-                return true
-            end
+            if tick() - targetRespawnTime < RespawnWaitTime then return true end
             respawnPending = false
         end
         return false
@@ -9222,7 +9420,12 @@ function UpdatePrediction(target, resolvedPos)
         predictionLastTime = now2
     end
 
-    local ahead = predictionVelocity * PredictionMultiplier
+    local t = PredictionMultiplier
+    local ahead = predictionVelocity * t
+    if ResolverEnabled and target then
+        local raccel = ResolverGetAcceleration(target)
+        ahead = ahead + raccel * (0.5 * t * t)
+    end
     if PingPredictionEnabled then
         ahead = ahead * (1 + GetPingSeconds())
     end
@@ -9232,65 +9435,84 @@ end
 function ResolveTargetPosition(target)
     if not target or not target.Character then return nil, nil end
     local char = target.Character
-    local bestCF
-    for _, name in ipairs(PositionResolverSources) do
+
+    local samples = {}
+    local totalWeight = 0
+    for name, weight in pairs(PositionSourceWeights) do
         local part = char:FindFirstChild(name)
         if part and part:IsA("BasePart") then
             local pos = part.Position
             if not IsVoidPosition(pos) then
-                bestCF = part.CFrame
-                break
+                samples[#samples + 1] = { pos = pos, weight = weight, cf = part.CFrame }
+                totalWeight = totalWeight + weight
             end
         end
     end
-    if not bestCF then
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
-                local pos = part.Position
-                if not IsVoidPosition(pos) then
-                    bestCF = part.CFrame
-                    break
-                end
-            end
-        end
-    end
-    if not bestCF then
-        for _, acc in ipairs(char:GetChildren()) do
-            if acc:IsA("Accessory") then
-                local handle = acc:FindFirstChild("Handle")
-                if handle and handle:IsA("BasePart") then
-                    local pos = handle.Position
-                    if not IsVoidPosition(pos) then
-                        bestCF = handle.CFrame
-                        break
-                    end
-                end
-            end
-        end
-    end
-    if not bestCF then
+
+    if #samples == 0 then
         if lastValidTargetCFrame then
             return lastValidTargetCFrame, lastValidTargetCFrame.Position
         end
         return nil, nil
     end
-    lastValidTargetCFrame = bestCF
-    lastValidTargetPos = bestCF.Position
+
+    local sumX, sumY, sumZ = 0, 0, 0
+    for _, s in ipairs(samples) do
+        sumX = sumX + s.pos.X * s.weight
+        sumY = sumY + s.pos.Y * s.weight
+        sumZ = sumZ + s.pos.Z * s.weight
+    end
+    local centroid = Vector3.new(sumX / totalWeight, sumY / totalWeight, sumZ / totalWeight)
+
+    local keptX, keptY, keptZ, keptWeight = 0, 0, 0, 0
+    local bestCF, bestWeight = nil, 0
+    for _, s in ipairs(samples) do
+        if (s.pos - centroid).Magnitude <= OUTLIER_THRESHOLD then
+            keptX = keptX + s.pos.X * s.weight
+            keptY = keptY + s.pos.Y * s.weight
+            keptZ = keptZ + s.pos.Z * s.weight
+            keptWeight = keptWeight + s.weight
+            if s.weight > bestWeight then
+                bestWeight = s.weight
+                bestCF = s.cf
+            end
+        end
+    end
+
+    if keptWeight <= 0 then
+        keptX, keptY, keptZ, keptWeight = sumX, sumY, sumZ, totalWeight
+        bestCF = samples[1].cf
+    end
+
+    local finalPos = Vector3.new(keptX / keptWeight, keptY / keptWeight, keptZ / keptWeight)
+
+    if LastAnchorPos then
+        finalPos = LastAnchorPos:Lerp(finalPos, AnchorSmoothRate)
+    end
+    LastAnchorPos = finalPos
+
+    local newLook = bestCF and bestCF.LookVector or Vector3.new(0, 0, 1)
+    if LastAnchorLook then
+        newLook = LastAnchorLook:Lerp(newLook, 0.4)
+    end
+    LastAnchorLook = newLook
+
+    local finalCF = CFrame.new(finalPos, finalPos + newLook)
+
+    lastValidTargetCFrame = finalCF
+    lastValidTargetPos = finalPos
     lastValidTargetPosTime = tick()
 
-    ResolverUpdate(target, bestCF.Position)
+    ResolverUpdate(target, finalPos)
 
-    return bestCF, bestCF.Position
+    return finalCF, finalPos
 end
 
 function GetOrbitAnchorCFrame(target)
     local now = tick()
     if now - resolverLastRun < ResolverRate and resolvedPredictedPos then
-        local cf = lastValidTargetCFrame
-        if cf then
-            return CFrame.new(resolvedPredictedPos, resolvedPredictedPos + cf.LookVector), resolvedPredictedPos
-        end
-        return nil, resolvedPredictedPos
+        local look = LastAnchorLook or Vector3.new(0, 0, 1)
+        return CFrame.new(resolvedPredictedPos, resolvedPredictedPos + look), resolvedPredictedPos
     end
     resolverLastRun = now
     local cf, pos = ResolveTargetPosition(target)
@@ -9300,7 +9522,7 @@ function GetOrbitAnchorCFrame(target)
     local predicted = UpdatePrediction(target, pos)
     resolvedPredictedPos = predicted
     if DirectCFramePrediction then
-        local look = cf.LookVector
+        local look = LastAnchorLook or cf.LookVector
         return CFrame.new(predicted, predicted + look), predicted
     end
     return cf, predicted
@@ -9409,6 +9631,8 @@ function ReturnToRealWorld()
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
     resolvedPredictedPos = nil
+    LastAnchorPos = nil
+    LastAnchorLook = nil
 end
 
 function ComputeRandomOffset(now)
@@ -9549,6 +9773,10 @@ function HandleTargetLost()
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
     resolvedPredictedPos = nil
+    LastAnchorPos = nil
+    LastAnchorLook = nil
+    OrbitLastRadius = nil
+    OrbitLastHeight = nil
 
     if ResolverStates then ResolverClear() end
 end
@@ -9636,9 +9864,7 @@ function Orbit()
         return
     end
 
-    if not target.Character then
-        return
-    end
+    if not target.Character then return end
 
     if IdleReloadEnabled and reloading and IdleState ~= "none" then
         disengageAt = 0
@@ -9665,9 +9891,7 @@ function Orbit()
         return
     end
 
-    if not _orbitTargetValid(target) then
-        return
-    end
+    if not _orbitTargetValid(target) then return end
 
     disengageAt = 0
 
@@ -9692,6 +9916,10 @@ function Orbit()
         predictionLastTime = 0
         predictionVelocity = Vector3.new(0, 0, 0)
         resolvedPredictedPos = nil
+        LastAnchorPos = nil
+        LastAnchorLook = nil
+        OrbitLastRadius = nil
+        OrbitLastHeight = nil
     end
 
     if IsWaitingForRespawn(target) then return end
@@ -9733,6 +9961,10 @@ function StartOrbit()
     VoidBasePos = nil
     ClearReturnPoint()
     LastIdleExitTime = 0
+    LastAnchorPos = nil
+    LastAnchorLook = nil
+    OrbitLastRadius = nil
+    OrbitLastHeight = nil
     UpdateSelfAnchor()
 
     OrbitConnection = RunService.Heartbeat:Connect(Orbit)
@@ -9766,6 +9998,10 @@ function StopOrbit()
     ReloadingActive = false
     ReloadHoldUntil = 0
     VoidBasePos = nil
+    LastAnchorPos = nil
+    LastAnchorLook = nil
+    OrbitLastRadius = nil
+    OrbitLastHeight = nil
 
     if ResolverStates then ResolverClear() end
 end
@@ -9933,11 +10169,120 @@ _56.CharacterAdded:Connect(function()
     LastIdleExitTime = 0
     ReloadingActive = false
     ReloadHoldUntil = 0
+    LastAnchorPos = nil
+    LastAnchorLook = nil
+    OrbitLastRadius = nil
+    OrbitLastHeight = nil
     if ResolverStates then ResolverClear() end
     if OrbitEnabled then StartOrbit() end
 end)
 
 _48:OnUnload(function() StopOrbit() end)
+
+-- >> ( sender rate value )
+
+do
+    old_physics_rate = getfflag and getfflag("S2PhysicsSenderRate") or "15"
+    old_data_rate    = getfflag and getfflag("DFIntDataSenderRate") or "15"
+
+    SenderRateRunService = game:GetService("RunService")
+
+    do_automatic_physics = function()
+        if setfflag then
+            setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+        end
+    end
+
+    do_automatic_data = function()
+        if setfflag then
+            setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+        end
+    end
+
+    function ApplyPhysicsSenderRate()
+        if not setfflag then return end
+        local rateType = Options.SenderRateValueType and Options.SenderRateValueType.Value or "custom"
+        if type(rateType) == "table" then rateType = rateType[1] end
+
+        if Toggles.SenderRateValue and Toggles.SenderRateValue.Value then
+            if rateType == "custom" then
+                setfflag("S2PhysicsSenderRate", tostring(Options.SenderRateValueRate and Options.SenderRateValueRate.Value or 15))
+            else
+                setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+            end
+        else
+            setfflag("S2PhysicsSenderRate", old_physics_rate)
+        end
+    end
+
+    function ApplyDataSenderRate()
+        if not setfflag then return end
+        local rateType = Options.DataSenderRateValueType and Options.DataSenderRateValueType.Value or "custom"
+        if type(rateType) == "table" then rateType = rateType[1] end
+
+        if Toggles.DataSenderRateValue and Toggles.DataSenderRateValue.Value then
+            if rateType == "custom" then
+                setfflag("DFIntDataSenderRate", tostring(Options.DataSenderRateValueRate and Options.DataSenderRateValueRate.Value or 15))
+            else
+                setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+            end
+        else
+            setfflag("DFIntDataSenderRate", old_data_rate)
+        end
+    end
+
+    sender_rate_conn = SenderRateRunService.RenderStepped:Connect(function()
+        if Toggles.SenderRateValue and Toggles.SenderRateValue.Value then
+            local rateType = Options.SenderRateValueType and Options.SenderRateValueType.Value or "custom"
+            if type(rateType) == "table" then rateType = rateType[1] end
+            if rateType == "automatic" then
+                do_automatic_physics()
+            end
+        end
+        if Toggles.DataSenderRateValue and Toggles.DataSenderRateValue.Value then
+            local rateType = Options.DataSenderRateValueType and Options.DataSenderRateValueType.Value or "custom"
+            if type(rateType) == "table" then rateType = rateType[1] end
+            if rateType == "automatic" then
+                do_automatic_data()
+            end
+        end
+    end)
+end
+
+Toggles.SenderRateValue:OnChanged(function(v)
+    ApplyPhysicsSenderRate()
+end)
+
+Options.SenderRateValueType:OnChanged(function()
+    ApplyPhysicsSenderRate()
+end)
+
+Options.SenderRateValueRate:OnChanged(function()
+    ApplyPhysicsSenderRate()
+end)
+
+Toggles.DataSenderRateValue:OnChanged(function(v)
+    ApplyDataSenderRate()
+end)
+
+Options.DataSenderRateValueType:OnChanged(function()
+    ApplyDataSenderRate()
+end)
+
+Options.DataSenderRateValueRate:OnChanged(function()
+    ApplyDataSenderRate()
+end)
+
+_48:OnUnload(function()
+    if sender_rate_conn then
+        pcall(function() sender_rate_conn:Disconnect() end)
+        sender_rate_conn = nil
+    end
+    if setfflag then
+        pcall(function() setfflag("S2PhysicsSenderRate", old_physics_rate) end)
+        pcall(function() setfflag("DFIntDataSenderRate", old_data_rate) end)
+    end
+end)
 
 FaceTargetConnection = nil
 
@@ -13005,6 +13350,308 @@ do
         end
     end)
 end
+
+env = getgenv()
+
+if env.cleanupforhearts and env.cleanupforhearts.Clean then
+    pcall(function() env.cleanupforhearts:Clean() end)
+end
+
+Cleaner = {
+    _groups = {},
+    _known = setmetatable({}, { __mode = "k" }),
+    _instances = setmetatable({}, { __mode = "k" }),
+    _tables = {},
+    _playerConn = nil,
+    _loop = nil,
+    _running = true,
+}
+
+function CleanerKindOf(obj)
+    local t = typeof(obj)
+    if t == "RBXScriptConnection" then return "connection" end
+    if t == "Instance" then return "instance" end
+    if t == "thread" then return "thread" end
+    if t == "function" then return "function" end
+    if t == "table" then
+        for _, method in ipairs({ "Destroy", "Disconnect", "Cleanup", "Clean" }) do
+            local ok, fn = pcall(function() return obj[method] end)
+            if ok and type(fn) == "function" then return "object" end
+        end
+    end
+    return nil
+end
+
+function CleanerAlive(entry)
+    local obj = entry.obj
+    if obj == nil then return false end
+    if entry.kind == "connection" then return obj.Connected end
+    if entry.kind == "thread" then return coroutine.status(obj) ~= "dead" end
+    return true
+end
+
+function CleanerRelease(entry)
+    local obj, kind = entry.obj, entry.kind
+    if obj == nil then return end
+    if kind == "connection" then
+        pcall(function() obj:Disconnect() end)
+    elseif kind == "instance" then
+        if entry.watch then pcall(function() entry.watch:Disconnect() end) end
+        pcall(function() obj:Destroy() end)
+    elseif kind == "thread" then
+        if obj ~= coroutine.running() and coroutine.status(obj) ~= "dead" then
+            pcall(task.cancel, obj)
+        end
+    elseif kind == "function" then
+        pcall(obj)
+    elseif kind == "object" then
+        for _, method in ipairs({ "Destroy", "Disconnect", "Cleanup", "Clean" }) do
+            local ok, fn = pcall(function() return obj[method] end)
+            if ok and type(fn) == "function" then
+                pcall(fn, obj)
+                break
+            end
+        end
+    end
+    entry.obj = nil
+end
+
+function CleanerTotal(self)
+    local n = 0
+    for _, list in pairs(self._groups) do n = n + #list end
+    return n
+end
+
+function Cleaner:Add(obj, group)
+    local kind = CleanerKindOf(obj)
+    if not kind then return obj end
+
+    group = group or "main"
+    local list = self._groups[group]
+    if not list then
+        list = {}
+        self._groups[group] = list
+    end
+
+    local entry = { obj = obj, kind = kind }
+    if kind == "instance" then
+        self._instances[obj] = true
+        entry.watch = obj.Destroying:Connect(function() entry.obj = nil end)
+    end
+
+    list[#list + 1] = entry
+    return obj
+end
+
+function Cleaner:Connect(signal, fn, group)
+    self._known[fn] = true
+    return self:Add(signal:Connect(fn), group)
+end
+
+function Cleaner:Spawn(fn, ...)
+    return self:Add(task.spawn(fn, ...))
+end
+
+function Cleaner:Clean(group)
+    if group then
+        local list = self._groups[group]
+        self._groups[group] = nil
+        if list then
+            for i = #list, 1, -1 do CleanerRelease(list[i]) end
+        end
+        return
+    end
+
+    self:Stop()
+
+    local names = {}
+    for name in pairs(self._groups) do names[#names + 1] = name end
+    for _, name in ipairs(names) do
+        local list = self._groups[name]
+        self._groups[name] = nil
+        if list then
+            for i = #list, 1, -1 do CleanerRelease(list[i]) end
+        end
+    end
+
+    if self._playerConn then
+        pcall(function() self._playerConn:Disconnect() end)
+        self._playerConn = nil
+    end
+    table.clear(self._tables)
+end
+
+function Cleaner:Sweep()
+    local removed = 0
+    for name, list in pairs(self._groups) do
+        local n, write = #list, 0
+        for read = 1, n do
+            local entry = list[read]
+            if CleanerAlive(entry) then
+                write = write + 1
+                list[write] = entry
+            else
+                removed = removed + 1
+            end
+        end
+        for i = write + 1, n do list[i] = nil end
+        if write == 0 then self._groups[name] = nil end
+    end
+    return removed
+end
+
+function Cleaner:Start(interval)
+    self:Stop()
+    interval = interval or 30
+    self._running = true
+    self._loop = task.spawn(function()
+        while self._running do
+            task.wait(interval)
+            if not self._running then break end
+            self:Sweep()
+        end
+    end)
+end
+
+function Cleaner:Stop()
+    self._running = false
+    if self._loop then
+        pcall(task.cancel, self._loop)
+        self._loop = nil
+    end
+end
+
+function Cleaner:PruneOnLeave(tbl, keyType, cleanup)
+    self._tables[#self._tables + 1] = { tbl = tbl, key = keyType or "player", cleanup = cleanup }
+
+    if not self._playerConn then
+        self._playerConn = _51.PlayerRemoving:Connect(function(player)
+            task.defer(function()
+                for _, info in ipairs(self._tables) do
+                    local key = player
+                    if info.key == "userid" then key = player.UserId
+                    elseif info.key == "name" then key = player.Name end
+
+                    local value = info.tbl[key]
+                    if value ~= nil then
+                        info.tbl[key] = nil
+                        if info.cleanup then
+                            local kind = CleanerKindOf(value)
+                            if kind and kind ~= "function" then
+                                CleanerRelease({ obj = value, kind = kind })
+                            end
+                        end
+                    end
+                end
+            end)
+        end)
+    end
+    return tbl
+end
+
+function Cleaner:SweepMarked(marker)
+    if CleanerTotal(self) > 0 then return 0, "call this before anything is registered" end
+    marker = marker or "\0"
+
+    local roots = { _53, _53.CurrentCamera }
+    pcall(function() roots[#roots + 1] = game:GetService("CoreGui") end)
+    pcall(function() if gethui then roots[#roots + 1] = gethui() end end)
+
+    local removed = 0
+    for _, root in ipairs(roots) do
+        for _, child in ipairs(root:GetChildren()) do
+            if child.Name == marker and not self._instances[child] then
+                pcall(function() child:Destroy() end)
+                removed = removed + 1
+            end
+        end
+    end
+    return removed
+end
+
+function Cleaner:SweepOrphans(chunkName, signals)
+    if not (getconnections and debug and debug.info) then
+        return 0, "executor has no getconnections / debug.info"
+    end
+    if CleanerTotal(self) > 0 then return 0, "call this before anything is registered" end
+
+    local function normalize(s) return (tostring(s):gsub("^[=@]", "")) end
+
+    local callerSource = debug.info(2, "s")
+    if not callerSource or normalize(callerSource) ~= normalize(chunkName) then
+        return 0, "chunk name doesn't match this script, load it with loadstring(src, \"=" .. tostring(chunkName) .. "\")"
+    end
+
+    if not signals then
+        signals = {
+            _52.Heartbeat, _52.RenderStepped, _52.Stepped,
+            _51.PlayerAdded, _51.PlayerRemoving,
+            _54.InputBegan, _54.InputChanged, _54.InputEnded,
+            _53.ChildAdded, _53.DescendantAdded,
+        }
+        local lp = _51.LocalPlayer
+        if lp then
+            signals[#signals + 1] = lp.CharacterAdded
+            signals[#signals + 1] = lp.ChildAdded
+        end
+    end
+
+    local removed = 0
+    for _, signal in ipairs(signals) do
+        local ok, conns = pcall(getconnections, signal)
+        if ok and conns then
+            for _, conn in ipairs(conns) do
+                local fn = conn.Function
+                if type(fn) == "function" then
+                    local executorOwned = true
+                    if isexecutorclosure then executorOwned = isexecutorclosure(fn) end
+
+                    local okSource, source = pcall(debug.info, fn, "s")
+                    if executorOwned and okSource and source and normalize(source) == normalize(chunkName) then
+                        local done = pcall(function() conn:Disconnect() end)
+                        if not done then pcall(function() conn:Disable() end) end
+                        removed = removed + 1
+                    end
+                end
+            end
+        end
+    end
+    return removed
+end
+
+function Cleaner:Collect()
+    local function kb()
+        local ok, v = pcall(collectgarbage, "count")
+        return ok and v or nil
+    end
+    local before = kb()
+    pcall(collectgarbage, "collect")
+    return before, kb()
+end
+
+function Cleaner:Stats()
+    local stats = { total = 0, dead = 0, groups = 0, connection = 0, instance = 0, thread = 0, ["function"] = 0, object = 0 }
+    for _, list in pairs(self._groups) do
+        stats.groups = stats.groups + 1
+        for _, entry in ipairs(list) do
+            if CleanerAlive(entry) then
+                stats.total = stats.total + 1
+                stats[entry.kind] = stats[entry.kind] + 1
+            else
+                stats.dead = stats.dead + 1
+            end
+        end
+    end
+    local ok, kb = pcall(collectgarbage, "count")
+    stats.memoryKB = ok and kb or nil
+    return stats
+end
+
+function Cleaner:BindUnload(library)
+    _48:OnUnload(function() self:Clean() end)
+end
+
+env.cleanupforhearts = Cleaner
 
 -- for das hood
 if game.PlaceId == 89723161599525 then pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RangeHelper.lua'))() end) end
