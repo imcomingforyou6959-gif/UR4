@@ -2099,6 +2099,14 @@ SenderRateDataSliderDep:SetupDependencies({
     { Options.DataSenderRateValueType, 'custom' }
 })
 
+DeflectGroup = Ragebot:AddRightGroupbox('Deflect')
+
+DeflectGroup:AddToggle('Deflect', {
+    Text = 'Deflect [BETA]',
+    Default = false,
+    Tooltip = 'Automatically target at whoever shot you - still in testing may have some false positives',
+})
+
 BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
 
 BehaviorB:AddDropdown('OBS', {
@@ -2974,29 +2982,452 @@ _78:AddLabel('Utility')
 local _AR_Toggle = _78:AddToggle('AutoReload', {
     Text = 'Auto Reload',
     Default = true,
+    Tooltip = 'reloads for u',
 })
 
 local _AutoEquipDBToggle = _78:AddToggle('AutoEquipDB', {
     Text = 'Auto Equip DB',
     Default = false,
+    Tooltip = 'its in the name',
 })
 
 local _ForceRestToggle = _78:AddToggle('ForceRest', {
-    Text = 'Auto Force Rest',
+    Text = 'Auto Force Reset',
     Default = false,
+    Tooltip = 'auto reset on death',
 })
 _ForceRestToggle:OnChanged(function(value)
     _ForceRestEnabled = value
 end)
 
-_78:AddButton('Force Rest', function()
-    forceReset()
+_78:AddToggle('RapidFireEnabled', {
+    Text = 'Rapid Fire',
+    Default = false,
+    Tooltip = 'makes ur gun shoot le fast',
+})
+
+RapidDep = _78:AddDependencyBox()
+
+RapidDep:AddDropdown('RapidFireMethod', {
+    Text = 'Method',
+    Values = { 'new', 'old' },
+    Default = 'new',
+    Tooltip = 'new = slow but works on all, old = faster but doesnt work on some games and more detected',
+})
+
+RapidDep:SetupDependencies({
+    { Toggles.RapidFireEnabled, true }
+})
+
+RapidMethod = "new"
+-- old
+RapidOldEnabled = false
+RapidOldFiring = false
+RapidOldTool = nil
+RapidOldFireRate = 0.03
+RapidOldCharConns = {}
+RapidOldToolConns = {}
+RapidOldInputBeganConn = nil
+RapidOldInputEndedConn = nil
+RapidOldCharAddedConn = nil
+RapidOldOriginalUpvalues = setmetatable({}, {__mode = "k"})
+
+function RapidOldRemoveDelays(tool)
+if not tool then return end
+RapidOldOriginalUpvalues[tool] = {}
+local success,connections=pcall(getconnections,tool.Activated)
+if success and connections then
+for _,v in ipairs(connections) do
+local success,funcinfo=pcall(debug.getinfo,v.Function)
+if success and funcinfo then
+for i=1,math.min(funcinfo.nups or 0,10) do
+local success,c=pcall(debug.getupvalue,v.Function,i)
+if success and type(c)=="number" then
+RapidOldOriginalUpvalues[tool][#RapidOldOriginalUpvalues[tool]+1] = {
+    fn = v.Function,
+    index = i,
+    value = c,
+}
+pcall(debug.setupvalue,v.Function,i,0)
+end
+end
+end
+end
+end
+end
+
+function RapidOldRestoreDelays(tool)
+if not tool then return end
+local saved = RapidOldOriginalUpvalues[tool]
+if not saved then return end
+for _, entry in ipairs(saved) do
+    if entry.fn and entry.index and entry.value ~= nil then
+        pcall(debug.setupvalue, entry.fn, entry.index, entry.value)
+    end
+end
+RapidOldOriginalUpvalues[tool] = nil
+end
+
+function RapidOldStartRapidFire()
+if not RapidOldTool then return end
+if not RapidOldEnabled then return end
+if RapidOldFiring then return end
+RapidOldFiring=true
+local tool=RapidOldTool
+while RapidOldFiring and RapidOldTool==tool and tool.Parent and RapidOldEnabled do
+pcall(function()
+tool:Activate()
+end)
+task.wait(RapidOldFireRate)
+end
+RapidOldFiring=false
+end
+
+function RapidOldToggleRapidFire()
+RapidOldEnabled=not RapidOldEnabled
+if not RapidOldEnabled then
+RapidOldFiring=false
+end
+end
+
+function RapidOldOnInputBegan(input,gameProcessed)
+if gameProcessed then return end
+if input.KeyCode==Enum.KeyCode.M then
+RapidOldToggleRapidFire()
+end
+if input.UserInputType==Enum.UserInputType.MouseButton1 and RapidOldEnabled then
+if RapidOldFiring then return end
+task.spawn(RapidOldStartRapidFire)
+end
+end
+
+function RapidOldOnInputEnded(input)
+if input.UserInputType==Enum.UserInputType.MouseButton1 then
+RapidOldFiring=false
+end
+end
+
+function RapidOldOnCharacterAdded(character)
+task.wait(0.5)
+local function checkTools()
+if not character or not character.Parent then return end
+local tool=character:FindFirstChildOfClass("Tool")
+if tool and tool~=RapidOldTool then
+RapidOldTool=tool
+pcall(function()
+RapidOldRemoveDelays(tool)
+end)
+elseif not tool then
+RapidOldTool=nil
+end
+end
+checkTools()
+RapidOldCharConns[#RapidOldCharConns+1]=character.ChildAdded:Connect(function(child)
+if child:IsA("Tool") then
+task.wait(0.1)
+RapidOldTool=child
+pcall(function()
+RapidOldRemoveDelays(child)
+end)
+end
+end)
+RapidOldCharConns[#RapidOldCharConns+1]=character.ChildRemoved:Connect(function(child)
+if child:IsA("Tool") and child==RapidOldTool then
+pcall(RapidOldRestoreDelays, child)
+RapidOldTool=nil
+RapidOldFiring=false
+end
+end)
+end
+
+function RapidOldClear(list)
+    for _, c in ipairs(list) do
+        pcall(function() c:Disconnect() end)
+    end
+    table.clear(list)
+end
+
+function RapidOldEnable()
+    if RapidOldEnabled then return end
+    RapidOldEnabled = true
+
+    if not RapidOldInputBeganConn then
+        RapidOldInputBeganConn = UserInputService.InputBegan:Connect(RapidOldOnInputBegan)
+    end
+    if not RapidOldInputEndedConn then
+        RapidOldInputEndedConn = UserInputService.InputEnded:Connect(RapidOldOnInputEnded)
+    end
+    if not RapidOldCharAddedConn then
+        RapidOldCharAddedConn = Players.LocalPlayer.CharacterAdded:Connect(RapidOldOnCharacterAdded)
+    end
+
+    if Players.LocalPlayer.Character then
+        RapidOldOnCharacterAdded(Players.LocalPlayer.Character)
+    end
+end
+
+function RapidOldDisable()
+    RapidOldEnabled = false
+    RapidOldFiring = false
+
+    if RapidOldTool then
+        pcall(RapidOldRestoreDelays, RapidOldTool)
+    end
+
+    for tool in pairs(RapidOldOriginalUpvalues) do
+        pcall(RapidOldRestoreDelays, tool)
+    end
+
+    RapidOldTool = nil
+
+    if RapidOldInputBeganConn then
+        pcall(function() RapidOldInputBeganConn:Disconnect() end)
+        RapidOldInputBeganConn = nil
+    end
+    if RapidOldInputEndedConn then
+        pcall(function() RapidOldInputEndedConn:Disconnect() end)
+        RapidOldInputEndedConn = nil
+    end
+    if RapidOldCharAddedConn then
+        pcall(function() RapidOldCharAddedConn:Disconnect() end)
+        RapidOldCharAddedConn = nil
+    end
+
+    RapidOldClear(RapidOldCharConns)
+    RapidOldClear(RapidOldToolConns)
+end
+
+-- new
+RapidNewEnabled = false
+RapidNewFiring = false
+RapidNewTool = nil
+RapidNewFireRate = 0.001
+RapidNewCharConns = {}
+RapidNewToolConns = {}
+RapidNewInputBeganConn = nil
+RapidNewInputEndedConn = nil
+RapidNewCharAddedConn = nil
+RapidNewOriginalUpvalues = setmetatable({}, {__mode = "k"})
+
+function RapidNewGetConnections(signal)
+    if not getconnections then return {} end
+    local ok, conns = pcall(getconnections, signal)
+    if not ok or type(conns) ~= "table" then return {} end
+    local out = {}
+    for _, v in ipairs(conns) do
+        local fn = type(v) == "table" and (v.Function or v.func or v[1]) or v
+        if type(fn) == "function" then out[#out + 1] = fn end
+    end
+    return out
+end
+
+function RapidNewRemoveDelays(tool)
+    if not tool then return end
+    RapidNewOriginalUpvalues[tool] = {}
+    for _, fn in ipairs(RapidNewGetConnections(tool.Activated)) do
+        local ok, info = pcall(debug.getinfo, fn)
+        if ok and info then
+            for i = 1, math.min(info.nups or 0, 20) do
+                local ok2, _, v = pcall(debug.getupvalue, fn, i)
+                if ok2 and type(v) == "number" then
+                    RapidNewOriginalUpvalues[tool][#RapidNewOriginalUpvalues[tool] + 1] = {
+                        fn = fn,
+                        index = i,
+                        value = v,
+                    }
+                    pcall(debug.setupvalue, fn, i, 0)
+                end
+            end
+        end
+    end
+end
+
+function RapidNewRestoreDelays(tool)
+    if not tool then return end
+    local saved = RapidNewOriginalUpvalues[tool]
+    if not saved then return end
+    for _, entry in ipairs(saved) do
+        if entry.fn and entry.index and entry.value ~= nil then
+            pcall(debug.setupvalue, entry.fn, entry.index, entry.value)
+        end
+    end
+    RapidNewOriginalUpvalues[tool] = nil
+end
+
+function RapidNewClear(list)
+    for _, c in ipairs(list) do
+        pcall(function() c:Disconnect() end)
+    end
+    table.clear(list)
+end
+
+function RapidNewStart()
+    if not RapidNewTool then return end
+    if not RapidNewEnabled then return end
+    if RapidNewFiring then return end
+    RapidNewFiring = true
+    local tool = RapidNewTool
+    while RapidNewFiring and RapidNewTool == tool and tool.Parent and RapidNewEnabled do
+        pcall(function() tool:Activate() end)
+        task.wait(RapidNewFireRate)
+    end
+    RapidNewFiring = false
+end
+
+function RapidNewAttachTool(tool)
+    if not tool or not tool:IsA("Tool") then return end
+    task.wait(0.1)
+    if not tool.Parent then return end
+    RapidNewTool = tool
+    pcall(RapidNewRemoveDelays, tool)
+
+    RapidNewToolConns[#RapidNewToolConns + 1] = tool.AncestryChanged:Connect(function()
+        if not tool.Parent and RapidNewTool == tool then
+            pcall(RapidNewRestoreDelays, tool)
+            RapidNewTool = nil
+            RapidNewFiring = false
+        end
+    end)
+
+    RapidNewToolConns[#RapidNewToolConns + 1] = tool.Destroying:Connect(function()
+        if RapidNewTool == tool then
+            RapidNewTool = nil
+            RapidNewFiring = false
+        end
+    end)
+end
+
+function RapidNewOnCharacterAdded(character)
+    task.wait(0.5)
+    if not character or not character.Parent then return end
+
+    RapidNewClear(RapidNewCharConns)
+    RapidNewClear(RapidNewToolConns)
+    RapidNewTool = nil
+    RapidNewFiring = false
+
+    local existing = character:FindFirstChildOfClass("Tool")
+    if existing then
+        task.spawn(RapidNewAttachTool, existing)
+    end
+
+    RapidNewCharConns[#RapidNewCharConns + 1] = character.ChildAdded:Connect(RapidNewAttachTool)
+
+    RapidNewCharConns[#RapidNewCharConns + 1] = character.ChildRemoved:Connect(function(child)
+        if child:IsA("Tool") and child == RapidNewTool then
+            pcall(RapidNewRestoreDelays, child)
+            RapidNewTool = nil
+            RapidNewFiring = false
+        end
+    end)
+
+    RapidNewCharConns[#RapidNewCharConns + 1] = character.Destroying:Connect(function()
+        RapidNewClear(RapidNewCharConns)
+        RapidNewClear(RapidNewToolConns)
+        RapidNewTool = nil
+        RapidNewFiring = false
+    end)
+end
+
+function RapidNewOnInputBegan(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        task.spawn(RapidNewStart)
+    end
+end
+
+function RapidNewOnInputEnded(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        RapidNewFiring = false
+    end
+end
+
+function RapidNewEnable()
+    if RapidNewEnabled then return end
+    RapidNewEnabled = true
+
+    if not RapidNewInputBeganConn then
+        RapidNewInputBeganConn = UserInputService.InputBegan:Connect(RapidNewOnInputBegan)
+    end
+    if not RapidNewInputEndedConn then
+        RapidNewInputEndedConn = UserInputService.InputEnded:Connect(RapidNewOnInputEnded)
+    end
+    if not RapidNewCharAddedConn then
+        RapidNewCharAddedConn = Players.LocalPlayer.CharacterAdded:Connect(RapidNewOnCharacterAdded)
+    end
+
+    if Players.LocalPlayer.Character then
+        RapidNewOnCharacterAdded(Players.LocalPlayer.Character)
+    end
+end
+
+function RapidNewDisable()
+    RapidNewEnabled = false
+    RapidNewFiring = false
+
+    if RapidNewTool then
+        pcall(RapidNewRestoreDelays, RapidNewTool)
+    end
+
+    for tool in pairs(RapidNewOriginalUpvalues) do
+        pcall(RapidNewRestoreDelays, tool)
+    end
+
+    RapidNewTool = nil
+
+    if RapidNewInputBeganConn then
+        pcall(function() RapidNewInputBeganConn:Disconnect() end)
+        RapidNewInputBeganConn = nil
+    end
+    if RapidNewInputEndedConn then
+        pcall(function() RapidNewInputEndedConn:Disconnect() end)
+        RapidNewInputEndedConn = nil
+    end
+    if RapidNewCharAddedConn then
+        pcall(function() RapidNewCharAddedConn:Disconnect() end)
+        RapidNewCharAddedConn = nil
+    end
+
+    RapidNewClear(RapidNewCharConns)
+    RapidNewClear(RapidNewToolConns)
+end
+
+function RapidApplyMethod()
+    RapidOldDisable()
+    RapidNewDisable()
+
+    if not Toggles.RapidFireEnabled.Value then return end
+
+    if RapidMethod == "old" then
+        RapidOldEnable()
+    else
+        RapidNewEnable()
+    end
+end
+
+Toggles.RapidFireEnabled:OnChanged(function(value)
+    if value then
+        RapidApplyMethod()
+    else
+        RapidOldDisable()
+        RapidNewDisable()
+    end
 end)
 
-_78:AddButton('Rapid Fire', function()
-    loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RapidFire.lua'))()
+Options.RapidFireMethod:OnChanged(function(value)
+    if type(value) == "table" then value = value[1] end
+    RapidMethod = value or "new"
+    if Toggles.RapidFireEnabled.Value then
+        RapidApplyMethod()
+    end
 end)
 
+_48:OnUnload(function()
+    RapidOldDisable()
+    RapidNewDisable()
+end)
+
+-- auto stim logic
 AS_busy = false
 AS_cache = nil
 AS_randomEquipConnection = nil
@@ -3371,11 +3802,13 @@ end
 _78:AddToggle('AutoStim', {
     Text = 'Auto Stim',
     Default = false,
+    Tooltip = 'gets a stim for u and uses it',
 })
 
 _78:AddToggle('BuyStim', {
     Text = 'Buy Stim',
     Default = false,
+    Tooltip = 'buys a stim when u dont have one on u - turn on auto stim',
 })
 
 _78:AddSlider('AutoStimThreshold', {
@@ -3768,6 +4201,7 @@ end
 _78:AddToggle('AutoMask', {
     Text = 'Auto Mask',
     Default = false,
+    Tooltip = 'automatically grabs and puts on a mask for u',
 })
 
 Toggles.AutoMask:OnChanged(function(value)
@@ -3794,6 +4228,7 @@ _78:AddLabel('Auto Armor')
 local _AutoArmorToggle = _78:AddToggle('AutoArmor', {
     Text = 'Auto Armor',
     Default = false,
+    Tooltip = 'gets armor for u',
 })
 
 local _AutoArmorThresholdSlider = _78:AddSlider('AutoArmorThreshold', {
@@ -3845,11 +4280,17 @@ BoxESPColor = BoxESPToggle:AddColorPicker('BoxESPColor', {
     Title = 'Box Color',
 })
 
-_78:AddDropdown('BoxESPBarType', {
+BoxESPDep = _78:AddDependencyBox()
+
+BoxESPDep:AddDropdown('BoxESPBarType', {
     Values = { "Health", "Armor" },
     Default = { "Health" },
     Multi = true,
     Text = 'Bar Type',
+})
+
+BoxESPDep:SetupDependencies({
+    { Toggles.BoxESPEnabled, true },
 })
 
 local _SkeletonToggle = _78:AddToggle('ESPShowSkeleton', {
@@ -4319,29 +4760,39 @@ function ChinaHat:setLineTransparency(t) lineTrs = t end
 function ChinaHat:setSpeed(s) speed = s end
 function ChinaHat:setOffsetY(o) offsetY = o end
 
-_78:AddToggle("ChinaHatEnabled", {
+chinahattoggle = _78:AddToggle("ChinaHatEnabled", {
     Text = "China Hat",
     Default = false,
-}):AddColorPicker("ChinaHatColor1", {
+})
+
+ChinaHatDep = _78:AddDependencyBox()
+
+chinahattoggle:AddColorPicker("ChinaHatColor1", {
     Default = Color3.fromRGB(255, 0, 0),
     Title = "Color 1",
-}):AddColorPicker("ChinaHatColor2", {
+})
+
+chinahattoggle:AddColorPicker("ChinaHatColor2", {
     Default = Color3.fromRGB(0, 255, 0),
     Title = "Color 2",
-}):AddColorPicker("ChinaHatColor3", {
+})
+
+chinahattoggle:AddColorPicker("ChinaHatColor3", {
     Default = Color3.fromRGB(0, 0, 255),
     Title = "Color 3",
-}):AddColorPicker("ChinaHatColor4", {
+})
+
+chinahattoggle:AddColorPicker("ChinaHatColor4", {
     Default = Color3.fromRGB(255, 255, 0),
     Title = "Color 4",
 })
 
-_78:AddToggle("ChinaHatSelfEnabled", {
+ChinaHatDep:AddToggle("ChinaHatSelfEnabled", {
     Text = "Self China Hat",
     Default = false,
 })
 
-_78:AddSlider("ChinaHatRadius", {
+ChinaHatDep:AddSlider("ChinaHatRadius", {
     Text = "Radius",
     Default = 2,
     Min = 0.5,
@@ -4349,7 +4800,7 @@ _78:AddSlider("ChinaHatRadius", {
     Rounding = 1,
 })
 
-_78:AddSlider("ChinaHatHeight", {
+ChinaHatDep:AddSlider("ChinaHatHeight", {
     Text = "Height",
     Default = 0.7,
     Min = 0.1,
@@ -4357,7 +4808,7 @@ _78:AddSlider("ChinaHatHeight", {
     Rounding = 1,
 })
 
-_78:AddSlider("ChinaHatTransparency", {
+ChinaHatDep:AddSlider("ChinaHatTransparency", {
     Text = "Hat Transparency",
     Default = 0.35,
     Min = 0,
@@ -4365,12 +4816,16 @@ _78:AddSlider("ChinaHatTransparency", {
     Rounding = 2,
 })
 
-_78:AddSlider("ChinaHatSpeed", {
+ChinaHatDep:AddSlider("ChinaHatSpeed", {
     Text = "Speed",
     Default = 0.2,
     Min = 0.01,
     Max = 2,
     Rounding = 2,
+})
+
+ChinaHatDep:SetupDependencies({
+    { Toggles.ChinaHatEnabled, true },
 })
 
 Toggles.ChinaHatEnabled:OnChanged(function(value)
@@ -4412,8 +4867,6 @@ end)
 Options.ChinaHatSpeed:OnChanged(function(value)
     ChinaHat:setSpeed(value)
 end)
-
-
 
 -- bullet tracers
 BT_Beams = {
@@ -4751,6 +5204,18 @@ AnimationSets = {
     Toy       = {idle1="782841498",  idle2="782845736",  walk="782843345",  run="782842708",  jump="782847020",  climb="782843869",  fall="782846423"},
 }
 
+-- HumanoidDescription attribute names <-> our slot keys
+AnimHDAttr = {
+    idle1 = "IdleAnimation",
+    idle2 = "IdleAnimation2",
+    walk  = "WalkAnimation",
+    run   = "RunAnimation",
+    jump  = "JumpAnimation",
+    climb = "ClimbAnimation",
+    fall  = "FallAnimation",
+}
+
+-- Animate script folder/name pairs, same as before
 AnimSlots = {
     {key = 'idle1', folder = 'idle',  name = 'Animation1'},
     {key = 'idle2', folder = 'idle',  name = 'Animation2'},
@@ -4765,9 +5230,10 @@ AnimChangerEnabled  = false
 AnimCharConn        = nil
 AnimDebounceRunning = false
 AnimPendingSet      = nil
-AnimDebounceDelay   = 0.08
+AnimDebounceDelay   = 0.25
 OriginalAnims       = setmetatable({}, {__mode = 'k'})
 CachedAnimate       = setmetatable({}, {__mode = 'k'})
+OriginalDescIDs     = setmetatable({}, {__mode = 'k'})
 
 function AnimGetSlotObject(Animate, slot)
     local folder = Animate:FindFirstChild(slot.folder)
@@ -4786,37 +5252,63 @@ function AnimWaitForAnimate(char)
     return Animate
 end
 
-function AnimCaptureOriginals(char, Animate)
-    if OriginalAnims[char] then return end
-    local saved = {}
-    for _, slot in ipairs(AnimSlots) do
-        local obj = AnimGetSlotObject(Animate, slot)
-        if obj then saved[slot.key] = obj.AnimationId end
-    end
-    OriginalAnims[char] = saved
+function AnimGetDesc(char)
+    local hum = char and char:FindFirstChildOfClass('Humanoid')
+    if not hum then return nil end
+
+    -- prefer the live instance if the game exposes it
+    local desc = hum:FindFirstChildOfClass('HumanoidDescription')
+    if desc then return desc end
+
+    -- fall back to asking the humanoid for its applied description
+    local ok, applied = pcall(function() return hum:GetAppliedDescription() end)
+    if ok and applied then return applied end
+
+    return nil
 end
 
-function AnimKillAllTracks(char)
-    local hum = char and char:FindFirstChildOfClass('Humanoid')
-    if not hum then return end
-    local animator = hum:FindFirstChildOfClass('Animator')
-    if not animator then return end
-    local ok, tracks = pcall(function() return animator:GetPlayingAnimationTracks() end)
-    if not ok then return end
-    for _, track in ipairs(tracks) do
-        pcall(function()
-            track:Stop(0)
-            track:Destroy()
-        end)
+function AnimCaptureOriginals(char, Animate, desc)
+    if not OriginalAnims[char] then
+        local saved = {}
+        for _, slot in ipairs(AnimSlots) do
+            local obj = AnimGetSlotObject(Animate, slot)
+            if obj then saved[slot.key] = obj.AnimationId end
+        end
+        OriginalAnims[char] = saved
+    end
+
+    if desc and not OriginalDescIDs[char] then
+        local savedDesc = {}
+        for key, attr in pairs(AnimHDAttr) do
+            local ok, v = pcall(function() return desc:GetAttribute(attr) end)
+            if ok and v ~= nil then
+                savedDesc[key] = v
+            end
+        end
+        OriginalDescIDs[char] = savedDesc
     end
 end
 
 function AnimReloadAnimate(char, Animate)
-    AnimKillAllTracks(char)
-    Animate.Disabled = true
-    task.wait(0)
-    if Animate.Parent then
-        Animate.Disabled = false
+    local hum = char and char:FindFirstChildOfClass('Humanoid')
+    local animator = hum and hum:FindFirstChildOfClass('Animator')
+    if animator then
+        local ok, tracks = pcall(function() return animator:GetPlayingAnimationTracks() end)
+        if ok then
+            for _, track in ipairs(tracks) do
+                pcall(function() track:Stop(0.1) end)
+            end
+        end
+    end
+
+    task.wait(0.1)
+
+    if Animate and Animate.Parent then
+        Animate.Disabled = true
+        task.wait(0.05)
+        if Animate.Parent then
+            Animate.Disabled = false
+        end
     end
 end
 
@@ -4827,12 +5319,16 @@ end
 function AnimApplySet(setName)
     local char = _56.Character
     if not char then return end
+
     local Animate = AnimWaitForAnimate(char)
     if not Animate or not char.Parent then return end
-    AnimCaptureOriginals(char, Animate)
+
+    local desc = AnimGetDesc(char)
+    AnimCaptureOriginals(char, Animate, desc)
 
     local ids = {}
-    if setName and setName ~= 'Default' then
+    local isDefault = (not setName) or setName == 'Default'
+    if not isDefault then
         local data = AnimationSets[setName]
         if not data then return end
         local hum = char:FindFirstChildOfClass('Humanoid')
@@ -4840,15 +5336,41 @@ function AnimApplySet(setName)
             AnimNotify(setName .. ' is R15 only - this character is R6 :(')
             return
         end
-        for _, slot in ipairs(AnimSlots) do ids[slot.key] = ASSET .. data[slot.key] end
+        for _, slot in ipairs(AnimSlots) do
+            ids[slot.key] = ASSET .. data[slot.key]
+        end
     else
         ids = OriginalAnims[char] or {}
     end
 
+    -- 1. write to the Animate script objects (local, instant)
     for _, slot in ipairs(AnimSlots) do
         local obj = AnimGetSlotObject(Animate, slot)
-        if obj and ids[slot.key] then obj.AnimationId = ids[slot.key] end
+        if obj and ids[slot.key] then
+            obj.AnimationId = ids[slot.key]
+        end
     end
+
+    -- 2. write to the HumanoidDescription (replicates to others)
+    if desc then
+        local descSource = isDefault and OriginalDescIDs[char] or nil
+        for key, attr in pairs(AnimHDAttr) do
+            local id
+            if isDefault then
+                id = descSource and descSource[key]
+            else
+                id = ids[key]
+            end
+            if id then
+                -- HumanoidDescription attribute reads need bare asset ids
+                local bare = tostring(id):gsub("^rbxassetid://", ""):gsub("^http://www%.roblox%.com/asset/%?id=", "")
+                pcall(function() desc:SetAttribute(attr, bare) end)
+                -- also set the property itself if it exists
+                pcall(function() desc[attr] = tonumber(bare) or bare end)
+            end
+        end
+    end
+
     AnimReloadAnimate(char, Animate)
 end
 
@@ -4874,7 +5396,10 @@ end
 if _56.Character then
     task.spawn(function()
         local Animate = AnimWaitForAnimate(_56.Character)
-        if Animate then AnimCaptureOriginals(_56.Character, Animate) end
+        if Animate then
+            local desc = AnimGetDesc(_56.Character)
+            AnimCaptureOriginals(_56.Character, Animate, desc)
+        end
     end)
 end
 
@@ -4882,8 +5407,9 @@ if AnimCharConn then AnimCharConn:Disconnect() end
 AnimCharConn = _56.CharacterAdded:Connect(function(char)
     local Animate = AnimWaitForAnimate(char)
     if not Animate then return end
-    AnimCaptureOriginals(char, Animate)
-    task.wait(0.3)
+    local desc = AnimGetDesc(char)
+    AnimCaptureOriginals(char, Animate, desc)
+    task.wait(0.5)
     if AnimChangerEnabled then
         AnimApplySet(Options.AnimSet.Value or 'Default')
     end
@@ -6045,6 +6571,19 @@ local StompToggle = _78:AddToggle('AutoStomp', {
     Default = false,
 })
 
+StompDep = _78:AddDependencyBox()
+
+StompModeDropdown = StompDep:AddDropdown('StompMode', {
+    Text = 'Stomp Mode',
+    Values = { 'direct', 'vector' },
+    Default = 'direct',
+    Tooltip = 'direct = snap HRP to target part CFrame. vector = offset 0, 2.3, 0 above the part.',
+})
+
+StompDep:SetupDependencies({
+    { Toggles.AutoStomp, true }
+})
+
 GrabEnabled = false
 isGrabbing = false
 grabReturnPos = nil
@@ -6202,9 +6741,10 @@ setfflag("DebugRunParallelLuaOnMainThread", "true")
 setfflag("FFlagUserEnablePlayerCharacterDestroyBehavior", "true")
 setfflag("FIntRenderShadowIntensity", 0)
 setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
-setfflag("DFIntRuntimeConcurrency", "4")
 setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
 setfflag("DFIntConnectionMTUSize", "1472")
+setfflag("ReplicatorAnimationTrackLimitPerAnimator", "100")
+setfflag("DFIntNumAssetsMaxToPreload", "9999999")
 
 local _104 = {
     enabled = false,
@@ -6220,7 +6760,11 @@ local _104 = {
     wasknocked = {},
     mode = "sticky",
     autoshoot = false,
-    currentmode = "sticky"
+    currentmode = "sticky",
+    deflectactive = false,
+    deflectplayer = nil,
+    deflectpart = nil,
+    deflectposition = nil,
 }
 
 _104.hitNotifyLastHealth = {}
@@ -7607,6 +8151,20 @@ _135.TextStrokeTransparency = 0
 local _136 = {}
 local _137 = {}
 
+_deflectLine = Drawing.new("Line")
+_deflectLine.Color = Color3.fromRGB(255, 60, 60)
+_deflectLine.Thickness = 2
+_deflectLine.Transparency = 1
+_deflectLine.Visible = false
+_deflectLine.ZIndex = 3
+
+_deflectOutline = Drawing.new("Line")
+_deflectOutline.Color = Color3.new(0, 0, 0)
+_deflectOutline.Thickness = 4
+_deflectOutline.Transparency = 1
+_deflectOutline.Visible = false
+_deflectOutline.ZIndex = 2
+
 local function _138()
     for i, _139 in ipairs(_136) do
         _139:Remove()
@@ -8465,6 +9023,7 @@ do
     StompReturnLocked = false
     StompStartTime = 0
     StompFallbackPhase = false
+    StompMode = "direct"
 
     StompToggle:OnChanged(function(value)
         StompEnabled = value
@@ -8483,6 +9042,11 @@ do
                 end
             end
         end
+    end)
+
+    StompModeDropdown:OnChanged(function(value)
+        if type(value) == "table" then value = value[1] end
+        StompMode = value or "direct"
     end)
 
     function getStompRemote()
@@ -8587,6 +9151,16 @@ do
         return CFrame.new(top, top + facing.Unit)
     end
 
+    function getStompCFrame(targetPart)
+        if not targetPart or not targetPart.Parent then return nil end
+
+        if StompMode == "vector" then
+            return CFrame.new(targetPart.Position + Vector3.new(0, 2.3, 0))
+        end
+
+        return targetPart.CFrame
+    end
+
     function autoStompTarget()
         if not StompEnabled then return end
         if _118 then return end
@@ -8633,7 +9207,7 @@ do
             targetPart:SetNetworkOwner(_56)
         end)
 
-        localHRP.CFrame = targetPart.CFrame
+        localHRP.CFrame = getStompCFrame(targetPart) or targetPart.CFrame
 
         for i = 1, 20 do
             fireStomp()
@@ -8688,7 +9262,7 @@ do
 
             local currentTargetPart = getBestStompPosition(targetChar)
             if currentTargetPart then
-                localHRP.CFrame = currentTargetPart.CFrame
+                localHRP.CFrame = getStompCFrame(currentTargetPart) or currentTargetPart.CFrame
                 localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                 localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
                 fireStomp()
@@ -10826,6 +11400,62 @@ local function _198()
     end
 end
 
+function _198b()
+    if not _deflectLine or not _deflectOutline then return end
+
+    if DefenseCircleIsControlling then
+        _deflectLine.Visible = false
+        _deflectOutline.Visible = false
+        return
+    end
+
+    if not Toggles.Line or not Toggles.Line.Value then
+        _deflectLine.Visible = false
+        _deflectOutline.Visible = false
+        return
+    end
+
+    if not _104.deflectactive then
+        _deflectLine.Visible = false
+        _deflectOutline.Visible = false
+        return
+    end
+
+    local dPlayer = _104.deflectplayer
+    local dPart = _104.deflectpart
+
+    if not dPlayer or not dPart or not dPart.Parent then
+        _deflectLine.Visible = false
+        _deflectOutline.Visible = false
+        return
+    end
+
+    _104.deflectposition = dPart.Position
+
+    local screenPos, onScreen = _58:WorldToViewportPoint(dPart.Position)
+    if not onScreen or screenPos.Z <= 0 then
+        _deflectLine.Visible = false
+        _deflectOutline.Visible = false
+        return
+    end
+
+    local origin = _170()
+    local target = Vector2.new(screenPos.X, screenPos.Y)
+
+    _deflectLine.Color = Options.LineColor and Options.LineColor.Value or Color3.fromRGB(255, 60, 60)
+    _deflectLine.Thickness = shared.hitman.visuals.snaplines.thickness
+    _deflectLine.Transparency = Options.LineColor and Options.LineColor.Transparency or 0
+    _deflectLine.From = origin
+    _deflectLine.To = target
+    _deflectLine.Visible = true
+
+    _deflectOutline.Thickness = shared.hitman.visuals.snaplines.thickness + 2
+    _deflectOutline.Transparency = Options.LineColor and Options.LineColor.Transparency or 0
+    _deflectOutline.From = origin
+    _deflectOutline.To = target
+    _deflectOutline.Visible = true
+end
+
 local function _205()
     if not _104.active then return end
     if _isMode("auto select") then
@@ -10985,14 +11615,26 @@ function hasKO(player)
     local ko = bodyEffects:FindFirstChild("K.O")
     return ko and ko.Value == true
 end
-
 local function _206()
-    if not _104.autoshoot or not _104.active then return end
+    if not _104.autoshoot then return end
+    if not (_104.active or _104.deflectactive) then return end
+
     local _145 = _56.Character and _56.Character:FindFirstChildOfClass("Tool")
     if not _145 then return end
     local _207 = _145:FindFirstChild("Ammo")
     if _207 and _207.Value <= 0 then return end
-    
+
+    -- deflect takes over when primary isn't active
+    if _104.deflectactive and (not _104.active or not _104.targetplayer or not _104.targetpart or not _104.targetpart.Parent) then
+        local dPlr = _104.deflectplayer
+        local dPart = _104.deflectpart
+        if not dPlr or not dPart or not dPart.Parent then return end
+        if not _182(dPlr) or hasKO(dPlr) then return end
+        _145:Activate()
+        task.wait(0.05)
+        return
+    end
+
     if _isMode("target all") then
         local _174 = _173()
         if #_174 == 0 then return end
@@ -11004,9 +11646,7 @@ local function _206()
             end
         end
     else
-        if not _104.targetplayer or not _182(_104.targetplayer) or hasKO(_104.targetplayer) then
-            return
-        end
+        if not _104.targetplayer or not _182(_104.targetplayer) or hasKO(_104.targetplayer) then return end
         _145:Activate()
         task.wait(0.05)
     end
@@ -11163,17 +11803,28 @@ local _229; _229 = hookmetamethod(game, "__namecall", function(...)
     if checkcaller() then return _229(...) end
     local _230 = {...}
     local _44 = getnamecallmethod()
+
+    local usingDeflect = false
+    local tp = _104.targetpart
+    local tpos = _104.targetposition
+
     if not _104.active then
-        return _229(...)
+        if _104.deflectactive and _104.deflectpart and _104.deflectpart.Parent then
+            usingDeflect = true
+            tp = _104.deflectpart
+            tpos = _104.deflectposition
+        else
+            return _229(...)
+        end
     end
+
     if _104.hitchance < 100 then
         if _originalRandom(1, 100) > _104.hitchance then
             return _229(...)
         end
     end
+
     if _44:lower() == "raycast" and _230[1] == workspace then
-        local tp = _104.targetpart
-        local tpos = _104.targetposition
         if tp and tpos and tp.Parent then
             local origin = _230[2]
             if typeof(origin) == "Vector3" then
@@ -11204,6 +11855,12 @@ if _130 then
             local active = _104.active
             local tp = _104.targetpart
             local tpos = _104.targetposition
+
+            if not active and _104.deflectactive and _104.deflectpart and _104.deflectpart.Parent then
+                active = true
+                tp = _104.deflectpart
+                tpos = _104.deflectposition
+            end
 
             if key == "Hit" and active and tpos then
                 return CFrame.new(tpos)
@@ -11241,6 +11898,7 @@ local _237 = _52.RenderStepped:Connect(function()
         _205()
         _194()
         _198()
+        _198b()
         if _130 then
             _141()
         end
@@ -11249,6 +11907,7 @@ local _237 = _52.RenderStepped:Connect(function()
     else
         _134.Visible = false
         _135.Visible = false
+        _198b()
     end
 end)
 
@@ -11274,6 +11933,7 @@ Options.Mode:OnChanged(function(value)
     shared.hitman.silent.mode = value
     if _104.active then
         _198()
+        _198b()
         _165()
     end
     if (value == "auto select" or value == "target all") and _105 then
@@ -11314,9 +11974,12 @@ Toggles.Line:OnChanged(function(value)
         for i, _140 in ipairs(_137) do
             _140.Visible = false
         end
+        if _deflectLine then _deflectLine.Visible = false end
+        if _deflectOutline then _deflectOutline.Visible = false end
     elseif _104.active then
         _198()
     end
+    _198b()
 end)
 
 Toggles.Spectate:OnChanged(function(value)
@@ -12597,11 +13260,970 @@ _52.Heartbeat:Connect(function()
     end
 end)
 
+-- deflect
+
+DeflectActive = false
+DeflectConnections = {}
+DeflectCharConns = {}
+DeflectFireTracker = { FiredAt = {}, Mouse = {}, FireWhy = {} }
+DeflectHealthState = {
+    Last = nil,
+    LastHitAt = 0,
+    LastGunshotAt = 0,
+    LastTrustedShooter = nil,
+    LastTrustedAt = 0,
+}
+DeflectGunWatch = setmetatable({}, { __mode = "k" })
+DeflectHeldTarget = nil
+DeflectHoldConn = nil
+
+DeflectManualTarget = nil
+
+DeflectPlayerHooks = setmetatable({}, { __mode = "k" })
+DeflectToolHooks   = setmetatable({}, { __mode = "k" })
+DeflectScanAccum    = 0
+DeflectScanInterval = 1 / 39
+
+DeflectAimHitRadius   = 49
+DeflectFireWindow     = 0.8
+DeflectVoidDist       = 120
+DeflectMaxTargetDist  = 1200
+
+DeflectPlayers          = game:GetService("Players")
+DeflectRunService       = game:GetService("RunService")
+DeflectReplicatedStorage = game:GetService("ReplicatedStorage")
+DeflectLocalPlayer      = DeflectPlayers.LocalPlayer
+
+DeflectToggleConn       = nil
+DeflectUnloaded         = false
+DeflectLastNotifyTarget = nil
+
+function DeflectNotify(msg, duration)
+    pcall(function()
+        _48:Notify(msg, duration or 4)
+    end)
+end
+
+function DeflectCleanupHooks()
+    for plr, h in pairs(DeflectPlayerHooks) do
+        if h.mouseConn then pcall(function() h.mouseConn:Disconnect() end) end
+        if h.beChildConn then pcall(function() h.beChildConn:Disconnect() end) end
+        DeflectPlayerHooks[plr] = nil
+    end
+    DeflectPlayerHooks = setmetatable({}, { __mode = "k" })
+
+    for tool, t in pairs(DeflectToolHooks) do
+        if t.conn then pcall(function() t.conn:Disconnect() end) end
+        DeflectToolHooks[tool] = nil
+    end
+    DeflectToolHooks = setmetatable({}, { __mode = "k" })
+
+    DeflectScanAccum = 0
+end
+
+function DeflectCleanupPlayer(player)
+    if not player then return end
+    local h = DeflectPlayerHooks[player]
+    if h then
+        if h.mouseConn then pcall(function() h.mouseConn:Disconnect() end) end
+        if h.beChildConn then pcall(function() h.beChildConn:Disconnect() end) end
+        DeflectPlayerHooks[player] = nil
+    end
+
+    for tool, t in pairs(DeflectToolHooks) do
+        local owner = tool:FindFirstAncestorOfClass("Player") or tool:FindFirstAncestorOfClass("Model")
+        if not tool.Parent
+            or (owner and owner:IsA("Player") and owner == player)
+            or (owner and owner:IsA("Model") and DeflectPlayers:GetPlayerFromCharacter(owner) == player)
+        then
+            if t.conn then pcall(function() t.conn:Disconnect() end) end
+            DeflectToolHooks[tool] = nil
+        end
+    end
+
+    DeflectFireTracker.FiredAt[player] = nil
+    DeflectFireTracker.Mouse[player] = nil
+    DeflectFireTracker.FireWhy[player] = nil
+
+    if DeflectHealthState.LastTrustedShooter == player then
+        DeflectHealthState.LastTrustedShooter = nil
+        DeflectHealthState.LastTrustedAt = 0
+    end
+
+    if DeflectManualTarget == player then
+        DeflectManualTarget = nil
+    end
+end
+
+function DeflectCleanupStaleHooks()
+    for plr, h in pairs(DeflectPlayerHooks) do
+        if not plr.Parent then
+            if h.mouseConn then pcall(function() h.mouseConn:Disconnect() end) end
+            if h.beChildConn then pcall(function() h.beChildConn:Disconnect() end) end
+            DeflectPlayerHooks[plr] = nil
+        elseif h.beInst and not h.beInst.Parent then
+            if h.mouseConn then pcall(function() h.mouseConn:Disconnect() end) end
+            if h.beChildConn then pcall(function() h.beChildConn:Disconnect() end) end
+            DeflectPlayerHooks[plr] = nil
+        end
+    end
+
+    for tool, t in pairs(DeflectToolHooks) do
+        if not tool.Parent then
+            if t.conn then pcall(function() t.conn:Disconnect() end) end
+            DeflectToolHooks[tool] = nil
+        end
+    end
+end
+
+function DeflectSubscribe(signal, fn)
+    local conn = signal:Connect(fn)
+    if DeflectActive then
+        DeflectConnections[#DeflectConnections + 1] = conn
+    else
+        pcall(function()
+            if conn and conn.Disconnect then conn:Disconnect() end
+        end)
+    end
+    return conn
+end
+
+function DeflectCharSubscribe(signal, fn)
+    local conn = DeflectSubscribe(signal, fn)
+    DeflectCharConns[#DeflectCharConns + 1] = conn
+    return conn
+end
+
+function DeflectIsFriendlyWhitelisted(player)
+    if not player then return false end
+    local hitman = shared and shared.hitman
+    local wl = hitman and hitman.checks and hitman.checks.whitelist
+    if wl and wl.players then
+        return wl.players[player.Name] == true or wl.players[player.UserId] == true
+    end
+    return false
+end
+
+function DeflectIsCreatorTagName(name)
+    if type(name) ~= "string" then return false end
+    local ln = string.lower(name)
+    local compact = (ln:gsub("%s+", ""))
+    return compact == "creator" or compact == "creatortag" or compact == "killer"
+        or compact == "damager" or compact == "lastdamager" or compact == "attacker"
+        or compact == "causedby" or compact == "hitby" or compact == "lastattacker"
+        or ln == "creator tag" or ln == "last damager" or ln == "last attacker" or ln == "hit by"
+end
+
+function DeflectPlayerFromValue(value)
+    if typeof(value) == "Instance" then
+        if value:IsA("Player") then return value end
+        local plr = DeflectPlayers:GetPlayerFromCharacter(value)
+        if plr then return plr end
+        if value.Parent and value.Parent:IsA("Model") then
+            return DeflectPlayers:GetPlayerFromCharacter(value.Parent)
+        end
+    elseif type(value) == "string" and value ~= "" then
+        local byName = DeflectPlayers:FindFirstChild(value)
+        if byName and byName:IsA("Player") then return byName end
+        for _, plr in ipairs(DeflectPlayers:GetPlayers()) do
+            if plr.Name == value or plr.DisplayName == value then return plr end
+        end
+    elseif type(value) == "number" then
+        local ok, plr = pcall(DeflectPlayers.GetPlayerByUserId, DeflectPlayers, value)
+        if ok then return plr end
+    end
+    return nil
+end
+
+function DeflectPlayerFromTag(tag)
+    if not tag then return nil end
+    if tag:IsA("ObjectValue") or tag:IsA("StringValue") or tag:IsA("IntValue") or tag:IsA("NumberValue") then
+        return DeflectPlayerFromValue(tag.Value)
+    end
+    return nil
+end
+
+function DeflectRememberTrusted(plr)
+    if not plr or plr == DeflectLocalPlayer or plr.Parent ~= DeflectPlayers then return end
+    if DeflectIsFriendlyWhitelisted(plr) then return end
+    DeflectHealthState.LastTrustedShooter = plr
+    DeflectHealthState.LastTrustedAt = os.clock()
+end
+
+function DeflectCollectCreatorPlayers(root, into, seen)
+    if not root then return end
+    local function consider(inst)
+        if not (inst:IsA("ObjectValue") or inst:IsA("StringValue")
+            or inst:IsA("IntValue") or inst:IsA("NumberValue")) then return end
+        if not DeflectIsCreatorTagName(inst.Name) then return end
+        local plr = DeflectPlayerFromTag(inst)
+        if plr and plr ~= DeflectLocalPlayer and not seen[plr] and not DeflectIsFriendlyWhitelisted(plr) then
+            seen[plr] = true
+            into[#into + 1] = plr
+        end
+    end
+    for _, child in ipairs(root:GetChildren()) do consider(child) end
+    for _, desc in ipairs(root:GetDescendants()) do consider(desc) end
+end
+
+function DeflectFindCreatorAttacker(hum)
+    local char = DeflectLocalPlayer.Character
+    if not hum then hum = char and char:FindFirstChildOfClass("Humanoid") end
+    if not hum then return nil end
+
+    local list, seen = {}, {}
+    DeflectCollectCreatorPlayers(hum, list, seen)
+    if char then
+        DeflectCollectCreatorPlayers(char, list, seen)
+        local be = char:FindFirstChild("BodyEffects")
+        if be then DeflectCollectCreatorPlayers(be, list, seen) end
+    end
+
+    local filterTarget = DeflectManualTarget
+    if filterTarget then
+        local filtered = {}
+        for _, plr in ipairs(list) do
+            if plr ~= filterTarget then
+                filtered[#filtered + 1] = plr
+            end
+        end
+        list = filtered
+    end
+
+    if #list == 0 then return nil end
+    if #list == 1 then return list[1] end
+    local locked = DeflectHealthState.LastTrustedShooter
+    if locked and seen[locked] then return locked end
+    return nil
+end
+
+function DeflectRecordFire(player, why)
+    if not player or player == DeflectLocalPlayer then return end
+    if DeflectIsFriendlyWhitelisted(player) then return end
+    if DeflectManualTarget and DeflectManualTarget == player then return end
+    DeflectFireTracker.FiredAt[player] = os.clock()
+    DeflectFireTracker.FireWhy[player] = why or "fire"
+end
+
+function DeflectFindAmmoValue(tool)
+    if not tool then return nil end
+    local ammo = tool:FindFirstChild("Ammo") or tool:FindFirstChild("ammo") or tool:FindFirstChild("AMMO")
+    if ammo and ammo:IsA("ValueBase") then return ammo end
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("ValueBase") and string.lower(d.Name) == "ammo" then return d end
+    end
+    return nil
+end
+
+function DeflectAllToolsWithAmmo(player)
+    local list = {}
+    local function add(container)
+        if not container then return end
+        for _, t in ipairs(container:GetChildren()) do
+            if t:IsA("Tool") and DeflectFindAmmoValue(t) then list[#list + 1] = t end
+        end
+    end
+    add(player.Character)
+    add(player:FindFirstChild("Backpack"))
+    return list
+end
+
+function DeflectWatchGunFiringFlag(be, player)
+    if not be or be:GetAttribute("__reflect_gf_watch") then return end
+    be:SetAttribute("__reflect_gf_watch", true)
+    for _, name in ipairs({ "GunFiring", "Shooting", "Attacking", "GunFire" }) do
+        local flag = be:FindFirstChild(name)
+        if flag and flag:IsA("ValueBase") and not flag:GetAttribute("__reflect_gf") then
+            flag:SetAttribute("__reflect_gf", true)
+            DeflectSubscribe(flag.Changed, function()
+                local v = flag.Value
+                if v == true or v == 1 then
+                    local myHead = DeflectLocalPlayer.Character and DeflectLocalPlayer.Character:FindFirstChild("Head")
+                    local mp = DeflectFireTracker.Mouse[player]
+                    local aimed = myHead and mp and typeof(mp) == "Vector3"
+                        and (mp - myHead.Position).Magnitude <= DeflectAimHitRadius
+                    local far = true
+                    local me = DeflectLocalPlayer.Character
+                        and (DeflectLocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            or DeflectLocalPlayer.Character:FindFirstChild("Head"))
+                    local them = player.Character
+                        and (player.Character:FindFirstChild("HumanoidRootPart")
+                            or player.Character:FindFirstChild("Head"))
+                    if me and them then
+                        far = (them.Position - me.Position).Magnitude >= DeflectVoidDist
+                    elseif player.Character then
+                        far = false
+                    end
+                    if aimed or far or not player.Character then
+                        DeflectRecordFire(player, name)
+                    end
+                end
+            end)
+        end
+    end
+end
+
+function DeflectScanPlayers(dt)
+    if DeflectUnloaded then return end
+
+    DeflectScanAccum = DeflectScanAccum + (dt or 0)
+    if DeflectScanAccum < DeflectScanInterval then return end
+    DeflectScanAccum = 0
+
+    local now = os.clock()
+
+    for _, p in ipairs(DeflectPlayers:GetPlayers()) do
+        if p ~= DeflectLocalPlayer then
+            local hooks = DeflectPlayerHooks[p]
+            if not hooks then
+                hooks = { beInst = nil, mouseConn = nil, beChildConn = nil }
+                DeflectPlayerHooks[p] = hooks
+            end
+
+            local char = p.Character
+            if char then
+                local be = char:FindFirstChild("BodyEffects")
+                if be then
+                    if hooks.beInst ~= be then
+                        if hooks.mouseConn then pcall(function() hooks.mouseConn:Disconnect() end) end
+                        if hooks.beChildConn then pcall(function() hooks.beChildConn:Disconnect() end) end
+                        hooks.mouseConn = nil
+                        hooks.beChildConn = nil
+                        hooks.beInst = be
+
+                        local function hookMousePos(mp)
+                            if not mp or not mp:IsA("ValueBase") then return end
+                            if hooks.mouseConn then pcall(function() hooks.mouseConn:Disconnect() end) end
+                            local v = mp.Value
+                            if typeof(v) == "Vector3" then
+                                DeflectFireTracker.Mouse[p] = v
+                            end
+                            hooks.mouseConn = mp.Changed:Connect(function(newV)
+                                if typeof(newV) == "Vector3" then
+                                    DeflectFireTracker.Mouse[p] = newV
+                                end
+                            end)
+                        end
+
+                        local mp = be:FindFirstChild("MousePos")
+                        if mp then hookMousePos(mp) end
+                        hooks.beChildConn = be.ChildAdded:Connect(function(c)
+                            if c.Name == "MousePos" then hookMousePos(c) end
+                        end)
+                    end
+
+                    DeflectWatchGunFiringFlag(be, p)
+                end
+            end
+
+            local tools = DeflectAllToolsWithAmmo(p)
+            for _, tool in ipairs(tools) do
+                if not DeflectToolHooks[tool] then
+                    local ammo = DeflectFindAmmoValue(tool)
+                    if ammo then
+                        local startVal = tonumber(ammo.Value) or 0
+                        local entry = { ammoObj = ammo, lastAmmo = startVal, conn = nil }
+                        DeflectToolHooks[tool] = entry
+                        entry.conn = ammo.Changed:Connect(function(v)
+                            local nv = tonumber(v) or 0
+                            local cur = DeflectToolHooks[tool]
+                            if not cur then return end
+                            if nv < cur.lastAmmo then DeflectRecordFire(p, "ammo") end
+                            cur.lastAmmo = nv
+                        end)
+                    end
+                end
+            end
+        end
+    end
+
+    for plr, at in pairs(DeflectFireTracker.FiredAt) do
+        if now - at > 1.5 then DeflectFireTracker.FiredAt[plr] = nil end
+    end
+
+    for tool, t in pairs(DeflectToolHooks) do
+        if not tool.Parent then
+            if t.conn then pcall(function() t.conn:Disconnect() end) end
+            DeflectToolHooks[tool] = nil
+        end
+    end
+end
+
+function DeflectAttackerFromBulletObj(obj)
+    if not obj then return nil end
+    local owner = obj:GetAttribute("OwnerCharacter") or obj:GetAttribute("Owner")
+        or obj:GetAttribute("owner") or obj:GetAttribute("Creator")
+        or obj:GetAttribute("Shooter") or obj:GetAttribute("GunOwner")
+    local plr = DeflectPlayerFromValue(owner)
+    if plr then return plr end
+    for _, n in ipairs({ "Owner", "Creator", "Shooter", "OwnerCharacter" }) do
+        local v = obj:FindFirstChild(n)
+        if v then
+            plr = DeflectPlayerFromTag(v) or DeflectPlayerFromValue(v.Value)
+            if plr then return plr end
+        end
+    end
+    return nil
+end
+
+function DeflectWatchBulletFolder(folder)
+    if not folder or folder:GetAttribute("__reflect_bullets") then return end
+    folder:SetAttribute("__reflect_bullets", true)
+    local function onObj(obj)
+        task.defer(function()
+            local plr = DeflectAttackerFromBulletObj(obj)
+            if plr and plr ~= DeflectLocalPlayer and not DeflectIsFriendlyWhitelisted(plr) then
+                DeflectRecordFire(plr, "bullet")
+            end
+        end)
+    end
+    DeflectSubscribe(folder.DescendantAdded, onObj)
+    DeflectSubscribe(folder.ChildAdded, onObj)
+end
+
+function DeflectIsDowned(player)
+    local char = player.Character
+    if not char then
+        local firedAt = DeflectFireTracker.FiredAt[player]
+        if firedAt and os.clock() - firedAt < 1.2 then return false end
+        return true
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return true end
+    local be = char:FindFirstChild("BodyEffects")
+    local ko = be and be:FindFirstChild("K.O")
+    if ko and ko.Value == true then return true end
+    return false
+end
+
+function DeflectMyRootPos()
+    local char = DeflectLocalPlayer.Character
+    local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head"))
+    return hrp and hrp.Position or nil
+end
+
+function DeflectPlayerDist(player)
+    local me = DeflectMyRootPos()
+    if not me then return 0 end
+    local char = player.Character
+    if not char then return math.huge end
+    local hrp = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
+    if not hrp then return math.huge end
+    return (hrp.Position - me).Magnitude
+end
+
+function DeflectIsVoidLike(player)
+    return DeflectPlayerDist(player) >= DeflectVoidDist
+end
+
+function DeflectMouseOnUs(player, myHead)
+    if not myHead then return false end
+    local mp = DeflectFireTracker.Mouse[player]
+    if not mp or typeof(mp) ~= "Vector3" then return false end
+    return (mp - myHead.Position).Magnitude <= DeflectAimHitRadius
+end
+
+function DeflectRecentFirers(window)
+    local now = os.clock()
+    window = window or DeflectFireWindow
+    local list = {}
+    for _, p in ipairs(DeflectPlayers:GetPlayers()) do
+        if p ~= DeflectLocalPlayer and not DeflectIsFriendlyWhitelisted(p) and not DeflectIsDowned(p) then
+            local firedAt = DeflectFireTracker.FiredAt[p]
+            if firedAt and (now - firedAt) <= window then
+                list[#list + 1] = p
+            end
+        end
+    end
+    return list
+end
+
+function DeflectPickBestAttacker(candidates, myHead)
+    if not candidates or #candidates == 0 then return nil, "none" end
+
+    local filterTarget = DeflectManualTarget
+    local filtered = {}
+    for _, p in ipairs(candidates) do
+        if p ~= filterTarget then
+            filtered[#filtered + 1] = p
+        end
+    end
+    candidates = filtered
+    if #candidates == 0 then return nil, "only-manual-target" end
+
+    local aimed = {}
+    for _, p in ipairs(candidates) do
+        if DeflectMouseOnUs(p, myHead) then aimed[#aimed + 1] = p end
+    end
+    local pool = aimed
+    if #pool == 0 then
+        local voids = {}
+        for _, p in ipairs(candidates) do
+            if DeflectIsVoidLike(p) then voids[#voids + 1] = p end
+        end
+        if #voids == 1 then return voids[1], "unique-void-firer" end
+        return nil, "no-aim-on-us"
+    end
+    if #pool == 1 then
+        return pool[1], DeflectIsVoidLike(pool[1]) and "void-aim" or "near-aim"
+    end
+    local best, bestD = nil, -1
+    for _, p in ipairs(pool) do
+        local d = DeflectPlayerDist(p)
+        if d > bestD then best, bestD = p, d end
+    end
+    if best and bestD >= DeflectVoidDist then return best, "farthest-void-aim" end
+    if best and #pool >= 2 and bestD < DeflectVoidDist then return nil, "ambiguous-near-aim:" .. #pool end
+    return best, "aim"
+end
+
+function DeflectFindUniqueFireAimAttacker(myHead)
+    local firers = DeflectRecentFirers(DeflectFireWindow)
+    if #firers == 0 then return nil, "no-firers" end
+    return DeflectPickBestAttacker(firers, myHead)
+end
+
+function DeflectFindAttacker()
+    local myChar = DeflectLocalPlayer.Character
+    local myHead = myChar and myChar:FindFirstChild("Head")
+    local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    local now = os.clock()
+
+    -- sticky: only if the held target fired right before our hit landed
+    local held = DeflectHeldTarget
+    if held and held.Parent == DeflectPlayers then
+        local heldFiredAt = DeflectFireTracker.FiredAt[held]
+        local hitAt = DeflectHealthState.LastHitAt
+        if heldFiredAt and hitAt > 0
+            and (hitAt - heldFiredAt) >= 0
+            and (hitAt - heldFiredAt) <= DeflectFireWindow then
+            return held, "held-sticky"
+        end
+        if DeflectIsDowned(held) then
+            DeflectReleaseTarget()
+        end
+    end
+
+    local tagged = DeflectFindCreatorAttacker(hum)
+    if tagged then
+        DeflectRememberTrusted(tagged)
+        return tagged, "creator-tag"
+    end
+
+    local locked = DeflectHealthState.LastTrustedShooter
+    if locked and locked.Parent == DeflectPlayers and not DeflectIsFriendlyWhitelisted(locked)
+        and (now - DeflectHealthState.LastTrustedAt) <= 1.0 then
+        if DeflectIsVoidLike(locked) or DeflectMouseOnUs(locked, myHead) then
+            return locked, "trusted-lock"
+        end
+    end
+
+    local unique, why = DeflectFindUniqueFireAimAttacker(myHead)
+    if unique then
+        DeflectRememberTrusted(unique)
+        return unique, why
+    end
+
+    return nil, why or "no-evidence"
+end
+
+function DeflectResolveAttackerAsync()
+    local lastWhy = "pending"
+    for _ = 1, 4 do
+        if not DeflectActive then return nil, "disabled" end
+        local attacker, why = DeflectFindAttacker()
+        lastWhy = why or lastWhy
+        if attacker then return attacker, why end
+        task.wait(0.02)
+    end
+    return nil, lastWhy
+end
+
+function DeflectWatchCreatorOnInstance(inst)
+    if not inst then return end
+    local function consider(child)
+        if not child then return end
+        local isTag = DeflectIsCreatorTagName(child.Name)
+        local isObj = child:IsA("ObjectValue")
+        if not isTag and not isObj then return end
+        if not isTag and isObj then
+            local function onLoose()
+                if os.clock() - (DeflectHealthState.LastHitAt or 0) > 1.0 then return end
+                local plr = DeflectPlayerFromTag(child)
+                if plr then DeflectRememberTrusted(plr) end
+            end
+            DeflectCharSubscribe(child.Changed, onLoose)
+            task.defer(onLoose)
+            return
+        end
+        local function onChanged()
+            local plr = DeflectPlayerFromTag(child)
+            if plr then DeflectRememberTrusted(plr) end
+        end
+        if child:IsA("ValueBase") then DeflectCharSubscribe(child.Changed, onChanged) end
+        task.defer(onChanged)
+    end
+    for _, child in ipairs(inst:GetChildren()) do consider(child) end
+    DeflectCharSubscribe(inst.ChildAdded, consider)
+end
+
+function DeflectReleaseTarget()
+    if DeflectHeldTarget then
+        _48:Notify("Deflect: target released - " .. DeflectHeldTarget.DisplayName, 3)
+        DeflectLastNotifyTarget = nil
+    end
+    if DeflectHeldTarget and _104 then
+        if _104.targetplayer == DeflectHeldTarget then
+            _104.targetplayer = nil
+            _104.targetpart = nil
+            _104.targetposition = nil
+            _104.active = false
+        end
+    end
+    DeflectHeldTarget = nil
+    if DeflectHoldConn then
+        pcall(function() DeflectHoldConn:Disconnect() end)
+        DeflectHoldConn = nil
+    end
+end
+
+function DeflectWatchTargetKO(player)
+    if DeflectHoldConn then
+        pcall(function() DeflectHoldConn:Disconnect() end)
+        DeflectHoldConn = nil
+    end
+
+    local function checkKO()
+        if not DeflectActive then
+            DeflectReleaseTarget()
+            return
+        end
+        if not player or not player.Parent then
+            DeflectReleaseTarget()
+            return
+        end
+
+        local char = player.Character
+        if not char then
+            DeflectReleaseTarget()
+            return
+        end
+
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then
+            DeflectReleaseTarget()
+            return
+        end
+
+        local be = char:FindFirstChild("BodyEffects") or char:FindFirstChild("Character")
+        local ko = be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked"))
+        if ko and ko.Value == true then
+            DeflectReleaseTarget()
+            return
+        end
+    end
+
+    checkKO()
+    if DeflectHeldTarget then
+        DeflectHoldConn = DeflectRunService.Heartbeat:Connect(checkKO)
+    end
+end
+
+function DeflectFireAtTarget(player)
+    if not DeflectActive then return false end
+    if not player or player == DeflectLocalPlayer or player.Parent ~= DeflectPlayers then return false end
+    if DeflectPlayerDist(player) > DeflectMaxTargetDist then return false end
+
+    local targetChar = player.Character
+    local targetHum = targetChar and targetChar:FindFirstChildOfClass("Humanoid")
+    local targetHead = targetChar and targetChar:FindFirstChild("Head")
+    if not targetChar or not targetHum or targetHum.Health <= 0 or not targetHead then return false end
+
+    local be = targetChar:FindFirstChild("BodyEffects")
+    local ko = be and be:FindFirstChild("K.O")
+    if ko and ko.Value == true then return false end
+
+    if DeflectLastNotifyTarget ~= player then
+        _48:Notify("Deflect: targeting " .. player.DisplayName, 3)
+        DeflectLastNotifyTarget = player
+    end
+
+    DeflectHeldTarget = player
+
+    _104.targetplayer = player
+    _104.targetpart = targetHead
+    _104.targetposition = targetHead.Position
+    _104.active = true
+
+    DeflectWatchTargetKO(player)
+    return true
+end
+
+function DeflectOnHealthChanged()
+    local char = DeflectLocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local current = hum.Health
+    local last = DeflectHealthState.Last
+    if last ~= nil and current < last - 0.5 and current > 0 then
+        if os.clock() - DeflectHealthState.LastHitAt < 0.1 then
+            DeflectHealthState.Last = current
+            return
+        end
+        DeflectHealthState.LastHitAt = os.clock()
+        if not DeflectActive then
+            DeflectHealthState.Last = current
+            return
+        end
+        _G.AutoStimPauseUntil = os.clock() + 1.0
+        task.spawn(function()
+            local attacker = DeflectResolveAttackerAsync()
+            if attacker then
+                DeflectFireAtTarget(attacker)
+            end
+            _G.AutoStimPauseUntil = nil
+        end)
+    end
+    DeflectHealthState.Last = current
+end
+
+function DeflectResetCharacter()
+    for _, conn in ipairs(DeflectCharConns) do
+        pcall(function() if conn and conn.Disconnect then conn:Disconnect() end end)
+    end
+    DeflectCharConns = {}
+    DeflectReleaseTarget()
+    local curChar = DeflectLocalPlayer.Character
+    if curChar then
+        local h = curChar:FindFirstChildOfClass("Humanoid")
+        if h then h:SetAttribute("__reflect_hh", nil) end
+        local b = curChar:FindFirstChild("BodyEffects")
+        if b then b:SetAttribute("__reflect_hbe", nil) end
+    end
+    DeflectHealthState.Last = nil
+    DeflectHealthState.LastHitAt = 0
+    DeflectHealthState.LastGunshotAt = 0
+    DeflectHealthState.LastTrustedShooter = nil
+    DeflectHealthState.LastTrustedAt = 0
+    DeflectFireTracker.Mouse = {}
+
+    DeflectCleanupHooks()
+end
+
+function DeflectHookCharacter()
+    DeflectHealthState.Last = nil
+    local char = DeflectLocalPlayer.Character
+    if not char then return end
+
+    local function hookHumanoid(hum)
+        if not hum or hum:GetAttribute("__reflect_hh") then return end
+        hum:SetAttribute("__reflect_hh", true)
+        DeflectHealthState.Last = hum.Health
+        DeflectCharSubscribe(hum:GetPropertyChangedSignal("Health"), DeflectOnHealthChanged)
+        DeflectWatchCreatorOnInstance(hum)
+    end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hookHumanoid(hum)
+    else
+        DeflectCharSubscribe(char.ChildAdded, function(child)
+            if child:IsA("Humanoid") then hookHumanoid(child) end
+        end)
+        task.spawn(function()
+            local t0 = tick()
+            while tick() - t0 < 3 do
+                local h = char and char:FindFirstChildOfClass("Humanoid")
+                if h then
+                    hookHumanoid(h)
+                    break
+                end
+                task.wait(0.05)
+            end
+        end)
+    end
+
+    DeflectWatchCreatorOnInstance(char)
+
+    local function hookBodyEffects(be)
+        if not be or be:GetAttribute("__reflect_hbe") then return end
+        be:SetAttribute("__reflect_hbe", true)
+        DeflectWatchCreatorOnInstance(be)
+        local gsc = be:FindFirstChild("GunShotChanges")
+        if gsc then
+            DeflectCharSubscribe(gsc:GetPropertyChangedSignal("Value"), function()
+                DeflectHealthState.LastGunshotAt = os.clock()
+            end)
+        end
+    end
+    local be = char:FindFirstChild("BodyEffects")
+    if be then
+        hookBodyEffects(be)
+    else
+        DeflectCharSubscribe(char.ChildAdded, function(child)
+            if child.Name == "BodyEffects" then hookBodyEffects(child) end
+        end)
+    end
+end
+
+function DeflectStop()
+    if not DeflectActive then return end
+    DeflectActive = false
+    DeflectReleaseTarget()
+    for _, conn in ipairs(DeflectConnections) do
+        pcall(function() if conn and conn.Disconnect then conn:Disconnect() end end)
+    end
+    DeflectConnections = {}
+    DeflectCharConns = {}
+
+    DeflectCleanupHooks()
+    DeflectCleanupStaleHooks()
+
+    pcall(function()
+        for _, name in ipairs({ "Ignored", "Debris", "Effects", "Projectiles" }) do
+            local root = workspace:FindFirstChild(name)
+            if root then
+                root:SetAttribute("__reflect_bullets", nil)
+                local br = root:FindFirstChild("BULLET_RAYS")
+                if br then br:SetAttribute("__reflect_bullets", nil) end
+            end
+        end
+        local br = workspace:FindFirstChild("BULLET_RAYS")
+        if br then br:SetAttribute("__reflect_bullets", nil) end
+    end)
+end
+
+function DeflectStart()
+    if DeflectActive then return end
+    DeflectActive = true
+    DeflectScanAccum = 0
+
+    DeflectSubscribe(DeflectRunService.Heartbeat, DeflectScanPlayers)
+
+    DeflectSubscribe(DeflectPlayers.PlayerRemoving, function(plr)
+        DeflectCleanupPlayer(plr)
+    end)
+
+    task.spawn(function()
+        local function scanRoots()
+            for _, name in ipairs({ "Ignored", "Debris", "Effects", "Projectiles" }) do
+                local root = workspace:FindFirstChild(name)
+                if root then
+                    DeflectWatchBulletFolder(root)
+                    local br = root:FindFirstChild("BULLET_RAYS")
+                    if br then DeflectWatchBulletFolder(br) end
+                end
+            end
+            local br = workspace:FindFirstChild("BULLET_RAYS")
+            if br then DeflectWatchBulletFolder(br) end
+        end
+        scanRoots()
+        DeflectSubscribe(workspace.ChildAdded, function() task.defer(scanRoots) end)
+    end)
+
+    DeflectResetCharacter()
+    DeflectHookCharacter()
+    DeflectSubscribe(DeflectLocalPlayer.CharacterAdded, function()
+        DeflectResetCharacter()
+        DeflectHookCharacter()
+    end)
+end
+
+function DeflectUnload()
+    if DeflectUnloaded then return end
+    DeflectUnloaded = true
+
+    if DeflectToggleConn then
+        pcall(function() DeflectToggleConn:Disconnect() end)
+        DeflectToggleConn = nil
+    end
+
+    DeflectStop()
+
+    for plr, h in pairs(DeflectPlayerHooks) do
+        if h.mouseConn then pcall(function() h.mouseConn:Disconnect() end) end
+        if h.beChildConn then pcall(function() h.beChildConn:Disconnect() end) end
+        DeflectPlayerHooks[plr] = nil
+    end
+    DeflectPlayerHooks = setmetatable({}, { __mode = "k" })
+
+    for tool, t in pairs(DeflectToolHooks) do
+        if t.conn then pcall(function() t.conn:Disconnect() end) end
+        DeflectToolHooks[tool] = nil
+    end
+    DeflectToolHooks = setmetatable({}, { __mode = "k" })
+
+    for _, conn in ipairs(DeflectConnections) do
+        pcall(function() if conn and conn.Disconnect then conn:Disconnect() end end)
+    end
+    DeflectConnections = {}
+
+    for _, conn in ipairs(DeflectCharConns) do
+        pcall(function() if conn and conn.Disconnect then conn:Disconnect() end end)
+    end
+    DeflectCharConns = {}
+
+    DeflectReleaseTarget()
+
+    DeflectFireTracker = { FiredAt = {}, Mouse = {}, FireWhy = {} }
+    DeflectHealthState = {
+        Last = nil,
+        LastHitAt = 0,
+        LastGunshotAt = 0,
+        LastTrustedShooter = nil,
+        LastTrustedAt = 0,
+    }
+    DeflectGunWatch = setmetatable({}, { __mode = "k" })
+    DeflectHeldTarget = nil
+    DeflectHoldConn = nil
+    DeflectScanAccum = 0
+    DeflectLastNotifyTarget = nil
+
+    pcall(function()
+        for _, name in ipairs({ "Ignored", "Debris", "Effects", "Projectiles" }) do
+            local root = workspace:FindFirstChild(name)
+            if root then
+                root:SetAttribute("__reflect_bullets", nil)
+                local br = root:FindFirstChild("BULLET_RAYS")
+                if br then br:SetAttribute("__reflect_bullets", nil) end
+            end
+        end
+        local br = workspace:FindFirstChild("BULLET_RAYS")
+        if br then br:SetAttribute("__reflect_bullets", nil) end
+    end)
+
+    _DEFLECT_Enabled = nil
+    _DEFLECT_Enable = nil
+
+    for k in pairs(DeflectPlayerHooks) do DeflectPlayerHooks[k] = nil end
+    for k in pairs(DeflectToolHooks) do DeflectToolHooks[k] = nil end
+end
+
+if _48 and library then
+    _48:BindDeflectUnload(library)
+end
+
+if Toggles.Deflect then
+    DeflectToggleConn = Toggles.Deflect:OnChanged(function(value)
+        if DeflectUnloaded then return end
+        if value then
+            DeflectStart()
+            _DEFLECT_Enabled = true
+            if _DEFLECT_Enable then _DEFLECT_Enable() end
+        else
+            DeflectStop()
+            _DEFLECT_Enabled = false
+        end
+    end)
+end
+
 _48:OnUnload(function()
     _AR_Running = false
     isRunning = false
     _G.x7f3k9m2 = false
     _G.serverHopOnMod = false
+
+    pcall(DeflectUnload)
 
     pcall(cleanup)
     pcall(_150)
@@ -13674,5 +15296,34 @@ return {
     specting = _149,
     nonspect = _150,
     updhigh = _165,
-    removeskidlights = _161
+    removeskidlights = _161,
+
+    setdeflect = function(player, part)
+        if not player or not part or not part.Parent then
+            _104.deflectplayer = nil
+            _104.deflectpart = nil
+            _104.deflectposition = nil
+            _104.deflectactive = false
+            return false
+        end
+        _104.deflectplayer = player
+        _104.deflectpart = part
+        _104.deflectposition = part.Position
+        _104.deflectactive = true
+        return true
+    end,
+
+    cleardeflect = function()
+        _104.deflectplayer = nil
+        _104.deflectpart = nil
+        _104.deflectposition = nil
+        _104.deflectactive = false
+    end,
+
+    getdeflect = function()
+        if not _104.deflectactive then return nil end
+        if not _104.deflectplayer or not _104.deflectpart then return nil end
+        if not _104.deflectpart.Parent then return nil end
+        return _104.deflectplayer, _104.deflectpart, _104.deflectposition
+    end,
 }
