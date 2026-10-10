@@ -4317,6 +4317,10 @@ ImageESP_Config = {
 
 ImageESP_Cached = nil
 ImageESP_PlayerConns = {}
+ImageESP_ConnectionAdded = nil
+ImageESP_ConnectionRemoving = nil
+ImageESP_ConnectionLocalAdded = nil
+ImageESP_RenderConnection = nil
 
 function ImageESP_LoadAsset(path)
     if ImageESP_Cached then return ImageESP_Cached end
@@ -4394,11 +4398,15 @@ function ImageESP_Remove(player)
     ImageESP_Objects[player.UserId] = nil
 end
 
-function ImageESP_Refresh()
+function ImageESP_Clear()
     for _, data in pairs(ImageESP_Objects) do
         if data.part then data.part:Destroy() end
     end
     table.clear(ImageESP_Objects)
+end
+
+function ImageESP_Refresh()
+    ImageESP_Clear()
 
     if not ImageESP_Enabled then return end
 
@@ -4411,19 +4419,6 @@ function ImageESP_Refresh()
         end
     end
 end
-
-_78:AddToggle('MarinESP', {
-    Text = 'Marin ESP',
-    Default = false,
-    Callback = function(value)
-        ImageESP_Enabled = value
-        ImageESP_Refresh()
-    end,
-})
-
-local ImageESP_ConnectionAdded
-local ImageESP_ConnectionRemoving
-local ImageESP_ConnectionLocalAdded
 
 function ImageESP_TrackPlayer(plr)
     if ImageESP_PlayerConns[plr] then return end
@@ -4455,51 +4450,98 @@ function ImageESP_UntrackPlayer(plr)
     ImageESP_Remove(plr)
 end
 
-ImageESP_ConnectionAdded = Players.PlayerAdded:Connect(function(plr)
-    if ImageESP_Objects[plr.UserId] then
-        ImageESP_Remove(plr)
-    end
-    ImageESP_TrackPlayer(plr)
-end)
-
-ImageESP_ConnectionRemoving = Players.PlayerRemoving:Connect(function(plr)
-    ImageESP_UntrackPlayer(plr)
-end)
-
-ImageESP_ConnectionLocalAdded = LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.5)
-    if ImageESP_Enabled then ImageESP_Refresh() end
-end)
-
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr ~= LocalPlayer then
-        ImageESP_TrackPlayer(plr)
+function ImageESP_RenderTick()
+    if not ImageESP_Enabled then return end
+    if next(ImageESP_Objects) then
+        ImageESP_UpdatePositions()
     end
 end
 
-task.spawn(function()
-    while task.wait() do
-        if ImageESP_Enabled and next(ImageESP_Objects) then
-            ImageESP_UpdatePositions()
+function ImageESP_Start()
+    if not ImageESP_RenderConnection then
+        ImageESP_RenderConnection = _52.RenderStepped:Connect(ImageESP_RenderTick)
+    end
+
+    if not ImageESP_ConnectionAdded then
+        ImageESP_ConnectionAdded = Players.PlayerAdded:Connect(function(plr)
+            if ImageESP_Objects[plr.UserId] then
+                ImageESP_Remove(plr)
+            end
+            if ImageESP_Enabled then
+                ImageESP_TrackPlayer(plr)
+            end
+        end)
+    end
+
+    if not ImageESP_ConnectionRemoving then
+        ImageESP_ConnectionRemoving = Players.PlayerRemoving:Connect(function(plr)
+            ImageESP_UntrackPlayer(plr)
+        end)
+    end
+
+    if not ImageESP_ConnectionLocalAdded then
+        ImageESP_ConnectionLocalAdded = LocalPlayer.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            if ImageESP_Enabled then ImageESP_Refresh() end
+        end)
+    end
+
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            ImageESP_TrackPlayer(plr)
         end
     end
-end)
+end
 
-_48:OnUnload(function()
-    for _, data in pairs(ImageESP_Objects) do
-        if data.part then data.part:Destroy() end
+function ImageESP_Stop()
+    if ImageESP_RenderConnection then
+        pcall(function() ImageESP_RenderConnection:Disconnect() end)
+        ImageESP_RenderConnection = nil
     end
-    table.clear(ImageESP_Objects)
-    ImageESP_Cached = nil
-    if ImageESP_ConnectionAdded then ImageESP_ConnectionAdded:Disconnect() end
-    if ImageESP_ConnectionRemoving then ImageESP_ConnectionRemoving:Disconnect() end
-    if ImageESP_ConnectionLocalAdded then ImageESP_ConnectionLocalAdded:Disconnect() end
+
+    if ImageESP_ConnectionAdded then
+        pcall(function() ImageESP_ConnectionAdded:Disconnect() end)
+        ImageESP_ConnectionAdded = nil
+    end
+
+    if ImageESP_ConnectionRemoving then
+        pcall(function() ImageESP_ConnectionRemoving:Disconnect() end)
+        ImageESP_ConnectionRemoving = nil
+    end
+
+    if ImageESP_ConnectionLocalAdded then
+        pcall(function() ImageESP_ConnectionLocalAdded:Disconnect() end)
+        ImageESP_ConnectionLocalAdded = nil
+    end
+
     for plr, conns in pairs(ImageESP_PlayerConns) do
         for _, c in ipairs(conns) do
             pcall(function() c:Disconnect() end)
         end
     end
     table.clear(ImageESP_PlayerConns)
+
+    ImageESP_Clear()
+end
+
+_78:AddToggle('MarinESP', {
+    Text = 'Marin ESP',
+    Default = false,
+    Callback = function(value)
+        ImageESP_Enabled = value
+        if value then
+            ImageESP_Start()
+            ImageESP_Refresh()
+        else
+            ImageESP_Stop()
+        end
+    end,
+})
+
+_48:OnUnload(function()
+    ImageESP_Enabled = false
+    ImageESP_Stop()
+    ImageESP_Cached = nil
 end)
 
 -- China hat core
@@ -6085,15 +6127,20 @@ local _afkto = _78:AddToggle('AntiAFK', {
     Default = false,
 })
 
-task.spawn(function()
-    while true do
-        task.wait(400)
-        if _afkto and _afkto.Value then
-            pcall(function()
-                local virtualUser = game:GetService("VirtualUser")
-                virtualUser:CaptureController()
-                virtualUser:ClickButton2(Vector2.new())
-            end)
+_afkConn = nil
+
+_afkto:OnChanged(function(value)
+    if value then
+        if _afkConn then return end
+        _afkConn = game:GetService("Players").LocalPlayer.Idled:Connect(function()
+            local virtualUser = game:GetService("VirtualUser")
+            virtualUser:CaptureController()
+            virtualUser:ClickButton2(Vector2.new())
+        end)
+    else
+        if _afkConn then
+            _afkConn:Disconnect()
+            _afkConn = nil
         end
     end
 end)
@@ -6743,8 +6790,6 @@ setfflag("FIntRenderShadowIntensity", 0)
 setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
 setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
 setfflag("DFIntConnectionMTUSize", "1472")
-setfflag("ReplicatorAnimationTrackLimitPerAnimator", "100")
-setfflag("DFIntNumAssetsMaxToPreload", "9999999")
 
 local _104 = {
     enabled = false,
@@ -11403,19 +11448,7 @@ end
 function _198b()
     if not _deflectLine or not _deflectOutline then return end
 
-    if DefenseCircleIsControlling then
-        _deflectLine.Visible = false
-        _deflectOutline.Visible = false
-        return
-    end
-
-    if not Toggles.Line or not Toggles.Line.Value then
-        _deflectLine.Visible = false
-        _deflectOutline.Visible = false
-        return
-    end
-
-    if not _104.deflectactive then
+    if DefenseCircleIsControlling or not Toggles.Line.Value or not _104.deflectactive then
         _deflectLine.Visible = false
         _deflectOutline.Visible = false
         return
@@ -11423,16 +11456,16 @@ function _198b()
 
     local dPlayer = _104.deflectplayer
     local dPart = _104.deflectpart
-
     if not dPlayer or not dPart or not dPart.Parent then
         _deflectLine.Visible = false
         _deflectOutline.Visible = false
         return
     end
 
-    _104.deflectposition = dPart.Position
+    local worldPos = dPart.Position
+    _104.deflectposition = worldPos
 
-    local screenPos, onScreen = _58:WorldToViewportPoint(dPart.Position)
+    local screenPos, onScreen = _58:WorldToViewportPoint(worldPos)
     if not onScreen or screenPos.Z <= 0 then
         _deflectLine.Visible = false
         _deflectOutline.Visible = false
@@ -11441,16 +11474,20 @@ function _198b()
 
     local origin = _170()
     local target = Vector2.new(screenPos.X, screenPos.Y)
+    local lineCfg = Options.LineColor
+    local lc = lineCfg and lineCfg.Value or Color3.fromRGB(255, 60, 60)
+    local lt = lineCfg and lineCfg.Transparency or 0
+    local th = shared.hitman.visuals.snaplines.thickness
 
-    _deflectLine.Color = Options.LineColor and Options.LineColor.Value or Color3.fromRGB(255, 60, 60)
-    _deflectLine.Thickness = shared.hitman.visuals.snaplines.thickness
-    _deflectLine.Transparency = Options.LineColor and Options.LineColor.Transparency or 0
+    _deflectLine.Color = lc
+    _deflectLine.Thickness = th
+    _deflectLine.Transparency = lt
     _deflectLine.From = origin
     _deflectLine.To = target
     _deflectLine.Visible = true
 
-    _deflectOutline.Thickness = shared.hitman.visuals.snaplines.thickness + 2
-    _deflectOutline.Transparency = Options.LineColor and Options.LineColor.Transparency or 0
+    _deflectOutline.Thickness = th + 2
+    _deflectOutline.Transparency = lt
     _deflectOutline.From = origin
     _deflectOutline.To = target
     _deflectOutline.Visible = true
@@ -11624,7 +11661,6 @@ local function _206()
     local _207 = _145:FindFirstChild("Ammo")
     if _207 and _207.Value <= 0 then return end
 
-    -- deflect takes over when primary isn't active
     if _104.deflectactive and (not _104.active or not _104.targetplayer or not _104.targetpart or not _104.targetpart.Parent) then
         local dPlr = _104.deflectplayer
         local dPart = _104.deflectpart
@@ -12422,6 +12458,9 @@ skeletonCamera = workspace.CurrentCamera
 screenSize = skeletonCamera and skeletonCamera.ViewportSize or Vector2.new(1920, 1080)
 screenPadding = 100
 
+skeletonRenderConnection = nil
+skeletonPlayerRemovingConnection = nil
+
 function isOnScreen(position)
     return position.X > -screenPadding and position.X < screenSize.X + screenPadding and
            position.Y > -screenPadding and position.Y < screenSize.Y + screenPadding
@@ -12553,21 +12592,7 @@ function updateSkeleton(player)
     end
 end
 
-Toggles.ESPShowSkeleton:OnChanged(function(value)
-    if value then return end
-    cleanupAllSkeletons()
-end)
-
-Options.SkeletonColor:OnChanged(function()
-    local color = Options.SkeletonColor.Value
-    for _, lines in pairs(skeletonLines) do
-        for _, line in ipairs(lines) do
-            line.Color = color
-        end
-    end
-end)
-
-skeletonRenderConnection = _52.RenderStepped:Connect(function()
+function skeletonRenderTick()
     if not Toggles.ESPShowSkeleton.Value then return end
 
     local camera = workspace.CurrentCamera
@@ -12585,10 +12610,47 @@ skeletonRenderConnection = _52.RenderStepped:Connect(function()
             end
         end
     end
+end
+
+function skeletonStart()
+    if skeletonRenderConnection then return end
+
+    cleanupAllSkeletons()
+
+    for _, player in ipairs(_51:GetPlayers()) do
+        if player ~= _56 then
+            skeletonLines[player] = nil
+        end
+    end
+
+    skeletonRenderConnection = _52.RenderStepped:Connect(skeletonRenderTick)
+
+    skeletonPlayerRemovingConnection = _51.PlayerRemoving:Connect(function(player)
+        cleanupSkeleton(player)
+    end)
+
+    skeletonRenderTick()
+end
+
+function skeletonStop()
+    cleanupAllSkeletons()
+end
+
+Toggles.ESPShowSkeleton:OnChanged(function(value)
+    if value then
+        skeletonStart()
+    else
+        skeletonStop()
+    end
 end)
 
-skeletonPlayerRemovingConnection = _51.PlayerRemoving:Connect(function(player)
-    cleanupSkeleton(player)
+Options.SkeletonColor:OnChanged(function()
+    local color = Options.SkeletonColor.Value
+    for _, lines in pairs(skeletonLines) do
+        for _, line in ipairs(lines) do
+            line.Color = color
+        end
+    end
 end)
 
 -- < Box Core > --
@@ -13281,6 +13343,7 @@ DeflectManualTarget = nil
 
 DeflectPlayerHooks = setmetatable({}, { __mode = "k" })
 DeflectToolHooks   = setmetatable({}, { __mode = "k" })
+DeflectToolNoAmmo  = setmetatable({}, { __mode = "k" })
 DeflectScanAccum    = 0
 DeflectScanInterval = 1 / 39
 
@@ -13317,6 +13380,7 @@ function DeflectCleanupHooks()
         DeflectToolHooks[tool] = nil
     end
     DeflectToolHooks = setmetatable({}, { __mode = "k" })
+    DeflectToolNoAmmo = setmetatable({}, { __mode = "k" })
 
     DeflectScanAccum = 0
 end
@@ -13520,7 +13584,7 @@ function DeflectAllToolsWithAmmo(player)
     local function add(container)
         if not container then return end
         for _, t in ipairs(container:GetChildren()) do
-            if t:IsA("Tool") and DeflectFindAmmoValue(t) then list[#list + 1] = t end
+            if t:IsA("Tool") then list[#list + 1] = t end
         end
     end
     add(player.Character)
@@ -13618,7 +13682,7 @@ function DeflectScanPlayers(dt)
 
             local tools = DeflectAllToolsWithAmmo(p)
             for _, tool in ipairs(tools) do
-                if not DeflectToolHooks[tool] then
+                if not DeflectToolHooks[tool] and not DeflectToolNoAmmo[tool] then
                     local ammo = DeflectFindAmmoValue(tool)
                     if ammo then
                         local startVal = tonumber(ammo.Value) or 0
@@ -13631,6 +13695,8 @@ function DeflectScanPlayers(dt)
                             if nv < cur.lastAmmo then DeflectRecordFire(p, "ammo") end
                             cur.lastAmmo = nv
                         end)
+                    else
+                        DeflectToolNoAmmo[tool] = true
                     end
                 end
             end
@@ -13645,6 +13711,12 @@ function DeflectScanPlayers(dt)
         if not tool.Parent then
             if t.conn then pcall(function() t.conn:Disconnect() end) end
             DeflectToolHooks[tool] = nil
+        end
+    end
+
+    for tool in pairs(DeflectToolNoAmmo) do
+        if not tool.Parent then
+            DeflectToolNoAmmo[tool] = nil
         end
     end
 end
@@ -13670,6 +13742,7 @@ function DeflectWatchBulletFolder(folder)
     if not folder or folder:GetAttribute("__reflect_bullets") then return end
     folder:SetAttribute("__reflect_bullets", true)
     local function onObj(obj)
+        if obj.Name ~= "BULLET_RAYS" then return end
         task.defer(function()
             local plr = DeflectAttackerFromBulletObj(obj)
             if plr and plr ~= DeflectLocalPlayer and not DeflectIsFriendlyWhitelisted(plr) then
@@ -13678,7 +13751,6 @@ function DeflectWatchBulletFolder(folder)
         end)
     end
     DeflectSubscribe(folder.DescendantAdded, onObj)
-    DeflectSubscribe(folder.ChildAdded, onObj)
 end
 
 function DeflectIsDowned(player)
@@ -13789,7 +13861,6 @@ function DeflectFindAttacker()
     local hum = myChar and myChar:FindFirstChildOfClass("Humanoid")
     local now = os.clock()
 
-    -- sticky: only if the held target fired right before our hit landed
     local held = DeflectHeldTarget
     if held and held.Parent == DeflectPlayers then
         local heldFiredAt = DeflectFireTracker.FiredAt[held]
@@ -14152,6 +14223,7 @@ function DeflectUnload()
         DeflectToolHooks[tool] = nil
     end
     DeflectToolHooks = setmetatable({}, { __mode = "k" })
+    DeflectToolNoAmmo = setmetatable({}, { __mode = "k" })
 
     for _, conn in ipairs(DeflectConnections) do
         pcall(function() if conn and conn.Disconnect then conn:Disconnect() end end)
