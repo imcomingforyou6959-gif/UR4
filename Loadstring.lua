@@ -141,7 +141,7 @@ local _FRPlayer = _FRPlayers.LocalPlayer
 local _ForceRestEnabled = false
 local _ForceRestHeartbeat = nil
 
-local function forceReset()
+function forceReset()
     local character = _FRPlayer.Character
     if character then
         local humanoid = character:FindFirstChild("Humanoid")
