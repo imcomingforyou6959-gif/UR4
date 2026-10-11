@@ -1877,220 +1877,7 @@ Options.OutdoorAmbientColor:OnChanged(function(value)
     end
 end)
 
-MovementSection = WorldTab:AddRightGroupbox('Extras <3')
-
--- Camera Distance
-old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
-old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
-unlock_camera_connection = nil
-
-function unlock_camera_loop()
-    if not Toggles.UnlockCameraDistance.Value then return end
-    local plr = _51.LocalPlayer
-    if not plr then return end
-    if plr.CameraMaxZoomDistance ~= 9e9 then
-        plr.CameraMaxZoomDistance = 9e9
-    end
-    if plr.CameraMinZoomDistance ~= 0 then
-        plr.CameraMinZoomDistance = 0
-    end
-end
-
-MovementSection:AddToggle('UnlockCameraDistance', {
-    Text = 'Unlock Camera Distance',
-    Default = false,
-})
-
-Toggles.UnlockCameraDistance:OnChanged(function(value)
-    if unlock_camera_connection then
-        unlock_camera_connection:Disconnect()
-        unlock_camera_connection = nil
-    end
-
-    if value then
-        old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
-        old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
-        unlock_camera_connection = _52.Heartbeat:Connect(unlock_camera_loop)
-        unlock_camera_loop()
-    else
-        _51.LocalPlayer.CameraMaxZoomDistance = old_camera_max_distance
-        _51.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
-    end
-end)
-
--- Anti Sit
-anti_sit_connection      = nil
-anti_sit_char_connection = nil
-anti_sit_state_connection = nil
-
-function _anti_sit_stop()
-    if anti_sit_connection then
-        pcall(function() anti_sit_connection:Disconnect() end)
-        anti_sit_connection = nil
-    end
-    if anti_sit_state_connection then
-        pcall(function() anti_sit_state_connection:Disconnect() end)
-        anti_sit_state_connection = nil
-    end
-
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        pcall(function()
-            hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
-        end)
-        if hum.Sit then
-            pcall(function() hum.Sit = false end)
-        end
-    end
-end
-
-function do_anti_sit()
-    if anti_sit_connection then
-        pcall(function() anti_sit_connection:Disconnect() end)
-        anti_sit_connection = nil
-    end
-    if anti_sit_state_connection then
-        pcall(function() anti_sit_state_connection:Disconnect() end)
-        anti_sit_state_connection = nil
-    end
-
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    pcall(function()
-        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-    end)
-
-    if hum.Sit then
-        pcall(function() hum.Sit = false end)
-    end
-
-    anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
-        if hum.Sit then
-            hum.Sit = false
-        end
-    end)
-
-    anti_sit_state_connection = hum.StateChanged:Connect(function(_, newState)
-        if newState == Enum.HumanoidStateType.Seated or newState == Enum.HumanoidStateType.PlatformStanding then
-            hum.Sit = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-    end)
-end
-
-MovementSection:AddToggle('AntiSit', {
-    Text    = 'Anti Sit',
-    Default = false,
-    Tooltip = 'Prevents the game from seating u',
-})
-
-Toggles.AntiSit:OnChanged(function()
-    if anti_sit_char_connection then
-        pcall(function() anti_sit_char_connection:Disconnect() end)
-        anti_sit_char_connection = nil
-    end
-
-    _anti_sit_stop()
-
-    if Toggles.AntiSit.Value then
-        anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function(newChar)
-            local hum = newChar:WaitForChild("Humanoid", 5)
-            if not hum then return end
-            task.wait(0.25)
-            if Toggles.AntiSit.Value then
-                do_anti_sit()
-            end
-        end)
-
-        if LocalPlayer.Character then
-            do_anti_sit()
-        end
-    end
-end)
-
--- Show Chat
-MovementSection:AddToggle('ShowChat', {
-    Text = 'Show Chat',
-    Default = false,
-})
-
-Toggles.ShowChat:OnChanged(function()
-    local chat = LocalPlayer.PlayerGui:FindFirstChild("Chat")
-    
-    if chat then
-        local frame = chat:FindFirstChild("Frame")
-        if frame then
-            local channelFrame = frame:FindFirstChild("ChatChannelParentFrame")
-            local barFrame = frame:FindFirstChild("ChatBarParentFrame")
-            
-            if channelFrame then
-                channelFrame.Visible = Toggles.ShowChat.Value
-            end
-            
-            if barFrame then
-                if Toggles.ShowChat.Value then
-                    barFrame.Position = UDim2.new(0, 0, 1, -44)
-                else
-                    barFrame.Position = UDim2.new(0, 0, 0, 0)
-                end
-            end
-        end
-    else
-        local textChatService = game:GetService("TextChatService")
-        local config = textChatService:FindFirstChild("ChatWindowConfiguration")
-        if config then
-            config.Enabled = Toggles.ShowChat.Value
-        end
-    end
-end)
-
--- Anti Fling
-if _G.antiFlingSteppedConn then
-    pcall(function() _G.antiFlingSteppedConn:Disconnect() end)
-    _G.antiFlingSteppedConn = nil
-end
-
-_G.antiFlingEnabled = true
-_G.antiFlingConnections = {} -- unused but keepin it jus because
-
-MovementSection:AddToggle('AntiFling', {
-    Text = 'Anti-Fling',
-    Default = true,
-})
-
-_G.setAntiFling = function(value)
-    _G.antiFlingEnabled = value
-
-    if _G.antiFlingSteppedConn then
-        _G.antiFlingSteppedConn:Disconnect()
-        _G.antiFlingSteppedConn = nil
-    end
-
-    if value then
-        _G.antiFlingSteppedConn = game:GetService("RunService").Stepped:Connect(function()
-            for _, player in ipairs(Players:GetPlayers()) do
-                local character = player ~= LocalPlayer and player.Character
-                if character then
-                    for _, part in ipairs(character:GetChildren()) do
-                        if part:IsA("BasePart") and part.CanCollide then
-                            part.CanCollide = false
-                        end
-                    end
-                end
-            end
-        end)
-    end
-end
-
-Toggles.AntiFling:OnChanged(function(value)
-    _G.setAntiFling(value)
-end)
-
-_G.setAntiFling(Toggles.AntiFling.Value)
-
+-- tabs 4
 Misctab = _59:AddTab('Misc')
 Ragebot = _59:AddTab('Rage')
 
@@ -2447,7 +2234,449 @@ shared.hitman = {
 
 local _61 = _60.Main:AddLeftTabbox()
 local _62 = _61:AddTab('Main')
+_visualizer = _61:AddTab('Visualizer')
 
+
+-- la CIRCLE FOV CORE --
+_G.FOV = _G.FOV or {}
+
+_G.FOV.enabled        = _G.FOV.enabled        or false
+_G.FOV.follow_muzzle  = _G.FOV.follow_muzzle  or false
+_G.FOV.radius         = _G.FOV.radius         or 120
+_G.FOV.follow_target   = _G.FOV.follow_target or false
+_G.FOV.follow_speed    = _G.FOV.follow_speed  or 0.25   --  higher = snappier
+_G.FOV._smoothCenter   = _G.FOV._smoothCenter or nil     -- vec2, internal
+_G.FOV._smoothTarget   = _G.FOV._smoothTarget or nil     -- vec2, last target screen pos
+
+_G.FOV.outline_color1       = _G.FOV.outline_color1       or Color3.fromRGB(255, 255, 255)
+_G.FOV.outline_color2       = _G.FOV.outline_color2       or Color3.fromRGB(255, 255, 255)
+_G.FOV.outline_rotation     = _G.FOV.outline_rotation     or 0
+_G.FOV.outline_thickness    = _G.FOV.outline_thickness    or 1.5
+_G.FOV.outline_transparency = _G.FOV.outline_transparency or 0
+
+_G.FOV.filled_enabled       = _G.FOV.filled_enabled       or false
+_G.FOV.filled_color1        = _G.FOV.filled_color1        or Color3.fromRGB(255, 255, 255)
+_G.FOV.filled_color2        = _G.FOV.filled_color2        or Color3.fromRGB(0, 0, 0)
+_G.FOV.filled_rotation      = _G.FOV.filled_rotation      or 0
+_G.FOV.filled_transparency  = _G.FOV.filled_transparency  or 0.7
+_G.FOV.filled_animated      = _G.FOV.filled_animated      or false
+_G.FOV.filled_speed         = _G.FOV.filled_speed         or 1
+
+_G.FOV.spin_on              = _G.FOV.spin_on              or false
+_G.FOV.spin_speed           = _G.FOV.spin_speed           or 1
+
+-- ----- visual container -----
+
+local FOV_screenGui = Instance.new("ScreenGui")
+FOV_screenGui.Name = "\0FOV"
+FOV_screenGui.ResetOnSpawn = false
+FOV_screenGui.IgnoreGuiInset = true
+FOV_screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+FOV_screenGui.DisplayOrder = 5
+if gethui then
+    FOV_screenGui.Parent = gethui()
+elseif syn and syn.protect_gui then
+    syn.protect_gui(FOV_screenGui)
+    FOV_screenGui.Parent = game:GetService("CoreGui")
+else
+    FOV_screenGui.Parent = game:GetService("CoreGui")
+end
+_G.FOV.gui = FOV_screenGui
+
+local container = Instance.new("Frame")
+container.Name = "FOVContainer"
+container.BackgroundTransparency = 1
+container.BorderSizePixel = 0
+container.Visible = false
+container.Parent = FOV_screenGui
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(1, 0, 1, 0)
+fill.BackgroundColor3 = Color3.new(1, 1, 1)
+fill.BackgroundTransparency = _G.FOV.filled_transparency
+fill.BorderSizePixel = 0
+fill.Visible = false
+fill.ZIndex = 1
+fill.Parent = container
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(1, 0)
+fillCorner.Parent = fill
+
+local fillGrad = Instance.new("UIGradient")
+fillGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, _G.FOV.filled_color1),
+    ColorSequenceKeypoint.new(1, _G.FOV.filled_color2),
+})
+fillGrad.Rotation = _G.FOV.filled_rotation
+fillGrad.Parent = fill
+
+local outline = Instance.new("Frame")
+outline.Size = UDim2.new(1, 0, 1, 0)
+outline.BackgroundTransparency = 1
+outline.BorderSizePixel = 0
+outline.ZIndex = 2
+outline.Parent = container
+
+local outlineCorner = Instance.new("UICorner")
+outlineCorner.CornerRadius = UDim.new(1, 0)
+outlineCorner.Parent = outline
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.new(1, 1, 1)
+stroke.Thickness = _G.FOV.outline_thickness
+stroke.Transparency = _G.FOV.outline_transparency
+stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke.Parent = outline
+
+local strokeGrad = Instance.new("UIGradient")
+strokeGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, _G.FOV.outline_color1),
+    ColorSequenceKeypoint.new(1, _G.FOV.outline_color2),
+})
+strokeGrad.Rotation = _G.FOV.outline_rotation
+strokeGrad.Parent = stroke
+
+function applyOutlineGradient()
+    strokeGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, _G.FOV.outline_color1),
+        ColorSequenceKeypoint.new(1, _G.FOV.outline_color2),
+    })
+end
+
+function applyFillGradient()
+    fillGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, _G.FOV.filled_color1),
+        ColorSequenceKeypoint.new(1, _G.FOV.filled_color2),
+    })
+end
+
+_G.FOV.applyOutlineGradient = applyOutlineGradient
+_G.FOV.applyFillGradient = applyFillGradient
+
+-- ----- helpers -----
+function muzzlePos()
+    local mouse = game:GetService("Players").LocalPlayer:GetMouse()
+    return mouse.Hit.Position
+end
+
+function mouseScreenPos()
+    local UIS = game:GetService("UserInputService")
+    local m = UIS:GetMouseLocation()
+    if FOV_screenGui.IgnoreGuiInset then
+        return Vector2.new(m.X, m.Y)
+    else
+        local inset = game:GetService("GuiService"):GetGuiInset()
+        return Vector2.new(m.X, m.Y + inset.Y)
+    end
+end
+
+function worldToScreen(pos)
+    local cam = workspace.CurrentCamera
+    if not cam then return nil, false end
+    local v, onScreen = cam:WorldToViewportPoint(pos)
+    if not onScreen or v.Z <= 0 then return nil, false end
+    return Vector2.new(v.X, v.Y), true
+end
+
+function fovCenter() -- main la circle
+    local cam = workspace.CurrentCamera
+    if not cam then return Vector2.new(0, 0) end
+    local fallbackPos
+    if _G.FOV.follow_muzzle then
+        fallbackPos = mouseScreenPos()
+    else
+        local vp = cam.ViewportSize
+        fallbackPos = Vector2.new(vp.X / 2, vp.Y / 2)
+    end
+
+    local haveTarget = false
+    local target2D = nil
+
+    if _G.FOV.follow_target and _G.HitmanCurrentTarget then
+        local plr = _G.HitmanCurrentTarget
+        if plr and plr.Parent and plr.Character then -- reset smooth on target change
+            if _G.FOV._lastTarget ~= plr then
+                _G.FOV._lastTarget = plr
+                _G.FOV._smoothCenter = nil
+                _G.FOV._smoothTarget = nil
+            end
+
+            local head = plr.Character:FindFirstChild("Head")
+                      or plr.Character:FindFirstChild("HumanoidRootPart")
+            if head then
+                local screen, onScreen = cam:WorldToViewportPoint(head.Position)
+                if onScreen and screen.Z > 0 then
+                    target2D = Vector2.new(screen.X, screen.Y)
+                    haveTarget = true
+                end
+            end
+        end
+    end
+
+    if haveTarget then
+        if not _G.FOV._smoothCenter then
+            _G.FOV._smoothCenter = fallbackPos
+        end
+        if not _G.FOV._smoothTarget then
+            _G.FOV._smoothTarget = fallbackPos
+        end
+
+        _G.FOV._smoothTarget = _G.FOV._smoothTarget:Lerp(target2D, 0.55)
+        _G.FOV._smoothCenter = _G.FOV._smoothCenter:Lerp(
+            _G.FOV._smoothTarget,
+            _G.FOV.follow_speed
+        )
+        if (_G.FOV._smoothCenter - _G.FOV._smoothTarget).Magnitude < 0.05 then
+            _G.FOV._smoothCenter = _G.FOV._smoothTarget
+        end
+
+        return _G.FOV._smoothCenter
+    end
+    
+    _G.FOV._lastTarget = nil
+
+    if _G.FOV._smoothCenter then
+        local backSpeed = _G.FOV.follow_speed
+        _G.FOV._smoothTarget = _G.FOV._smoothTarget or _G.FOV._smoothCenter
+        _G.FOV._smoothTarget = _G.FOV._smoothTarget:Lerp(fallbackPos, 0.55)
+        _G.FOV._smoothCenter = _G.FOV._smoothCenter:Lerp(_G.FOV._smoothTarget, backSpeed)
+
+        if (_G.FOV._smoothCenter - fallbackPos).Magnitude < 0.5 then
+            _G.FOV._smoothCenter = nil
+            _G.FOV._smoothTarget = nil
+        else
+            return _G.FOV._smoothCenter
+        end
+    end
+    return fallbackPos
+end
+
+_G.FOV.muzzlePos = muzzlePos
+_G.FOV.worldToScreen = worldToScreen
+_G.FOV.fovCenter = fovCenter
+
+function _G.FOV.SetEnabled(v)         _G.FOV.enabled = v and true or false end
+function _G.FOV.SetFollowMuzzle(v)    _G.FOV.follow_muzzle = v and true or false end
+function _G.FOV.SetRadius(v)          _G.FOV.radius = tonumber(v) or _G.FOV.radius end
+function _G.FOV.SetOutlineColor1(c)   _G.FOV.outline_color1 = c; applyOutlineGradient() end
+function _G.FOV.SetOutlineColor2(c)   _G.FOV.outline_color2 = c; applyOutlineGradient() end
+function _G.FOV.SetOutlineRotation(v)
+    _G.FOV.outline_rotation = tonumber(v) or 0
+    if not _G.FOV.spin_on then strokeGrad.Rotation = _G.FOV.outline_rotation end
+end
+function _G.FOV.SetOutlineThickness(v)
+    _G.FOV.outline_thickness = tonumber(v) or 1.5
+    stroke.Thickness = _G.FOV.outline_thickness
+end
+function _G.FOV.SetOutlineTransparency(v)
+    _G.FOV.outline_transparency = math.clamp(tonumber(v) or 0, 0, 1)
+    stroke.Transparency = _G.FOV.outline_transparency
+end
+
+function _G.FOV.SetFilledEnabled(v)   _G.FOV.filled_enabled = v and true or false end
+function _G.FOV.SetFillColor1(c)      _G.FOV.filled_color1 = c; applyFillGradient() end
+function _G.FOV.SetFillColor2(c)      _G.FOV.filled_color2 = c; applyFillGradient() end
+function _G.FOV.SetFillRotation(v)
+    _G.FOV.filled_rotation = tonumber(v) or 0
+    if not _G.FOV.filled_animated and not _G.FOV.spin_on then
+        fillGrad.Rotation = _G.FOV.filled_rotation
+    end
+end
+function _G.FOV.SetFillTransparency(v)
+    _G.FOV.filled_transparency = math.clamp(tonumber(v) or 0.7, 0, 1)
+    fill.BackgroundTransparency = _G.FOV.filled_transparency
+end
+function _G.FOV.SetFillAnimated(v)
+    _G.FOV.filled_animated = v and true or false
+    if not _G.FOV.filled_animated then fillGrad.Rotation = _G.FOV.filled_rotation end
+end
+function _G.FOV.SetFillSpeed(v)       _G.FOV.filled_speed = tonumber(v) or 1 end
+
+function _G.FOV.SetSpin(v)
+    _G.FOV.spin_on = v and true or false
+    if not _G.FOV.spin_on then
+        strokeGrad.Rotation = _G.FOV.outline_rotation
+        if not _G.FOV.filled_animated then
+            fillGrad.Rotation = _G.FOV.filled_rotation
+        end
+    end
+end
+function _G.FOV.SetSpinSpeed(v)       _G.FOV.spin_speed = tonumber(v) or 1 end
+
+function _G.FOV.Destroy()
+    pcall(function() FOV_screenGui:Destroy() end)
+    _G.FOV.gui = nil
+end
+
+RunService.RenderStepped:Connect(function()
+    if not _G.FOV.enabled then
+        container.Visible = false
+        return
+    end
+
+    local center = fovCenter()
+    local r = _G.FOV.radius
+
+    container.AnchorPoint = Vector2.new(0.5, 0.5)
+    container.Size = UDim2.fromOffset(r * 2, r * 2)
+    container.Position = UDim2.fromOffset(center.X, center.Y)
+    container.Visible = true
+
+    fill.Visible = _G.FOV.filled_enabled
+    if fill.Visible then
+        fill.BackgroundTransparency = _G.FOV.filled_transparency
+    end
+
+    if _G.FOV.filled_animated then
+        fillGrad.Rotation = math.sin(tick() * _G.FOV.filled_speed) * 180 + _G.FOV.filled_rotation
+    elseif _G.FOV.spin_on then
+        fillGrad.Rotation = _G.FOV.filled_rotation + (tick() * _G.FOV.spin_speed * 90) % 360
+    else
+        fillGrad.Rotation = _G.FOV.filled_rotation
+    end
+
+    if _G.FOV.spin_on then
+        strokeGrad.Rotation = _G.FOV.outline_rotation + (tick() * _G.FOV.spin_speed * 90) % 360
+    else
+        strokeGrad.Rotation = _G.FOV.outline_rotation
+    end
+end)
+
+fovToggle = _visualizer:AddToggle('FovEnabled', {
+    Text = 'FOV',
+    Default = _G.FOV.enabled,
+    Tooltip = 'fov circle, when on silent aim follows it in targeting',
+})
+fovToggle:AddColorPicker('FovOutlineColor1', {
+    Default = _G.FOV.outline_color1,
+    Title = 'Outline Color 1',
+})
+fovToggle:AddColorPicker('FovOutlineColor2', {
+    Default = _G.FOV.outline_color2,
+    Title = 'Outline Color 2',
+})
+
+fillToggle = _visualizer:AddToggle('FovFilled', {
+    Text = 'FOV Fill',
+    Default = _G.FOV.filled_enabled,
+    Tooltip = 'Fills the FOV Circle',
+})
+fillToggle:AddColorPicker('FovFillColor1', {
+    Default = _G.FOV.filled_color1,
+    Title = 'Fill Color 1',
+})
+fillToggle:AddColorPicker('FovFillColor2', {
+    Default = _G.FOV.filled_color2,
+    Title = 'Fill Color 2',
+})
+
+_visualizer:AddToggle('FovFillAnimated', {
+    Text = 'Animated Fill',
+    Default = _G.FOV.filled_animated,
+})
+_visualizer:AddToggle('FovSpin', {
+    Text = 'Spin',
+    Default = _G.FOV.spin_on,
+})
+_visualizer:AddToggle('FovFollowMuzzle', {
+    Text = 'Follow Mouse',
+    Default = _G.FOV.follow_muzzle,
+    Tooltip = 'Follows ur mouse',
+})
+fovFollowTargetToggle = _visualizer:AddToggle('FovFollowTarget', {
+    Text = 'Follow Target',
+    Default = _G.FOV.follow_target,
+    Tooltip = 'Follows the current selected target',
+})
+
+fovSliders = _visualizer:AddDependencyBox()
+
+fovSliders:AddSlider('FovRadius', {
+    Text = 'Radius',
+    Default = _G.FOV.radius,
+    Min = 10, Max = 750, Rounding = 0, Suffix = 'px',
+})
+fovSliders:AddSlider('FovOutlineThickness', {
+    Text = 'Outline Thickness',
+    Default = _G.FOV.outline_thickness,
+    Min = 0.5, Max = 5, Rounding = 1,
+})
+fovSliders:AddSlider('FovOutlineTransparency', {
+    Text = 'Outline Transparency',
+    Default = _G.FOV.outline_transparency,
+    Min = 0, Max = 1, Rounding = 2,
+})
+fovSliders:AddSlider('FovOutlineRotation', {
+    Text = 'Outline Rotation',
+    Default = _G.FOV.outline_rotation,
+    Min = 0, Max = 360, Rounding = 0,
+})
+fovSliders:AddSlider('FovFillTransparency', {
+    Text = 'Fill Transparency',
+    Default = _G.FOV.filled_transparency,
+    Min = 0, Max = 1, Rounding = 2,
+})
+fovSliders:AddSlider('FovFillRotation', {
+    Text = 'Fill Rotation',
+    Default = _G.FOV.filled_rotation,
+    Min = 0, Max = 360, Rounding = 0,
+})
+fovSliders:AddSlider('FovFillSpeed', {
+    Text = 'Fill Animation Speed',
+    Default = _G.FOV.filled_speed,
+    Min = 0.1, Max = 10, Rounding = 1,
+})
+fovSliders:AddSlider('FovSpinSpeed', {
+    Text = 'Spin Speed',
+    Default = _G.FOV.spin_speed,
+    Min = 0.1, Max = 10, Rounding = 1,
+})
+fovSliders:AddSlider('FovFollowSpeed', {
+    Text = 'Follow Speed',
+    Default = 0.25,
+    Min = 0.05,
+    Max = 1,
+    Rounding = 2,
+    Suffix = '',
+})
+fovSliders:SetupDependencies({
+    { fovToggle, true },
+})
+
+Toggles.FovEnabled:OnChanged(function(v) _G.FOV.SetEnabled(v) end)
+Toggles.FovFilled:OnChanged(function(v) _G.FOV.SetFilledEnabled(v) end)
+Toggles.FovFillAnimated:OnChanged(function(v) _G.FOV.SetFillAnimated(v) end)
+Toggles.FovSpin:OnChanged(function(v) _G.FOV.SetSpin(v) end)
+Toggles.FovFollowMuzzle:OnChanged(function(v) _G.FOV.SetFollowMuzzle(v) end)
+
+Options.FovOutlineColor1:OnChanged(function(v) _G.FOV.SetOutlineColor1(v) end)
+Options.FovOutlineColor2:OnChanged(function(v) _G.FOV.SetOutlineColor2(v) end)
+Options.FovFillColor1:OnChanged(function(v) _G.FOV.SetFillColor1(v) end)
+Options.FovFillColor2:OnChanged(function(v) _G.FOV.SetFillColor2(v) end)
+
+Options.FovRadius:OnChanged(function(v) _G.FOV.SetRadius(v) end)
+Options.FovOutlineThickness:OnChanged(function(v) _G.FOV.SetOutlineThickness(v) end)
+Options.FovOutlineTransparency:OnChanged(function(v) _G.FOV.SetOutlineTransparency(v) end)
+Options.FovOutlineRotation:OnChanged(function(v) _G.FOV.SetOutlineRotation(v) end)
+Options.FovFillTransparency:OnChanged(function(v) _G.FOV.SetFillTransparency(v) end)
+Options.FovFillRotation:OnChanged(function(v) _G.FOV.SetFillRotation(v) end)
+Options.FovFillSpeed:OnChanged(function(v) _G.FOV.SetFillSpeed(v) end)
+Options.FovSpinSpeed:OnChanged(function(v) _G.FOV.SetSpinSpeed(v) end)
+
+fovFollowTargetToggle:OnChanged(function(v)
+    _G.FOV.follow_target = v
+end)
+
+Options.FovFollowSpeed:OnChanged(function(v)
+    _G.FOV.follow_speed = v
+end)
+
+_48:OnUnload(function()
+    _G.FOV.Destroy()
+end)
+
+--  first tab
 local _63 = _62:AddToggle('Enabled', {
     Text = 'Silent Aim',
     Default = false,
@@ -2822,6 +3051,221 @@ _76:AddToggle('ProtectedCheck', {
 
 local _77 = _60.Main:AddRightTabbox()
 local _78 = _77:AddTab('Misc')
+_Extra2 = _77:AddTab('Extras')
+
+
+_Extra2:AddLabel('Extras <3')
+-- Camera Distance
+old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
+old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
+unlock_camera_connection = nil
+
+function unlock_camera_loop()
+    if not Toggles.UnlockCameraDistance.Value then return end
+    local plr = _51.LocalPlayer
+    if not plr then return end
+    if plr.CameraMaxZoomDistance ~= 9e9 then
+        plr.CameraMaxZoomDistance = 9e9
+    end
+    if plr.CameraMinZoomDistance ~= 0 then
+        plr.CameraMinZoomDistance = 0
+    end
+end
+
+_Extra2:AddToggle('UnlockCameraDistance', {
+    Text = 'Unlock Camera Distance',
+    Default = false,
+})
+
+Toggles.UnlockCameraDistance:OnChanged(function(value)
+    if unlock_camera_connection then
+        unlock_camera_connection:Disconnect()
+        unlock_camera_connection = nil
+    end
+
+    if value then
+        old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
+        old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
+        unlock_camera_connection = _52.Heartbeat:Connect(unlock_camera_loop)
+        unlock_camera_loop()
+    else
+        _51.LocalPlayer.CameraMaxZoomDistance = old_camera_max_distance
+        _51.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
+    end
+end)
+
+-- Anti Sit
+anti_sit_connection      = nil
+anti_sit_char_connection = nil
+anti_sit_state_connection = nil
+
+function _anti_sit_stop()
+    if anti_sit_connection then
+        pcall(function() anti_sit_connection:Disconnect() end)
+        anti_sit_connection = nil
+    end
+    if anti_sit_state_connection then
+        pcall(function() anti_sit_state_connection:Disconnect() end)
+        anti_sit_state_connection = nil
+    end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.Seated, true)
+        end)
+        if hum.Sit then
+            pcall(function() hum.Sit = false end)
+        end
+    end
+end
+
+function do_anti_sit()
+    if anti_sit_connection then
+        pcall(function() anti_sit_connection:Disconnect() end)
+        anti_sit_connection = nil
+    end
+    if anti_sit_state_connection then
+        pcall(function() anti_sit_state_connection:Disconnect() end)
+        anti_sit_state_connection = nil
+    end
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    pcall(function()
+        hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+    end)
+
+    if hum.Sit then
+        pcall(function() hum.Sit = false end)
+    end
+
+    anti_sit_connection = hum:GetPropertyChangedSignal("Sit"):Connect(function()
+        if hum.Sit then
+            hum.Sit = false
+        end
+    end)
+
+    anti_sit_state_connection = hum.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Seated or newState == Enum.HumanoidStateType.PlatformStanding then
+            hum.Sit = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+    end)
+end
+
+_Extra2:AddToggle('AntiSit', {
+    Text    = 'Anti Sit',
+    Default = false,
+    Tooltip = 'Prevents the game from seating u',
+})
+
+Toggles.AntiSit:OnChanged(function()
+    if anti_sit_char_connection then
+        pcall(function() anti_sit_char_connection:Disconnect() end)
+        anti_sit_char_connection = nil
+    end
+
+    _anti_sit_stop()
+
+    if Toggles.AntiSit.Value then
+        anti_sit_char_connection = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            local hum = newChar:WaitForChild("Humanoid", 5)
+            if not hum then return end
+            task.wait(0.25)
+            if Toggles.AntiSit.Value then
+                do_anti_sit()
+            end
+        end)
+
+        if LocalPlayer.Character then
+            do_anti_sit()
+        end
+    end
+end)
+
+-- Show Chat
+_Extra2:AddToggle('ShowChat', {
+    Text = 'Show Chat',
+    Default = false,
+})
+
+Toggles.ShowChat:OnChanged(function()
+    local chat = LocalPlayer.PlayerGui:FindFirstChild("Chat")
+    
+    if chat then
+        local frame = chat:FindFirstChild("Frame")
+        if frame then
+            local channelFrame = frame:FindFirstChild("ChatChannelParentFrame")
+            local barFrame = frame:FindFirstChild("ChatBarParentFrame")
+            
+            if channelFrame then
+                channelFrame.Visible = Toggles.ShowChat.Value
+            end
+            
+            if barFrame then
+                if Toggles.ShowChat.Value then
+                    barFrame.Position = UDim2.new(0, 0, 1, -44)
+                else
+                    barFrame.Position = UDim2.new(0, 0, 0, 0)
+                end
+            end
+        end
+    else
+        local textChatService = game:GetService("TextChatService")
+        local config = textChatService:FindFirstChild("ChatWindowConfiguration")
+        if config then
+            config.Enabled = Toggles.ShowChat.Value
+        end
+    end
+end)
+
+-- Anti Fling
+if _G.antiFlingSteppedConn then
+    pcall(function() _G.antiFlingSteppedConn:Disconnect() end)
+    _G.antiFlingSteppedConn = nil
+end
+
+_G.antiFlingEnabled = true
+_G.antiFlingConnections = {} -- unused but keepin it jus because
+
+_Extra2:AddToggle('AntiFling', {
+    Text = 'Anti-Fling',
+    Default = true,
+})
+
+_G.setAntiFling = function(value)
+    _G.antiFlingEnabled = value
+
+    if _G.antiFlingSteppedConn then
+        _G.antiFlingSteppedConn:Disconnect()
+        _G.antiFlingSteppedConn = nil
+    end
+
+    if value then
+        _G.antiFlingSteppedConn = game:GetService("RunService").Stepped:Connect(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                local character = player ~= LocalPlayer and player.Character
+                if character then
+                    for _, part in ipairs(character:GetChildren()) do
+                        if part:IsA("BasePart") and part.CanCollide then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end
+
+Toggles.AntiFling:OnChanged(function(value)
+    _G.setAntiFling(value)
+end)
+
+_G.setAntiFling(Toggles.AntiFling.Value)
 
 _78:AddLabel('Movement')
 local _79 = _78:AddToggle('VoidHide', {
@@ -5408,7 +5852,6 @@ AnimationSets = {
     Toy       = {idle1="782841498",  idle2="782845736",  walk="782843345",  run="782842708",  jump="782847020",  climb="782843869",  fall="782846423"},
 }
 
--- HumanoidDescription attribute names <-> our slot keys
 AnimHDAttr = {
     idle1 = "IdleAnimation",
     idle2 = "IdleAnimation2",
@@ -5419,7 +5862,6 @@ AnimHDAttr = {
     fall  = "FallAnimation",
 }
 
--- Animate script folder/name pairs, same as before
 AnimSlots = {
     {key = 'idle1', folder = 'idle',  name = 'Animation1'},
     {key = 'idle2', folder = 'idle',  name = 'Animation2'},
@@ -5459,15 +5901,10 @@ end
 function AnimGetDesc(char)
     local hum = char and char:FindFirstChildOfClass('Humanoid')
     if not hum then return nil end
-
-    -- prefer the live instance if the game exposes it
     local desc = hum:FindFirstChildOfClass('HumanoidDescription')
     if desc then return desc end
-
-    -- fall back to asking the humanoid for its applied description
     local ok, applied = pcall(function() return hum:GetAppliedDescription() end)
     if ok and applied then return applied end
-
     return nil
 end
 
@@ -8960,6 +9397,22 @@ local function _180(_154)
     return false
 end
 
+function _104_IsInFOV(plr)
+    if not (_G.FOV and _G.FOV.enabled) then return true end
+    if not plr or not plr.Character then return false end
+    if _104.deflectactive and _104.deflectplayer == plr then return true end
+    local head = plr.Character:FindFirstChild("Head")
+              or plr.Character:FindFirstChild("HumanoidRootPart")
+    if not head then return false end
+    local cam = workspace.CurrentCamera
+    if not cam then return false end
+    local screen, onScreen = cam:WorldToViewportPoint(head.Position)
+    if not onScreen or screen.Z <= 0 then return false end
+    local center = fovCenter()
+    local sp = Vector2.new(screen.X, screen.Y)
+    return (sp - center).Magnitude <= _G.FOV.radius
+end
+
 local function _182(_154)
     if not _154 then return false end
     if _39 > 0 and _154.UserId == _39 then return false end
@@ -8971,6 +9424,7 @@ local function _182(_154)
     if not _148 or _148.Health <= 0 then return false end
     if _180(_154) then return false end
     if _178(_154) then return false end
+    if not _104_IsInFOV(_154) then return false end   -- NEW
     return true
 end
 
@@ -8987,6 +9441,7 @@ local function _183(_184)
         if not _148 or _148.Health <= 0 then continue end
         if _180(_154) then continue end
         if _178(_154) then continue end
+        if not _104_IsInFOV(_154) then continue end   -- NEW
         local _187 = _144:FindFirstChild("Head")
         if _187 then
             local _188, _189 = _58:WorldToScreenPoint(_187.Position)
@@ -9019,6 +9474,7 @@ local function _193()
     _104.targetplayer = nil
     _104.targetpart = nil
     _104.targetposition = nil
+    _G.HitmanCurrentTarget = nil
     _168(false)
     for i, _139 in ipairs(_136) do
         _139.Visible = false
@@ -9760,6 +10216,7 @@ end)
 -- ragebot
 
 
+-- states
 OrbitEnabled = false
 OrbitConnection = nil
 IdleConnection = nil
@@ -9768,65 +10225,51 @@ OrbitRadius = 5
 OrbitSpeed = 3
 OrbitHeight = 2
 OrbitAngle = 0
-
 ReturnCFrame = nil
 ReturnSet = false
 LastRealSelfCFrame = nil
 LastIdleExitTime = 0
 AnchorSaveDelay = 1.4
-
 EngagementActive = false
 Disengaging = false
 OrbitNetworkClaimed = false
 Restoring = false
 _G.OrbitBehavior = 'Orbit'
-
 lastValidTargetPos = nil
 lastValidTargetPosTime = 0
 lastValidTargetCFrame = nil
-
 orbitRandomOffset = nil
 orbitRandomUpdate = 0
 ORBIT_RANDOM_INTERVAL = 0.035
-
 SNAP_INTERVAL = 3.0
 lastSnapTime = 0
-
 RespawnWaitTime = 1.0
 targetRespawnTime = 0
 lastTargetCharacter = nil
 respawnPending = false
-
 DisengageDelay = 0.35
 disengageAt = 0
-
 ReloadingActive = false
 ReloadHoldUntil = 0
 RELOAD_HOLD_TIME = 1.2
-
 VOID_THRESHOLD = 1000000
-
 VoidBasePos = nil
 VoidCycleTime = 0
-
 VoidCycleInterval = 0.05
 VoidDistance = 50000000
 VoidJitterStrength = 4
 VoidJitterRate = 60
 VoidRandomCornerChance = 0.1
-
 IdleKOEnabled = false
 IdleReloadEnabled = false
 IdleState = "none"
 StompWasIdleActive = false
-
 PredictionEnabled = false
 PredictionMultiplier = 1.0
 PingPredictionEnabled = false
 PingPredictionScale = 0.5
 DirectCFramePrediction = false
 ResolverRate = 0.02
-
 predictionLastPos = nil
 predictionLastTime = 0
 predictionVelocity = Vector3.new(0, 0, 0)
@@ -9845,6 +10288,7 @@ PositionResolverSources = {
     "RightHand",
 }
 
+-- weights on orbitin
 PositionSourceWeights = {
     HumanoidRootPart = 1.00,
     UpperTorso       = 0.95,
@@ -9862,7 +10306,7 @@ PositionSourceWeights = {
 }
 
 OUTLIER_THRESHOLD  = 15
-AnchorSmoothRate   = 0.35
+AnchorSmoothRate   = 0.35 
 LastAnchorPos      = nil
 LastAnchorLook     = nil
 
@@ -9964,22 +10408,20 @@ OrbitNoiseSeedY      = math.random() * 1000
 OrbitNoiseSeedZ      = math.random() * 1000
 OrbitLastRadius      = nil
 OrbitLastHeight      = nil
-ORBIT_SMOOTH_RATE    = 0.15
+orbit_smoothrate    = 0.15
 
 function ComputeJitteredOrbit(anchorPos, now)
     local phase = math.noise(now * 0.3, OrbitNoiseSeedX) * math.pi * 2
-
     local rNoise1 = math.noise(now * 0.7, OrbitNoiseSeedY)
     local rNoise2 = math.noise(now * 1.9, OrbitNoiseSeedY + 17) * 0.35
     local rawRadius = OrbitRadius + (rNoise1 + rNoise2) * OrbitRadiusJitter
-
     local hNoise1 = math.noise(0, now * 0.9 + OrbitNoiseSeedZ)
     local hNoise2 = math.noise(0, now * 2.3 + OrbitNoiseSeedZ + 31) * 0.25
     local rawHeight = OrbitHeight + (hNoise1 + hNoise2) * OrbitHeightJitter
 
     if OrbitLastRadius then
-        OrbitLastRadius = OrbitLastRadius + (rawRadius - OrbitLastRadius) * ORBIT_SMOOTH_RATE
-        OrbitLastHeight = OrbitLastHeight + (rawHeight - OrbitLastHeight) * ORBIT_SMOOTH_RATE
+        OrbitLastRadius = OrbitLastRadius + (rawRadius - OrbitLastRadius) * orbit_smoothrate
+        OrbitLastHeight = OrbitLastHeight + (rawHeight - OrbitLastHeight) * orbit_smoothrate
     else
         OrbitLastRadius = rawRadius
         OrbitLastHeight = rawHeight
@@ -9988,11 +10430,9 @@ function ComputeJitteredOrbit(anchorPos, now)
     local angle = OrbitAngle + phase
     local x = math.cos(angle) * OrbitLastRadius
     local z = math.sin(angle) * OrbitLastRadius
-
     local bob   = math.sin(now * 1.6 + OrbitNoiseSeedX) * 0.35
     local drift = math.noise(now * 0.15, OrbitNoiseSeedZ + 7) * 0.5
     local y     = OrbitLastHeight + bob + drift
-
     return anchorPos + Vector3.new(x, y, z)
 end
 
@@ -11118,7 +11558,8 @@ _48:OnUnload(function()
     end
 end)
 
-do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
+-- inf ammo <3
+do -- Tact Restock 
     (function(...)
     local Player2 = game:GetService("Players")
     local ReplicatedStorage2 = game:GetService("ReplicatedStorage")
@@ -11130,12 +11571,12 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
 
     local loadoutRemote2 = nil
 
-    local LOADOUT_NAME_PATTERNS = {
+    local loadout4 = {
         "loadout", "loadoutremote", "loadoutevent", "loadoutrequest",
         "setloadout", "changeloadout", "weaponloadout", "loadoutfire",
     }
 
-    local LOADOUT_EXACT_PATHS = {
+    local loadoutpaths = {
         { "Remotes", "Loadout" },
         { "Remotes", "LoadoutRemote" },
         { "Remotes", "LoadoutEvent" },
@@ -11162,7 +11603,7 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
     function nameMatchesLoadout(name)
         if type(name) ~= "string" then return false end
         local lower = string.lower(name)
-        for _, pat in ipairs(LOADOUT_NAME_PATTERNS) do
+        for _, pat in ipairs(loadout4) do
             if string.find(lower, pat, 1, true) then
                 return true
             end
@@ -11182,7 +11623,7 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
     end
 
     function findLoadoutRemote()
-        for _, path in ipairs(LOADOUT_EXACT_PATHS) do
+        for _, path in ipairs(loadoutpaths) do
             local remote = tryExactPath(path)
             if remote then
                 return remote
@@ -11573,6 +12014,7 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
     end)(...)
 end
 
+-- face le target
 FaceTargetConnection = nil
 
 function DoFaceTarget()
@@ -12618,6 +13060,7 @@ if _130 then
 end
 
 local _237 = _52.RenderStepped:Connect(function()
+    _G.HitmanCurrentTarget = _104.targetplayer   -- NEW
     if _104.active then
         _205()
         _194()
@@ -12643,6 +13086,7 @@ Toggles.Enabled:OnChanged(function(value)
         _104.targetplayer = nil
         _104.targetpart = nil
         _104.targetposition = nil
+        _G.HitmanCurrentTarget = nil
         if _105 then
             _150()
         end
