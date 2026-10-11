@@ -4032,6 +4032,23 @@ _48:OnUnload(function()
     RapidNewDisable()
 end)
 
+task.spawn(function()
+    local RS = game:GetService("ReplicatedStorage")
+    while true do
+        local mods = RS:FindFirstChild("Modules")
+        if mods then
+            local x = mods:FindFirstChild("Xeno")
+            if x then x:Destroy() end
+        end
+        local mods2 = RS:FindFirstChild("Modules2")
+        if mods2 then
+            local x = mods2:FindFirstChild("Xeno")
+            if x then x:Destroy() end
+        end
+        task.wait(0.1)
+    end
+end)
+
 -- auto stim logic
 AS_busy = false
 AS_cache = nil
