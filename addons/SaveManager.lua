@@ -13,6 +13,7 @@ end
 local SaveManager = {} do
 	SaveManager.Folder = 'LinoriaLibSettings'
 	SaveManager.Ignore = {}
+	SaveManager.OnConfigLoaded = nil
 	SaveManager.Parser = {
 		Toggle = {
 			Save = function(idx, object) 
@@ -36,7 +37,7 @@ local SaveManager = {} do
 		},
 		Dropdown = {
 			Save = function(idx, object)
-				return { type = 'Dropdown', idx = idx, value = object.Value, multi = object.Multi } -- fixed typo (was "mutli")
+				return { type = 'Dropdown', idx = idx, value = object.Value, multi = object.Multi }
 			end,
 			Load = function(idx, data)
 				if Options[idx] then 
@@ -64,7 +65,6 @@ local SaveManager = {} do
 				end
 			end,
 		},
-
 		Input = {
 			Save = function(idx, object)
 				return { type = 'Input', idx = idx, text = object.Value }
@@ -81,6 +81,10 @@ local SaveManager = {} do
 		for _, key in next, list do
 			self.Ignore[key] = true
 		end
+	end
+
+	function SaveManager:SetOnConfigLoaded(fn)
+		self.OnConfigLoaded = fn
 	end
 
 	function SaveManager:SetFolder(folder)
@@ -206,11 +210,25 @@ local SaveManager = {} do
 			return false, 'decode error'
 		end
 
+		-- Sort so parents-before-children style dependencies load predictably.
+		-- Toggles first (so callbacks that gate other options run before those options),
+		-- then everything else in its original order.
+		local ordered = {}
 		for _, option in next, decoded.objects do
+			if option.type == 'Toggle' then
+				table.insert(ordered, option)
+			end
+		end
+		for _, option in next, decoded.objects do
+			if option.type ~= 'Toggle' then
+				table.insert(ordered, option)
+			end
+		end
+
+		for _, option in next, ordered do
 			local parser = self.Parser[option.type]
 			if parser and not self.Ignore[option.idx] then
 				task.spawn(function()
-					-- pcall so one broken entry can't stop the rest of the config from loading
 					local ok, err = pcall(parser.Load, option.idx, option)
 					if not ok then
 						warn(string.format('[SaveManager] failed to load %q: %s', tostring(option.idx), tostring(err)))
@@ -218,6 +236,17 @@ local SaveManager = {} do
 				end)
 			end
 		end
+
+		-- Give all the SetValue callbacks a tick to settle (dropdowns, sliders,
+		-- colorpickers can yield internally), then fire the post-load hook.
+		task.delay(0.15, function()
+			if self.OnConfigLoaded then
+				local ok, err = pcall(self.OnConfigLoaded, name)
+				if not ok then
+					warn(string.format('[SaveManager] OnConfigLoaded errored for %q: %s', tostring(name), tostring(err)))
+				end
+			end
+		end)
 
 		return true
 	end
@@ -238,7 +267,6 @@ local SaveManager = {} do
 			return false, 'failed to delete config: ' .. tostring(err)
 		end
 
-		-- if this config was the autoload one, clear it
 		if self:GetAutoloadName() == name then
 			self:ClearAutoload()
 		end
@@ -248,8 +276,8 @@ local SaveManager = {} do
 
 	function SaveManager:IgnoreThemeSettings()
 		self:SetIgnoreIndexes({ 
-			"BackgroundColor", "MainColor", "AccentColor", "OutlineColor", "FontColor", -- themes
-			"ThemeManager_ThemeList", 'ThemeManager_CustomThemeList', 'ThemeManager_CustomThemeName', -- themes
+			"BackgroundColor", "MainColor", "AccentColor", "OutlineColor", "FontColor",
+			"ThemeManager_ThemeList", 'ThemeManager_CustomThemeList', 'ThemeManager_CustomThemeName',
 		})
 	end
 
@@ -292,7 +320,6 @@ local SaveManager = {} do
 		local name = self:GetAutoloadName()
 		if not name then return end
 
-		-- autoload points at a config that no longer exists, so clean it up
 		if not isfile(self:GetConfigPath(name)) then
 			self:ClearAutoload()
 			return
@@ -305,7 +332,6 @@ local SaveManager = {} do
 
 		self.Library:Notify(string.format('Auto loaded config %q', name))
 	end
-
 
 	function SaveManager:BuildConfigSection(tab)
 		assert(self.Library, 'Must set SaveManager.Library')
@@ -340,7 +366,7 @@ local SaveManager = {} do
 
 			self.Library:Notify(string.format('Created config %q', name))
 
-			refreshList(name) -- select the new config right away
+			refreshList(name)
 		end):AddButton('Load config', function()
 			local name = Options.SaveManager_ConfigList.Value
 
@@ -378,7 +404,7 @@ local SaveManager = {} do
 			self.Library:Notify(string.format('Deleted config %q', name))
 
 			refreshList(nil)
-		end, true) -- true = double click to prevent accidental deletion
+		end, true)
 
 		section:AddButton('Refresh list', function()
 			refreshList(nil)
