@@ -369,7 +369,9 @@ originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
             local cancelWeapons = {
                 ["revolver"] = true,
                 ["double-barrel sg"] = true,
-                ["tacticalshotgun"] = true
+                ["tacticalshotgun"] = true,
+                ["[Orbed Sniper]"] = true,
+                ["[Quested Rifle]"] = true
             }
             if cancelWeapons[name] then
                 if type(args[1]) == "string" and args[1]:lower() == "shoot" then
@@ -1727,13 +1729,14 @@ end)
 MovementSection = WorldTab:AddRightGroupbox('Extras <3')
 
 -- Camera Distance
-old_camera_max_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
-old_camera_min_distance = game.Players.LocalPlayer.CameraMinZoomDistance
+old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
+old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
 unlock_camera_connection = nil
 
 function unlock_camera_loop()
     if not Toggles.UnlockCameraDistance.Value then return end
-    local plr = game.Players.LocalPlayer
+    local plr = _51.LocalPlayer
+    if not plr then return end
     if plr.CameraMaxZoomDistance ~= 9e9 then
         plr.CameraMaxZoomDistance = 9e9
     end
@@ -1754,13 +1757,13 @@ Toggles.UnlockCameraDistance:OnChanged(function(value)
     end
 
     if value then
-        old_camera_max_distance = game.Players.LocalPlayer.CameraMaxZoomDistance
-        old_camera_min_distance = game.Players.LocalPlayer.CameraMinZoomDistance
+        old_camera_max_distance = _51.LocalPlayer.CameraMaxZoomDistance
+        old_camera_min_distance = _51.LocalPlayer.CameraMinZoomDistance
         unlock_camera_connection = _52.Heartbeat:Connect(unlock_camera_loop)
         unlock_camera_loop()
     else
-        game.Players.LocalPlayer.CameraMaxZoomDistance = old_camera_max_distance
-        game.Players.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
+        _51.LocalPlayer.CameraMaxZoomDistance = old_camera_max_distance
+        _51.LocalPlayer.CameraMinZoomDistance = old_camera_min_distance
     end
 end)
 
@@ -2232,6 +2235,13 @@ AA:AddSlider('AntiAimJitterInterval', {
     Rounding = 2,
     Suffix = 's',
     Tooltip = 'How often jitter mode re-randomizes your yaw.',
+})
+
+-- Infinite Ammo Section
+InfiniteAmmoSection = Ragebot:AddLeftGroupbox('Infinite')
+InfiniteAmmoSection:AddToggle('TactRestock', {
+    Text = 'Inf ammo',
+    Default = true,
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
@@ -3439,7 +3449,8 @@ AS_blacklistedTools = {
     "[Wallet]", "[Cranberry]", "[Mask]", "[Donut]", "[Chicken]",
     "[SoloBike]", "[Katana]", "[Hair Glue]", "[Phone]", "[Cookie]",
     "[Fists]", "Combat", "TipJar", "Wallet", "[Flintlock]", "Mask",
-    "mask", "[Hamburger]", "[Pizza]", "Cookie",
+    "mask", "[Hamburger]", "[Pizza]", "Cookie", "[Quested Rifle]",
+    "[Orbed Sniper]", 
 }
 
 AS_blacklistSet = {}
@@ -6624,7 +6635,7 @@ StompModeDropdown = StompDep:AddDropdown('StompMode', {
     Text = 'Stomp Mode',
     Values = { 'direct', 'vector' },
     Default = 'direct',
-    Tooltip = 'direct = snap HRP to target part CFrame. vector = offset 0, 2.3, 0 above the part.',
+    Tooltip = 'direct = directly to their cframe. vector = above them and is a bit better',
 })
 
 StompDep:SetupDependencies({
@@ -10157,6 +10168,476 @@ function PickVoidBase()
         axis(math.floor(side / 2) % 2),
         axis(side % 2)
     )
+end
+
+do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles) -- IIFE-scoped to free chunk registers
+    (function(...)
+    local Player2 = game:GetService("Players")
+    local ReplicatedStorage2 = game:GetService("ReplicatedStorage")
+
+    local player2 = Player2.LocalPlayer
+
+    local backpack2 = nil
+    pcall(function() backpack2 = player2:WaitForChild("Backpack") end)
+
+    local loadoutRemote2 = nil
+
+    local LOADOUT_NAME_PATTERNS = {
+        "loadout", "loadoutremote", "loadoutevent", "loadoutrequest",
+        "setloadout", "changeloadout", "weaponloadout", "loadoutfire",
+    }
+
+    local LOADOUT_EXACT_PATHS = {
+        { "Remotes", "Loadout" },
+        { "Remotes", "LoadoutRemote" },
+        { "Remotes", "LoadoutEvent" },
+        { "Remotes", "SetLoadout" },
+        { "Remotes", "ChangeLoadout" },
+        { "RemoteEvents", "Loadout" },
+        { "RemoteEvents", "LoadoutRemote" },
+        { "RemoteEvents", "SetLoadout" },
+        { "GameRemotes", "Loadout" },
+        { "GameRemotes", "LoadoutRemote" },
+        { "MainRemotes", "Loadout" },
+        { "MainRemotes", "LoadoutRemote" },
+        { "MainRemoteEvent" },
+        { "MainEvent" },
+        { "Loadout" },
+        { "LoadoutRemote" },
+        { "LoadoutEvent" },
+    }
+
+    local function isRemote(obj)
+        return obj and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction"))
+    end
+
+    local function nameMatchesLoadout(name)
+        if type(name) ~= "string" then return false end
+        local lower = string.lower(name)
+        for _, pat in ipairs(LOADOUT_NAME_PATTERNS) do
+            if string.find(lower, pat, 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function tryExactPath(path)
+        local current = ReplicatedStorage2
+        for _, name in ipairs(path) do
+            current = current and current:FindFirstChild(name)
+            if not current then
+                return nil
+            end
+        end
+        return isRemote(current) and current or nil
+    end
+
+    local function findLoadoutRemote()
+        for _, path in ipairs(LOADOUT_EXACT_PATHS) do
+            local remote = tryExactPath(path)
+            if remote then
+                return remote
+            end
+        end
+
+        local best, bestDepth = nil, math.huge
+        for _, obj in ipairs(ReplicatedStorage2:GetDescendants()) do
+            if isRemote(obj) and nameMatchesLoadout(obj.Name) then
+                local depth = 0
+                local parent = obj.Parent
+                while parent and parent ~= ReplicatedStorage2 do
+                    depth = depth + 1
+                    parent = parent.Parent
+                end
+                if depth < bestDepth then
+                    best, bestDepth = obj, depth
+                end
+            end
+        end
+
+        return best
+    end
+
+    -- Discover once, up front. Never re-resolve in the hot fire path.
+    loadoutRemote2 = findLoadoutRemote()
+    if loadoutRemote2 then
+        print("[Tact] using", loadoutRemote2:GetFullName())
+    else
+        print("[Tact] loadout remote not found yet")
+    end
+
+    local function getTactBackpack()
+        if backpack2 and backpack2.Parent then return backpack2 end
+        return player2:FindFirstChildOfClass("Backpack") or player2:FindFirstChild("Backpack")
+    end
+
+    local LOADOUT2 = {
+        [1] = "[Double-Barrel SG]",
+        [2] = "[Revolver]",
+        [3] = "[TacticalShotgun]",
+        [4] = "[knife]",
+    }
+
+    local SUPPORTED2 = {
+        ["[TacticalShotgun]"] = true,
+        ["[Double-Barrel SG]"] = true,
+        ["[Revolver]"] = true,
+    }
+
+    local watchedTools2 = setmetatable({}, { __mode = "k" })
+    local activeRequests2 = setmetatable({}, { __mode = "k" })
+    local watchedContainers2 = setmetatable({}, { __mode = "k" })
+    local toolWatchState2 = setmetatable({}, { __mode = "k" })
+    local generation2 = 0
+
+    local function tactEnabled()
+        return Toggles.TactRestock and Toggles.TactRestock.Value == true
+    end
+
+    local function clearTable(t)
+        for k in pairs(t) do
+            t[k] = nil
+        end
+    end
+
+    local function isAmmoValue(object)
+        return object
+            and object.Name == "Ammo"
+            and (object:IsA("IntValue") or object:IsA("NumberValue"))
+    end
+
+    local function getAmmo(tool)
+        local ammo = tool and tool:FindFirstChild("Ammo")
+        if isAmmoValue(ammo) then
+            return ammo
+        end
+        return nil
+    end
+
+    local function getTool(object)
+        if object:IsA("Tool") then
+            return object
+        end
+        return object:FindFirstAncestorOfClass("Tool")
+    end
+
+    local function equipTool(tool)
+        if not tool or not tool.Parent then
+            return false
+        end
+        local character = player2.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not character or not humanoid then
+            return false
+        end
+        if tool.Parent == character then
+            return true
+        end
+        pcall(function()
+            humanoid:EquipTool(tool)
+        end)
+        return true
+    end
+
+    local function findLoadedCopy(weaponName, emptyTool)
+        local character = player2.Character
+        local bestTool
+        local bestAmmo = 0
+        local bp = getTactBackpack()
+
+        for _, container in ipairs({ bp, character }) do
+            if container then
+                for _, object in ipairs(container:GetChildren()) do
+                    if object:IsA("Tool")
+                        and object.Name == weaponName
+                        and object ~= emptyTool then
+                        local ammo = getAmmo(object)
+                        if ammo and ammo.Value > bestAmmo then
+                            bestAmmo = ammo.Value
+                            bestTool = object
+                        end
+                    end
+                end
+            end
+        end
+
+        return bestTool
+    end
+
+    local function disconnectWatchState(tool)
+        local state = toolWatchState2[tool]
+        if not state then
+            return
+        end
+        for _, connection in ipairs(state.connections) do
+            if connection and connection.Connected then
+                connection:Disconnect()
+            end
+        end
+        clearTable(state.connections)
+        toolWatchState2[tool] = nil
+        watchedTools2[tool] = nil
+        activeRequests2[tool] = nil
+    end
+
+    local function requestAndSwitch(emptyTool)
+        if not tactEnabled() then
+            return
+        end
+        if not emptyTool or not emptyTool.Parent or not SUPPORTED2[emptyTool.Name] then
+            return
+        end
+
+        local weaponName = emptyTool.Name
+        local char = player2.Character
+        local wasInHand = char and emptyTool.Parent == char
+
+        -- Hot path: same direct FireServer as the original. No cache checks,
+        -- no IsA, no discovery — just fire.
+        if loadoutRemote2 and loadoutRemote2.Parent then
+            pcall(function()
+                loadoutRemote2:FireServer(LOADOUT2)
+            end)
+        end
+
+        if not wasInHand then
+            return
+        end
+
+        local copy = findLoadedCopy(weaponName, emptyTool)
+        if copy and copy.Parent then
+            equipTool(copy)
+            return
+        end
+
+        for _ = 1, 12 do
+            local ammoLive = getAmmo(emptyTool)
+            if ammoLive and ammoLive.Value > 0 then
+                return
+            end
+            local loaded = findLoadedCopy(weaponName, emptyTool)
+            if loaded and loaded.Parent then
+                equipTool(loaded)
+                return
+            end
+            task.wait(0.35)
+        end
+    end
+
+    local function watchWeapon(tool)
+        if not tool
+            or not tool:IsA("Tool")
+            or not SUPPORTED2[tool.Name]
+            or watchedTools2[tool] then
+            return
+        end
+
+        watchedTools2[tool] = true
+        local state = { connections = {}, generation = generation2 }
+        toolWatchState2[tool] = state
+
+        local currentAmmo
+        local ammoConnection
+        local triggeredAtZero = false
+
+        local function track(connection)
+            table.insert(state.connections, connection)
+            return connection
+        end
+
+        local function attachAmmo(ammo)
+            if not isAmmoValue(ammo) or currentAmmo == ammo then
+                return
+            end
+            if ammoConnection and ammoConnection.Connected then
+                ammoConnection:Disconnect()
+            end
+            currentAmmo = ammo
+
+            local function checkAmmo()
+                if state.generation ~= generation2 or not tool.Parent then
+                    return
+                end
+                if ammo.Value > 0 then
+                    triggeredAtZero = false
+                    return
+                end
+                if not triggeredAtZero then
+                    triggeredAtZero = true
+                    requestAndSwitch(tool)
+                end
+            end
+
+            ammoConnection = track(ammo:GetPropertyChangedSignal("Value"):Connect(checkAmmo))
+            checkAmmo()
+        end
+
+        local ammo = getAmmo(tool)
+        if ammo then
+            attachAmmo(ammo)
+        end
+
+        track(tool.DescendantAdded:Connect(function(descendant)
+            if isAmmoValue(descendant) then
+                attachAmmo(descendant)
+            end
+        end))
+
+        track(tool.Destroying:Connect(function()
+            disconnectWatchState(tool)
+        end))
+    end
+
+    local function watchObject(object)
+        local tool = getTool(object)
+        if tool then
+            watchWeapon(tool)
+        end
+    end
+
+    local function watchContainer(container)
+        if not container or watchedContainers2[container] then
+            return
+        end
+        watchedContainers2[container] = true
+        container.DescendantAdded:Connect(watchObject)
+        for _, object in ipairs(container:GetDescendants()) do
+            watchObject(object)
+        end
+    end
+
+    local function rescanTools()
+        for _, container in ipairs({ getTactBackpack(), player2.Character }) do
+            if container then
+                for _, object in ipairs(container:GetDescendants()) do
+                    watchObject(object)
+                end
+            end
+        end
+    end
+
+    local backpackWatchConn = nil
+
+    local function ensureBackpackWatch()
+        local bp = getTactBackpack()
+        if not bp then
+            pcall(function() bp = player2:WaitForChild("Backpack", 8) end)
+        end
+        if not bp then
+            return nil
+        end
+        backpack2 = bp
+        if backpackWatchConn and backpackWatchConn.Connected and watchedContainers2[bp] then
+            return bp
+        end
+        if backpackWatchConn then
+            pcall(function()
+                backpackWatchConn:Disconnect()
+            end)
+            backpackWatchConn = nil
+        end
+        watchedContainers2[bp] = true
+        backpackWatchConn = bp.DescendantAdded:Connect(watchObject)
+        for _, object in ipairs(bp:GetDescendants()) do
+            watchObject(object)
+        end
+        return bp
+    end
+
+    local function hardResetLoop(reason)
+        generation2 = generation2 + 1
+        for tool in pairs(toolWatchState2) do
+            disconnectWatchState(tool)
+        end
+        clearTable(watchedTools2)
+        clearTable(activeRequests2)
+        for container in pairs(watchedContainers2) do
+            watchedContainers2[container] = nil
+        end
+        print("[Tact] loop reset:", reason or "unknown", "gen", generation2)
+        return generation2
+    end
+
+    local function bootAfterRespawn(character)
+        local gen = hardResetLoop("respawn")
+        task.spawn(function()
+            local char = character
+            if not char then
+                return
+            end
+            local hum = char:WaitForChild("Humanoid", 12)
+            if gen ~= generation2 then
+                return
+            end
+            if hum then
+                local t0 = tick()
+                while hum.Parent and hum.Health <= 0 and tick() - t0 < 12 do
+                    if gen ~= generation2 then
+                        return
+                    end
+                    task.wait(0.1)
+                end
+            end
+            if gen ~= generation2 or not char.Parent then
+                return
+            end
+
+            -- On respawn, re-resolve once (not in the fire path).
+            if not loadoutRemote2 or not loadoutRemote2.Parent then
+                loadoutRemote2 = findLoadoutRemote()
+                if loadoutRemote2 then
+                    print("[Tact] re-resolved remote:", loadoutRemote2:GetFullName())
+                end
+            end
+
+            if loadoutRemote2 and loadoutRemote2.Parent then
+                pcall(function()
+                    loadoutRemote2:FireServer(LOADOUT2)
+                end)
+            end
+
+            ensureBackpackWatch()
+            watchContainer(char)
+            rescanTools()
+            for _, delaySec in ipairs({ 0.25, 0.6, 1.2, 2.0 }) do
+                task.delay(delaySec, function()
+                    if gen ~= generation2 then
+                        return
+                    end
+                    ensureBackpackWatch()
+                    if char.Parent then
+                        watchContainer(char)
+                    end
+                    rescanTools()
+                end)
+            end
+        end)
+    end
+
+    player2.CharacterRemoving:Connect(function()
+        generation2 = generation2 + 1
+        for tool in pairs(toolWatchState2) do
+            disconnectWatchState(tool)
+        end
+        clearTable(watchedTools2)
+        clearTable(activeRequests2)
+        for container in pairs(watchedContainers2) do
+            if container ~= getTactBackpack() then
+                watchedContainers2[container] = nil
+            end
+        end
+    end)
+
+    player2.CharacterAdded:Connect(bootAfterRespawn)
+
+    ensureBackpackWatch()
+    if player2.Character then
+        bootAfterRespawn(player2.Character)
+    end
+
+    print("[Tact] ready - supports TacticalShotgun, Double-Barrel SG, Revolver")
+    end)(...)
 end
 
 function EnterVoid()
@@ -14962,6 +15443,8 @@ if _56.Character then
     end
 end
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Cilent.lua'))()
+
+_48:Notify('Bugs? Report them in discord.gg/eMpUQzFrNG <3', 15)
 
 -- ticks for le automation
 do
