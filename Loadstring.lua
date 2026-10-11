@@ -11155,11 +11155,11 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
         { "LoadoutEvent" },
     }
 
-    local function isRemote(obj)
+    function isRemote(obj)
         return obj and (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction"))
     end
 
-    local function nameMatchesLoadout(name)
+    function nameMatchesLoadout(name)
         if type(name) ~= "string" then return false end
         local lower = string.lower(name)
         for _, pat in ipairs(LOADOUT_NAME_PATTERNS) do
@@ -11170,7 +11170,7 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
         return false
     end
 
-    local function tryExactPath(path)
+    function tryExactPath(path)
         local current = ReplicatedStorage2
         for _, name in ipairs(path) do
             current = current and current:FindFirstChild(name)
@@ -11181,7 +11181,7 @@ do -- Tact Restock (auto restock TacticalShotgun, gated by UI toggles)
         return isRemote(current) and current or nil
     end
 
-    local function findLoadoutRemote()
+    function findLoadoutRemote()
         for _, path in ipairs(LOADOUT_EXACT_PATHS) do
             local remote = tryExactPath(path)
             if remote then
