@@ -2237,11 +2237,11 @@ AA:AddSlider('AntiAimJitterInterval', {
     Tooltip = 'How often jitter mode re-randomizes your yaw.',
 })
 
--- Infinite Ammo Section
 InfiniteAmmoSection = Ragebot:AddLeftGroupbox('Infinite')
 InfiniteAmmoSection:AddToggle('TactRestock', {
     Text = 'Inf ammo',
-    Default = true,
+    Default = false,
+    Tooltip = 'Inf Ammo method works on some zee/des hoods',
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
