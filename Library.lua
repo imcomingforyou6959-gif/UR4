@@ -441,6 +441,59 @@ function Library:GetDarkerColor(Color)
 end;
 Library.AccentColorDark = Library:GetDarkerColor(Library.AccentColor);
 
+-- =====================================================================
+-- Color transparency (driven by the color pickers in ThemeManager)
+-- Every frame whose BackgroundColor3 is registered to BackgroundColor / MainColor /
+-- AccentColor gets that color's transparency. Only the main window is affected.
+-- =====================================================================
+Library.ColorTransparency = { BackgroundColor = 0; MainColor = 0; AccentColor = 0; };
+Library.TransparencyCache = {};   -- shared with the open/close fade in CreateWindow
+Library.IsOpen = false;
+Library.WindowOuter = nil;
+
+-- sets a transparency prop and keeps the open/close fade cache in sync
+function Library:SetTransparencyProp(Inst, Prop, Value)
+    local Cache = Library.TransparencyCache[Inst];
+
+    if Cache and Cache[Prop] ~= nil then
+        Cache[Prop] = Value;
+        if not Library.IsOpen then
+            return; -- menu is faded out, it will fade in to the new value
+        end;
+    end;
+
+    Inst[Prop] = Value;
+end;
+
+-- applies the transparency of whatever color key an instance's background is registered to
+function Library:ApplyColorTransparency(Inst)
+    local Window = Library.WindowOuter;
+    if not Window or not Inst.Parent then return end;
+
+    local Reg = Library.RegistryMap[Inst];
+    if not Reg then return end;
+
+    local Key = Reg.Properties.BackgroundColor3;
+    if type(Key) ~= 'string' then return end;
+
+    local T = Library.ColorTransparency[Key];
+    if T == nil then return end;
+
+    -- only the main window, and not the search results list (zindex 30+)
+    if not Inst:IsDescendantOf(Window) or Inst.ZIndex >= 30 then return end;
+
+    Library:SetTransparencyProp(Inst, 'BackgroundTransparency', T);
+
+    -- the black outline frame behind an inset frame would show through, so match it
+    local Parent = Inst.Parent;
+    if Parent and Parent:IsA('Frame') and Inst.BorderMode == Enum.BorderMode.Inset then
+        local ParentReg = Library.RegistryMap[Parent];
+        if not (ParentReg and ParentReg.Properties.BackgroundColor3) then
+            Library:SetTransparencyProp(Parent, 'BackgroundTransparency', T);
+        end;
+    end;
+end;
+
 function Library:AddToRegistry(Instance, Properties, IsHud)
     local Idx = #Library.Registry + 1;
     local Data = {
@@ -454,6 +507,15 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
 
     if IsHud then
         table.insert(Library.HudRegistry, Data);
+    end;
+
+    if Properties.BackgroundColor3 and Instance:IsA('GuiObject') then
+        -- some elements swap their background color at runtime (tabs, toggles), so re-apply when it changes
+        Instance:GetPropertyChangedSignal('BackgroundColor3'):Connect(function()
+            task.defer(Library.ApplyColorTransparency, Library, Instance);
+        end);
+
+        Library:ApplyColorTransparency(Instance);
     end;
 end;
 
@@ -478,16 +540,6 @@ function Library:RemoveFromRegistry(Instance)
 end;
 
 function Library:UpdateColorsUsingRegistry()
-    -- TODO: Could have an 'active' list of objects
-    -- where the active list only contains Visible objects.
-
-    -- IMPL: Could setup .Changed events on the AddToRegistry function
-    -- that listens for the 'Visible' propert being changed.
-    -- Visible: true => Add to active list, and call UpdateColors function
-    -- Visible: false => Remove from active list.
-
-    -- The above would be especially efficient for a rainbow menu color or live color-changing.
-
     for Idx, Object in next, Library.Registry do
         for Property, ColorIdx in next, Object.Properties do
             if type(ColorIdx) == 'string' then
@@ -495,6 +547,10 @@ function Library:UpdateColorsUsingRegistry()
             elseif type(ColorIdx) == 'function' then
                 Object.Instance[Property] = ColorIdx()
             end
+        end;
+
+        if Object.Properties.BackgroundColor3 then
+            Library:ApplyColorTransparency(Object.Instance);
         end;
     end;
 end;
@@ -2041,6 +2097,8 @@ do
 
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and 'AccentColor' or 'MainColor';
             Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
+
+            Library:ApplyColorTransparency(ToggleInner);
         end;
 
         function Toggle:OnChanged(Func)
@@ -3121,6 +3179,9 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
+    -- everything inside this frame is affected by the color transparency system
+    Library.WindowOuter = Outer;
+
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
         BorderColor3 = Library.AccentColor;
@@ -3472,12 +3533,13 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         });
 
+        -- hidden via Visible (not transparency) so it doesn't fight the color transparency system
         local Blocker = Library:Create('Frame', {
             BackgroundColor3 = Library.MainColor;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, 0);
             Size = UDim2.new(1, 0, 0, 1);
-            BackgroundTransparency = 1;
+            Visible = false;
             ZIndex = 3;
             Parent = TabButton;
         });
@@ -3549,16 +3611,18 @@ function Library:CreateWindow(...)
                 Tab:HideTab();
             end;
 
-            Blocker.BackgroundTransparency = 0;
+            Blocker.Visible = true;
             TabButton.BackgroundColor3 = Library.MainColor;
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = 'MainColor';
+            Library:ApplyColorTransparency(TabButton);
             TabFrame.Visible = true;
         end;
 
         function Tab:HideTab()
-            Blocker.BackgroundTransparency = 1;
+            Blocker.Visible = false;
             TabButton.BackgroundColor3 = Library.BackgroundColor;
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = 'BackgroundColor';
+            Library:ApplyColorTransparency(TabButton);
             TabFrame.Visible = false;
         end;
 
@@ -3794,6 +3858,7 @@ function Library:CreateWindow(...)
 
                     Button.BackgroundColor3 = Library.BackgroundColor;
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'BackgroundColor';
+                    Library:ApplyColorTransparency(Button);
 
                     Tab:Resize();
                 end;
@@ -3804,6 +3869,7 @@ function Library:CreateWindow(...)
 
                     Button.BackgroundColor3 = Library.MainColor;
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'MainColor';
+                    Library:ApplyColorTransparency(Button);
                 end;
 
                 function Tab:Resize()
@@ -3894,7 +3960,7 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
-    local TransparencyCache = {};
+    local TransparencyCache = Library.TransparencyCache;
     local Toggled = false;
     local Fading = false;
 
@@ -3906,6 +3972,7 @@ function Library:CreateWindow(...)
         local FadeTime = Config.MenuFadeTime;
         Fading = true;
         Toggled = (not Toggled);
+        Library.IsOpen = Toggled;
         ModalElement.Modal = Toggled;
 
         if Toggled then
