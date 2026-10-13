@@ -26,7 +26,7 @@ local ThemeManager = {} do
 		local scheme = data[2]
 		for idx, col in next, customThemeData or scheme do
 			self.Library[idx] = Color3.fromHex(col)
-			
+
 			if Options[idx] then
 				Options[idx]:SetValueRGB(Color3.fromHex(col))
 			end
@@ -48,7 +48,7 @@ local ThemeManager = {} do
 		self.Library:UpdateColorsUsingRegistry()
 	end
 
-	function ThemeManager:LoadDefault()		
+	function ThemeManager:LoadDefault()
 		local theme = 'Default'
 		local content = isfile(self.Folder .. '/themes/default.txt') and readfile(self.Folder .. '/themes/default.txt')
 
@@ -61,7 +61,7 @@ local ThemeManager = {} do
 				isDefault = false;
 			end
 		elseif self.BuiltInThemes[self.DefaultTheme] then
-		 	theme = self.DefaultTheme
+			theme = self.DefaultTheme
 		end
 
 		if isDefault then
@@ -105,14 +105,14 @@ local ThemeManager = {} do
 		groupbox:AddInput('ThemeManager_CustomThemeName', { Text = 'Custom theme name' })
 		groupbox:AddDropdown('ThemeManager_CustomThemeList', { Text = 'Custom themes', Values = self:ReloadCustomThemes(), AllowNull = true, Default = 1 })
 		groupbox:AddDivider()
-		
-		groupbox:AddButton('Save theme', function() 
+
+		groupbox:AddButton('Save theme', function()
 			self:SaveCustomTheme(Options.ThemeManager_CustomThemeName.Value)
 
 			Options.ThemeManager_CustomThemeList:SetValues(self:ReloadCustomThemes())
 			Options.ThemeManager_CustomThemeList:SetValue(nil)
-		end):AddButton('Load theme', function() 
-			self:ApplyTheme(Options.ThemeManager_CustomThemeList.Value) 
+		end):AddButton('Load theme', function()
+			self:ApplyTheme(Options.ThemeManager_CustomThemeList.Value)
 		end)
 
 		groupbox:AddButton('Refresh list', function()
@@ -140,6 +140,64 @@ local ThemeManager = {} do
 		Options.FontColor:OnChanged(UpdateTheme)
 	end
 
+	function ThemeManager:CreateBackgroundManager(groupbox)
+		local Library = self.Library
+
+		groupbox:AddInput('ThemeManager_BackgroundSource', {
+			Text = 'Background image',
+			Placeholder = 'raw link or rbxassetid',
+			Finished = true,
+			Tooltip = 'Direct .png/.jpg link (raw), or an rbxassetid / decal id. Press enter to apply.',
+			Callback = function(Value)
+				Library:SetBackgroundImage(Value)
+			end,
+		})
+
+		groupbox:AddButton('Apply image', function()
+			Library:SetBackgroundImage(Options.ThemeManager_BackgroundSource.Value)
+		end):AddButton('Clear image', function()
+			Options.ThemeManager_BackgroundSource:SetValue('')
+		end)
+
+		groupbox:AddDropdown('ThemeManager_BackgroundScale', {
+			Text = 'Image fit',
+			Values = { 'Crop', 'Stretch', 'Fit' },
+			Default = 1,
+			Callback = function(Value)
+				Library:SetBackgroundScaleType(Value)
+			end,
+		})
+
+		groupbox:AddSlider('ThemeManager_BackgroundImageTransparency', {
+			Text = 'Image transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
+			Callback = function(Value) Library:SetBackgroundImageTransparency(Value) end,
+		})
+
+		groupbox:AddDivider()
+
+		groupbox:AddSlider('ThemeManager_WindowTransparency', {
+			Text = 'Window transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
+			Tooltip = 'Main window / tab area. Ignored while a background image is active.',
+			Callback = function(Value) Library:SetLayerTransparency('Window', Value) end,
+		})
+
+		groupbox:AddSlider('ThemeManager_GroupTransparency', {
+			Text = 'Groupbox transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
+			Callback = function(Value) Library:SetLayerTransparency('Group', Value) end,
+		})
+
+		groupbox:AddSlider('ThemeManager_InlineTransparency', {
+			Text = 'Inline transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
+			Tooltip = 'Toggles, sliders, buttons, dropdowns, textboxes.',
+			Callback = function(Value) Library:SetLayerTransparency('Inline', Value) end,
+		})
+
+		groupbox:AddButton('Glass preset', function()
+			Options.ThemeManager_GroupTransparency:SetValue(0.45)
+			Options.ThemeManager_InlineTransparency:SetValue(0.35)
+		end)
+	end
+
 	function ThemeManager:GetCustomTheme(file)
 		local path = self.Folder .. '/themes/' .. file
 		if not isfile(path) then
@@ -148,7 +206,7 @@ local ThemeManager = {} do
 
 		local data = readfile(path)
 		local success, decoded = pcall(httpService.JSONDecode, httpService, data)
-		
+
 		if not success then
 			return nil
 		end
@@ -237,11 +295,18 @@ local ThemeManager = {} do
 		assert(self.Library, 'Must set ThemeManager.Library first!')
 		local groupbox = self:CreateGroupBox(tab)
 		self:CreateThemeManager(groupbox)
+
+		self:CreateBackgroundManager(tab:AddRightGroupbox('Background'))
 	end
 
-	function ThemeManager:ApplyToGroupbox(groupbox)
+	-- backgroundGroupbox is optional; pass a second groupbox to also get the background controls
+	function ThemeManager:ApplyToGroupbox(groupbox, backgroundGroupbox)
 		assert(self.Library, 'Must set ThemeManager.Library first!')
 		self:CreateThemeManager(groupbox)
+
+		if backgroundGroupbox then
+			self:CreateBackgroundManager(backgroundGroupbox)
+		end
 	end
 
 	ThemeManager:BuildFolderTree()
