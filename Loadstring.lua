@@ -712,7 +712,7 @@ _G.Emotes = {
         laughingitupemote = 122240620529815,
         tf2laughingspyr6 = 76507949699963,
         billybounce = 93450937830334,
-        catgirlsittingdown = 124682757478598,
+        catgirlsittingdown = 101776651626641,
         celebratoryapplauseclap = 71112576712945,
         happyhappyhappy = 99066466026711,
         gayemote2 = 104918870934219,
@@ -726,12 +726,12 @@ _G.Emotes = {
         Scenario = 111901279618983,
         slowclaps = 122162023523653,
         heyyamove = 119734573196374,
-        Caramelldansen = 97847706148165,
+        Caramelldansen = 84800924594640,
         Sleeply = 105016815489641,
         griddy = 106715239721951,
         creepindance = 80985588930231,
         upsidedownclapping = 135648992354309,
-        OrangeJustice = 129748377368660,
+        OrangeJustice = 110064349530772,
         spiceclapslay = 76426815825663,
         evillaugh = 73856013353080,
         coffinwalkout = 117302755748327,
@@ -743,7 +743,7 @@ _G.Emotes = {
         spinspinspin = 100677848413238,
         Druski = 98405298116702,
         gayidle = 135210847181660,
-        NLECHOPPA = 133293268056643,
+        NLECHOPPA = 71827861557555,
         mjpytprettyyoungthing = 137234266130963,
         worm = 112153137737330,
         gayclap = 108147171194405,
@@ -2066,6 +2066,38 @@ BehaviorB:AddToggle('IdleOnReload', {
     Text = 'Idle on Reload',
     Default = false,
     Tooltip = 'Void out and idle while you are reloading.',
+})
+
+BehaviorB:AddToggle('IdleSpam', {
+    Text = 'Idle Spam',
+    Default = false,
+    Tooltip = 'Alternates between strafing and hiding in the void. Defense against other cheaters.',
+})
+
+IdleSpamDep = BehaviorB:AddDependencyBox()
+
+IdleSpamDep:AddSlider('IdleSpamStrafeTime', {
+    Text = 'Strafe Time',
+    Default = 3,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = 's',
+    Tooltip = 'How long to strafe/orbit before hiding.',
+})
+
+IdleSpamDep:AddSlider('IdleSpamIdleTime', {
+    Text = 'Idle Time',
+    Default = 1,
+    Min = 0.5,
+    Max = 10,
+    Rounding = 1,
+    Suffix = 's',
+    Tooltip = 'How long to hide in the void before re-engaging.',
+})
+
+IdleSpamDep:SetupDependencies({
+    { Toggles.IdleSpam, true }
 })
 
 PredictionB = Ragebot:AddRightGroupbox('Prediction')
@@ -4285,7 +4317,7 @@ function AS_startRandomEquip()
             end
         end
         if hasTool then return end
-        local bp = _56.Backpack
+        local bp = _56:FindFirstChild("Backpack") or _56:FindFirstChild("PlayerBackpack")
         if not bp then return end
         for _, tool in ipairs(bp:GetChildren()) do
             if tool:IsA("Tool") and tool.Name ~= "[Stim]" and not AS_isBlacklisted(tool.Name) then
@@ -5204,63 +5236,67 @@ function getColor(progress, time)
     else return lerpColor(c4, c1, (s - 0.75) / 0.25) end
 end
 
-function CH_setVisibility(visible)
-    for _, d in ipairs(CH_drawings) do
-        if d[1] then d[1].Visible = visible end
-        if d[2] then d[2].Visible = visible end
+function CH_setVisibility(list, visible)
+    for _, d in ipairs(list) do
+        if d[1] then pcall(function() d[1].Visible = visible end) end
+        if d[2] then pcall(function() d[2].Visible = visible end) end
     end
 end
 
-function CH_setSelfVisibility(visible)
-    for _, d in ipairs(CH_drawingsSelf) do
-        if d[1] then d[1].Visible = visible end
-        if d[2] then d[2].Visible = visible end
+function CH_destroyList(list)
+    for _, d in ipairs(list) do
+        if d[1] then pcall(function() d[1]:Remove() end) end
+        if d[2] then pcall(function() d[2]:Remove() end) end
     end
+    for i = #list, 1, -1 do list[i] = nil end
 end
 
 function CH_cleanup()
     if CH_connection then CH_connection:Disconnect() CH_connection = nil end
     if CH_selfConnection then CH_selfConnection:Disconnect() CH_selfConnection = nil end
-    for _, d in ipairs(CH_drawings) do
-        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
+    CH_destroyList(CH_drawings)
+    CH_destroyList(CH_drawingsSelf)
+end
+
+function CH_buildList(list, count)
+    CH_destroyList(list)
+    for _ = 1, count do
+        local line = Drawing.new('Line')
+        local triangle = Drawing.new('Triangle')
+        line.ZIndex = 2
+        line.Thickness = 1
+        line.Transparency = 1
+        triangle.ZIndex = 1
+        triangle.Filled = true
+        triangle.Transparency = 1
+        line.Visible = false
+        triangle.Visible = false
+        list[#list + 1] = {line, triangle}
     end
-    for _, d in ipairs(CH_drawingsSelf) do
-        pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
-    end
-    CH_drawings = {}
-    CH_drawingsSelf = {}
 end
 
 function CH_renderSelf()
-    if not enabledSelf then CH_setSelfVisibility(false) return end
+    if not enabledSelf then
+        CH_setVisibility(CH_drawingsSelf, false)
+        return
+    end
 
     local char = LocalPlayer.Character
     local head = char and char:FindFirstChild('Head')
     local hum = char and char:FindFirstChildOfClass('Humanoid')
     if not char or not head or not hum or hum.Health <= 0 then
-        CH_setSelfVisibility(false)
+        CH_setVisibility(CH_drawingsSelf, false)
         return
     end
 
     local headScreen = cam:WorldToViewportPoint(head.Position)
     if headScreen.Z <= 0 then
-        CH_setSelfVisibility(false)
+        CH_setVisibility(CH_drawingsSelf, false)
         return
     end
 
-    local needed = sides
-    if #CH_drawingsSelf ~= needed then
-        for _, d in ipairs(CH_drawingsSelf) do
-            pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
-        end
-        CH_drawingsSelf = {}
-        for _ = 1, needed do
-            local line = Drawing.new('Line')
-            local triangle = Drawing.new('Triangle')
-            line.ZIndex = 2 line.Thickness = 1
-            triangle.ZIndex = 1 triangle.Filled = true
-            table.insert(CH_drawingsSelf, {line, triangle})
-        end
+    if #CH_drawingsSelf ~= sides then
+        CH_buildList(CH_drawingsSelf, sides)
     end
 
     local time = tick()
@@ -5301,10 +5337,14 @@ function CH_renderSelf()
 end
 
 function render()
-    if not enabled then CH_setVisibility(false) return end
+    if not enabled then
+        CH_setVisibility(CH_drawings, false)
+        return
+    end
 
     local visibleCount = 0
-    for _, player in ipairs(Players:GetPlayers()) do
+    local list = Players:GetPlayers()
+    for _, player in ipairs(list) do
         if player ~= LocalPlayer then
             local char = player.Character
             local head = char and char:FindFirstChild('Head')
@@ -5318,28 +5358,21 @@ function render()
         end
     end
 
-    if visibleCount == 0 then CH_setVisibility(false) return end
+    if visibleCount == 0 then
+        CH_setVisibility(CH_drawings, false)
+        return
+    end
 
     local needed = visibleCount * sides
     if #CH_drawings ~= needed then
-        for _, d in ipairs(CH_drawings) do
-            pcall(function() if d[1] then d[1]:Remove() end if d[2] then d[2]:Remove() end end)
-        end
-        CH_drawings = {}
-        for _ = 1, needed do
-            local line = Drawing.new('Line')
-            local triangle = Drawing.new('Triangle')
-            line.ZIndex = 2 line.Thickness = 1
-            triangle.ZIndex = 1 triangle.Filled = true
-            table.insert(CH_drawings, {line, triangle})
-        end
+        CH_buildList(CH_drawings, needed)
     end
 
     local time = tick()
     local fullCircle = math.pi * 2
     local drawIndex = 0
 
-    for _, player in ipairs(Players:GetPlayers()) do
+    for _, player in ipairs(list) do
         if player ~= LocalPlayer then
             local char = player.Character
             local head = char and char:FindFirstChild('Head')
@@ -5347,40 +5380,43 @@ function render()
 
             if char and head and hum and hum.Health > 0 then
                 local headScreen = cam:WorldToViewportPoint(head.Position)
-                if headScreen.Z <= 0 then continue end
+                if headScreen.Z > 0 then
+                    local topPos = head.Position + Vector3.new(0, offsetY + height, 0)
+                    local basePos = head.Position + Vector3.new(0, offsetY, 0)
 
-                local topPos = head.Position + Vector3.new(0, offsetY + height, 0)
-                local basePos = head.Position + Vector3.new(0, offsetY, 0)
+                    for i = 1, sides do
+                        drawIndex = drawIndex + 1
+                        local entry = CH_drawings[drawIndex]
+                        if entry then
+                            local line, triangle = entry[1], entry[2]
+                            local progress1 = i / sides
+                            local angle1 = progress1 * fullCircle
+                            local angle2 = ((i % sides) + 1) / sides * fullCircle
+                            local point1 = basePos + Vector3.new(math.cos(angle1), 0, math.sin(angle1)) * radius
+                            local point2 = basePos + Vector3.new(math.cos(angle2), 0, math.sin(angle2)) * radius
+                            local screen1 = cam:WorldToViewportPoint(point1)
+                            local screen2 = cam:WorldToViewportPoint(point2)
+                            local screenTop = cam:WorldToViewportPoint(topPos)
+                            local col = getColor(progress1, time)
 
-                for i = 1, sides do
-                    drawIndex = drawIndex + 1
-                    local line, triangle = CH_drawings[drawIndex][1], CH_drawings[drawIndex][2]
-                    local progress1 = i / sides
-                    local angle1 = progress1 * fullCircle
-                    local angle2 = ((i % sides) + 1) / sides * fullCircle
-                    local point1 = basePos + Vector3.new(math.cos(angle1), 0, math.sin(angle1)) * radius
-                    local point2 = basePos + Vector3.new(math.cos(angle2), 0, math.sin(angle2)) * radius
-                    local screen1 = cam:WorldToViewportPoint(point1)
-                    local screen2 = cam:WorldToViewportPoint(point2)
-                    local screenTop = cam:WorldToViewportPoint(topPos)
-                    local col = getColor(progress1, time)
+                            if screen1.Z > 0 and screen2.Z > 0 and screenTop.Z > 0 then
+                                line.From = Vector2.new(screen1.X, screen1.Y)
+                                line.To = Vector2.new(screen2.X, screen2.Y)
+                                line.Color = col
+                                line.Transparency = lineTrs
+                                line.Visible = true
 
-                    if screen1.Z > 0 and screen2.Z > 0 and screenTop.Z > 0 then
-                        line.From = Vector2.new(screen1.X, screen1.Y)
-                        line.To = Vector2.new(screen2.X, screen2.Y)
-                        line.Color = col
-                        line.Transparency = lineTrs
-                        line.Visible = true
-
-                        triangle.PointA = Vector2.new(screenTop.X, screenTop.Y)
-                        triangle.PointB = line.From
-                        triangle.PointC = line.To
-                        triangle.Color = col
-                        triangle.Transparency = hatTrs
-                        triangle.Visible = true
-                    else
-                        line.Visible = false
-                        triangle.Visible = false
+                                triangle.PointA = Vector2.new(screenTop.X, screenTop.Y)
+                                triangle.PointB = line.From
+                                triangle.PointC = line.To
+                                triangle.Color = col
+                                triangle.Transparency = hatTrs
+                                triangle.Visible = true
+                            else
+                                line.Visible = false
+                                triangle.Visible = false
+                            end
+                        end
                     end
                 end
             end
@@ -5388,17 +5424,22 @@ function render()
     end
 
     for i = drawIndex + 1, #CH_drawings do
-        if CH_drawings[i][1] then CH_drawings[i][1].Visible = false end
-        if CH_drawings[i][2] then CH_drawings[i][2].Visible = false end
+        local entry = CH_drawings[i]
+        if entry then
+            if entry[1] then entry[1].Visible = false end
+            if entry[2] then entry[2].Visible = false end
+        end
     end
 end
 
 function ChinaHat:setEnabled(val)
     enabled = val
     if enabled then
-        if not CH_connection then CH_connection = game:GetService("RunService").RenderStepped:Connect(render) end
+        if not CH_connection then
+            CH_connection = game:GetService("RunService").RenderStepped:Connect(render)
+        end
     else
-        CH_setVisibility(false)
+        CH_setVisibility(CH_drawings, false)
         if CH_connection then CH_connection:Disconnect() CH_connection = nil end
     end
 end
@@ -5406,10 +5447,13 @@ end
 function ChinaHat:setSelfEnabled(val)
     enabledSelf = val
     if enabledSelf then
-        if not CH_selfConnection then CH_selfConnection = game:GetService("RunService").RenderStepped:Connect(CH_renderSelf) end
+        if not CH_selfConnection then
+            CH_selfConnection = game:GetService("RunService").RenderStepped:Connect(CH_renderSelf)
+        end
     else
-        CH_setSelfVisibility(false)
+        CH_setVisibility(CH_drawingsSelf, false)
         if CH_selfConnection then CH_selfConnection:Disconnect() CH_selfConnection = nil end
+        CH_destroyList(CH_drawingsSelf)
     end
 end
 
@@ -5419,7 +5463,7 @@ function ChinaHat:setColor3(c) c3 = c end
 function ChinaHat:setColor4(c) c4 = c end
 function ChinaHat:setHeight(h) height = h end
 function ChinaHat:setRadius(r) radius = r end
-function ChinaHat:setSides(s) sides = s CH_drawings = {} CH_drawingsSelf = {} end
+function ChinaHat:setSides(s) sides = s CH_destroyList(CH_drawings) CH_destroyList(CH_drawingsSelf) end
 function ChinaHat:setHatTransparency(t) hatTrs = t end
 function ChinaHat:setLineTransparency(t) lineTrs = t end
 function ChinaHat:setSpeed(s) speed = s end
@@ -6001,7 +6045,6 @@ function AnimApplySet(setName)
         ids = OriginalAnims[char] or {}
     end
 
-    -- 1. write to the Animate script objects (local, instant)
     for _, slot in ipairs(AnimSlots) do
         local obj = AnimGetSlotObject(Animate, slot)
         if obj and ids[slot.key] then
@@ -6009,7 +6052,6 @@ function AnimApplySet(setName)
         end
     end
 
-    -- 2. write to the HumanoidDescription (replicates to others)
     if desc then
         local descSource = isDefault and OriginalDescIDs[char] or nil
         for key, attr in pairs(AnimHDAttr) do
@@ -6020,10 +6062,8 @@ function AnimApplySet(setName)
                 id = ids[key]
             end
             if id then
-                -- HumanoidDescription attribute reads need bare asset ids
                 local bare = tostring(id):gsub("^rbxassetid://", ""):gsub("^http://www%.roblox%.com/asset/%?id=", "")
                 pcall(function() desc:SetAttribute(attr, bare) end)
-                -- also set the property itself if it exists
                 pcall(function() desc[attr] = tonumber(bare) or bare end)
             end
         end
@@ -8876,9 +8916,21 @@ local function _141()
     end
     
     if Toggles.TargetInfo.Value and _135.Visible then
-        _135.Position = UDim2.new(0, _142.X + 10, 0, _142.Y + 30)
+        local statusOn = Toggles.StatusHud and Toggles.StatusHud.Value
+        if statusOn and StatusHud and StatusHud.container then
+            local c = StatusHud.container
+            local absPos  = c.AbsolutePosition
+            local absSize = c.AbsoluteSize
+            _135.AnchorPoint = Vector2.new(0.5, 0)
+            _135.Position = UDim2.new(0, absPos.X + absSize.X * 0.5, 0, absPos.Y + absSize.Y + 4)
+            _135.TextXAlignment = Enum.TextXAlignment.Center
+        else
+            _135.AnchorPoint = Vector2.new(0, 0)
+            _135.Position = UDim2.new(0, _142.X + 10, 0, _142.Y + 30)
+            _135.TextXAlignment = Enum.TextXAlignment.Left
+        end
     end
-end
+end   -- <-- this closes function _141()
 
 local function _143()
     local _144 = _56.Character
@@ -9709,7 +9761,6 @@ do
     stompRemote = nil
     StompReturnLocked = false
     StompStartTime = 0
-    StompFallbackPhase = false
     StompMode = "direct"
 
     StompToggle:OnChanged(function(value)
@@ -9719,7 +9770,6 @@ do
             stompConnection = nil
             stomping = false
             StompStartTime = 0
-            StompFallbackPhase = false
             if sethiddenproperty then
                 local char = _56.Character
                 local hum = char and char:FindFirstChildOfClass('Humanoid')
@@ -9825,19 +9875,6 @@ do
         return CFrame.new(originalPos + Vector3.new(0, 4, 0))
     end
 
-    function faceUprightOnTopOf(targetPart)
-        if not targetPart or not targetPart.Parent then return nil end
-        local hrp = _56.Character and _56.Character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return nil end
-        local top = targetPart.Position + Vector3.new(0, targetPart.Size.Y * 0.5 + 3, 0)
-        local facing = targetPart.Position - top
-        facing = Vector3.new(facing.X, 0, facing.Z)
-        if facing.Magnitude < 0.01 then
-            facing = Vector3.new(0, 0, 1)
-        end
-        return CFrame.new(top, top + facing.Unit)
-    end
-
     function getStompCFrame(targetPart)
         if not targetPart or not targetPart.Parent then return nil end
 
@@ -9884,124 +9921,91 @@ do
         local targetPart = getBestStompPosition(targetChar)
         if not targetPart then return end
 
-        -- Pause both idles and clear any active void state before we engage
-        if StompPauseIdles then
-            pcall(StompPauseIdles)
-        end
-
         stomping = true
         StompStartTime = tick()
-        StompFallbackPhase = false
         local lastpos = localHRP.CFrame
+        local localHum = localChar:FindFirstChildOfClass("Humanoid")
+        local finished = false
 
+        local function finishStomp()
+            if finished then return end
+            finished = true
+            stomping = false
+            StompStartTime = 0
+            if stompConnection then
+                stompConnection:Disconnect()
+                stompConnection = nil
+            end
+            if sethiddenproperty and localHum and localHum.RootPart then
+                pcall(function()
+                    sethiddenproperty(localHum.RootPart, "PhysicsRepRootPart", nil)
+                end)
+            end
+            if StompReturnLocked then return end
+            if Restoring then return end
+            if IdleState ~= "none" then return end
+            if localHRP and localHRP.Parent then
+                local safeReturn = findSafeReturnPosition(lastpos.Position)
+                pcall(function()
+                    localHRP.CFrame = safeReturn
+                end)
+            end
+        end
+
+        localHRP.Anchored = false
         pcall(function()
             localHRP:SetNetworkOwner(_56)
             targetPart:SetNetworkOwner(_56)
         end)
 
-        localHRP.CFrame = getStompCFrame(targetPart) or targetPart.CFrame
-
-        for i = 2, 30 do
-            fireStomp()
+        if sethiddenproperty and localHum and localHum.RootPart then
+            pcall(function()
+                sethiddenproperty(localHum.RootPart, "PhysicsRepRootPart", targetPart)
+            end)
         end
+
+        localHRP.CFrame = getStompCFrame(targetPart) or targetPart.CFrame
+        localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+        for i = 1, 30 do fireStomp() end
 
         if stompConnection then stompConnection:Disconnect() end
         stompConnection = _52.RenderStepped:Connect(function()
             if not stomping then
-                stompConnection:Disconnect()
-                stompConnection = nil
+                if stompConnection then
+                    stompConnection:Disconnect()
+                    stompConnection = nil
+                end
                 return
             end
 
-            if not StompFallbackPhase and tick() - StompStartTime >= 5 then
-                StompFallbackPhase = true
-
-                pcall(function()
-                    targetPart:SetNetworkOwner(nil)
-                end)
-
-                pcall(function()
-                    localHRP:SetNetworkOwner(_56)
-                end)
-
-                if localHRP and localHRP.Parent then
-                    local currentTargetPart = getBestStompPosition(targetChar)
-                    local cf = currentTargetPart and faceUprightOnTopOf(currentTargetPart) or CFrame.new(0, 2.3, 0)
-                    localHRP.CFrame = cf
-                    localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                end
-
-                fireStomp()
+            local beNow = targetChar and targetChar.Parent and targetChar:FindFirstChild("BodyEffects")
+            local koNow = beNow and beNow:FindFirstChild("K.O")
+            if not koNow or koNow.Value ~= true then
+                finishStomp()
                 return
             end
 
-            if StompFallbackPhase then
-                if localHRP and localHRP.Parent then
-                    local currentTargetPart = getBestStompPosition(targetChar)
-                    if currentTargetPart then
-                        local cf = faceUprightOnTopOf(currentTargetPart)
-                        if cf then
-                            localHRP.CFrame = cf
-                            localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                            localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                        end
-                    end
-                end
-                fireStomp()
+            if not localHRP or not localHRP.Parent then
+                finishStomp()
                 return
             end
 
             local currentTargetPart = getBestStompPosition(targetChar)
-            if currentTargetPart then
-                localHRP.CFrame = getStompCFrame(currentTargetPart) or currentTargetPart.CFrame
-                localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-                fireStomp()
+            if not currentTargetPart then
+                finishStomp()
+                return
             end
+
+            localHRP.CFrame = getStompCFrame(currentTargetPart) or currentTargetPart.CFrame
+            localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+            for i = 1, 4 do fireStomp() end
         end)
 
-        if sethiddenproperty then
-            task.wait()
-            pcall(function()
-                local hum = localChar:FindFirstChildOfClass('Humanoid')
-                if hum and hum.RootPart then
-                    sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", targetPart)
-                end
-            end)
-        end
-
-        task.delay(0.5, function()
-            stomping = false
-            StompStartTime = 0
-            StompFallbackPhase = false
-            if stompConnection then
-                stompConnection:Disconnect()
-                stompConnection = nil
-            end
-
-            if sethiddenproperty then
-                local hum = localChar:FindFirstChildOfClass('Humanoid')
-                if hum and hum.RootPart then
-                    pcall(function() sethiddenproperty(hum.RootPart, "PhysicsRepRootPart", nil) end)
-                end
-            end
-
-            if StompReturnLocked then return end
-            if Restoring then return end
-            if IdleState ~= "none" then return end
-            if not localHRP or not localHRP.Parent then return end
-
-            local safeReturn = findSafeReturnPosition(lastpos.Position)
-            pcall(function()
-                localHRP.CFrame = safeReturn
-            end)
-
-            -- Restore idles after stomp settles
-            if StompResumeIdles then
-                pcall(StompResumeIdles)
-            end
-        end)
+        task.delay(0.5, finishStomp)
     end
 end
 
@@ -10232,7 +10236,6 @@ end)
 
 -- ragebot
 
-
 -- states
 OrbitEnabled = false
 OrbitConnection = nil
@@ -10242,15 +10245,18 @@ OrbitRadius = 5
 OrbitSpeed = 3
 OrbitHeight = 2
 OrbitAngle = 0
+
 ReturnCFrame = nil
 ReturnSet = false
 LastRealSelfCFrame = nil
 LastIdleExitTime = 0
 AnchorSaveDelay = 1.4
+
 EngagementActive = false
 Disengaging = false
 OrbitNetworkClaimed = false
 Restoring = false
+
 _G.OrbitBehavior = 'Orbit'
 lastValidTargetPos = nil
 lastValidTargetPosTime = 0
@@ -10259,6 +10265,15 @@ orbitRandomOffset = nil
 orbitRandomUpdate = 0
 ORBIT_RANDOM_INTERVAL = 0.035
 SNAP_INTERVAL = 3.0
+
+IdleSpamEnabled = false
+IdleSpamState = "none"
+IdleSpamStrafeTime = 3
+IdleSpamIdleTime = 1
+IdleSpamSwitchAt = 0
+IdleSpamFirst = false
+IdleSpamKnown = setmetatable({}, { __mode = "k" })
+
 lastSnapTime = 0
 RespawnWaitTime = 1.0
 targetRespawnTime = 0
@@ -10271,6 +10286,7 @@ ReloadHoldUntil = 0
 RELOAD_HOLD_TIME = 1.2
 VOID_THRESHOLD = 1000000
 VoidBasePos = nil
+
 VoidCycleTime = 0
 VoidCycleInterval = 0.05
 VoidDistance = 50000000
@@ -10280,12 +10296,15 @@ VoidRandomCornerChance = 0.1
 IdleKOEnabled = false
 IdleReloadEnabled = false
 IdleState = "none"
+IdleReason = nil
+
 StompWasIdleActive = false
 PredictionEnabled = false
 PredictionMultiplier = 1.0
 PingPredictionEnabled = false
 PingPredictionScale = 0.5
 DirectCFramePrediction = false
+
 ResolverRate = 0.02
 predictionLastPos = nil
 predictionLastTime = 0
@@ -10305,7 +10324,6 @@ PositionResolverSources = {
     "RightHand",
 }
 
--- weights on orbitin
 PositionSourceWeights = {
     HumanoidRootPart = 1.00,
     UpperTorso       = 0.95,
@@ -10570,7 +10588,6 @@ function ForceReturnPoint()
         ReturnSet = true
         return
     end
-    if not CanSaveAnchor() then return end
     local hrp = GetSelfHRP()
     if not hrp then return end
     if IsVoidPosition(hrp.Position) then return end
@@ -10636,6 +10653,11 @@ function IsWaitingForRespawn(target)
     lastTargetCharacter = target.Character
     targetRespawnTime = tick()
     respawnPending = true
+
+    -- new character for the same player -> this is a fresh engagement
+    IdleSpamFirst = false
+    IdleSpamSwitchAt = tick() + IdleSpamStrafeTime
+
     return true
 end
 
@@ -10782,18 +10804,6 @@ function GetOrbitAnchorCFrame(target)
         return CFrame.new(predicted, predicted + look), predicted
     end
     return cf, predicted
-end
-
-function PickVoidBase()
-    local side = math.random(0, 7)
-    local function axis(bit)
-        return (bit == 1) and VoidDistance or -VoidDistance
-    end
-    return Vector3.new(
-        axis(math.floor(side / 4) % 2),
-        axis(math.floor(side / 2) % 2),
-        axis(side % 2)
-    )
 end
 
 VoidCycleInterval = 0.01
@@ -10978,18 +10988,21 @@ function OrbitAroundTarget(target)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
-function EnterHide()
+function EnterIdle(reason)
     local hrp = GetSelfHRP()
-    if not hrp then return end
+    if not hrp then return false end
     ForceReturnPoint()
     IdleState = "hiding"
+    IdleReason = reason or "idle"
     VoidBasePos = nil
     EnterVoid()
+    return true
 end
 
 function ExitIdle(restore)
     if IdleState ~= "hiding" then
         IdleState = "none"
+        IdleReason = nil
         LastIdleExitTime = tick()
         return
     end
@@ -11004,12 +11017,17 @@ function ExitIdle(restore)
         end
     end
     IdleState = "none"
+    IdleReason = nil
     LastIdleExitTime = tick()
     VoidBasePos = nil
 end
 
+function EnterHide()
+    EnterIdle("hide")
+end
+
 function IdleKOStep()
-    if IdleState ~= "hiding" then EnterHide() else EnterVoid() end
+    if IdleState ~= "hiding" then EnterIdle("ko") else EnterVoid() end
 end
 
 function StartDisengage()
@@ -11037,6 +11055,9 @@ function HandleTargetLost()
     lastTargetCharacter = nil
     respawnPending = false
     lastSnapTime = 0
+    IdleSpamState = "none"
+    IdleSpamSwitchAt = 0
+    IdleSpamFirst = false
     predictionLastPos = nil
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
@@ -11051,6 +11072,7 @@ end
 
 function IdleLoop()
     if Restoring then return end
+    if stomping then return end
     if not OrbitEnabled then
         if IdleState ~= "none" then ExitIdle(true) end
         return
@@ -11061,33 +11083,61 @@ function IdleLoop()
     end
 
     local reloading = UpdateReloadingState()
-
     local target = _104.targetplayer
-    if not target or not target.Parent or not target.Character then
+
+    if not target or not target.Parent then
         if IdleState ~= "none" then HandleTargetLost() end
         return
     end
 
-    if IdleReloadEnabled and reloading then
-        if IdleState ~= "hiding" then EnterHide() else EnterVoid() end
+    if not target.Character then
+        if IdleState == "hiding" then EnterVoid() end
         return
     end
 
-    if IsTargetKO(target) then
-        if IdleKOEnabled then
-            IdleKOStep()
+    local isIdling   = (IdleState == "hiding")
+    local spamIdling = IdleSpamEnabled and IdleSpamState == "idling"
+
+    if IdleReloadEnabled and reloading then
+        if IdleState ~= "hiding" then
+            EnterIdle("reload")
         else
-            if IdleState ~= "none" then ExitIdle(true) end
+            EnterVoid()
         end
         return
     end
 
-    if IdleState ~= "none" then ExitIdle(true) end
+    if IsTargetKO(target) then
+        if IdleKOEnabled or spamIdling then
+            IdleKOStep()
+        elseif isIdling and IdleReason == "ko" then
+            EnterVoid()
+        else
+            if IdleState ~= "none" then ExitIdle(false) end
+        end
+        return
+    end
+
+    if isDead(target) or not _orbitTargetValid(target) then
+        if isIdling then
+            EnterVoid()
+            return
+        end
+        if IdleState ~= "none" then ExitIdle(false) end
+        return
+    end
+
+    if isIdling then
+        if IdleReason == "ko" or IdleReason == "reload" then
+            ExitIdle(false)
+        end
+        return
+    end
 end
 
 function StartIdle()
     if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
-    if not (IdleKOEnabled or IdleReloadEnabled) or not OrbitEnabled then return end
+    if not (IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled) or not OrbitEnabled then return end
     IdleConnection = RunService.Heartbeat:Connect(IdleLoop)
 end
 
@@ -11111,7 +11161,7 @@ function StompResumeIdles()
     if not StompWasIdleActive then return end
     StompWasIdleActive = false
     if not OrbitEnabled then return end
-    if not (IdleKOEnabled or IdleReloadEnabled) then return end
+    if not (IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled) then return end
     if IdleConnection then return end
 
     IdleConnection = RunService.Heartbeat:Connect(IdleLoop)
@@ -11153,25 +11203,51 @@ function Orbit()
         return
     end
 
-    if not target.Character then return end
+    if not target.Character then
+        if IdleState == "hiding" then EnterVoid() end
+        return
+    end
 
-    if IdleReloadEnabled and reloading and IdleState ~= "none" then
+    if IdleState == "hiding" then
+        local badTarget =
+            not target.Character.Parent
+            or isDead(target)
+            or Grabbed(target)
+            or IsTargetKO(target)
+            or not _orbitTargetValid(target)
+
+        if badTarget then
+            EnterVoid()
+            if IdleSpamEnabled and IdleSpamState == "idling" then
+                IdleSpamSwitchAt = tick() + IdleSpamIdleTime
+            end
+            disengageAt = 0
+            return
+        end
+    end
+
+    if IdleReloadEnabled and reloading then
+        if IdleState ~= "hiding" then
+            EnterIdle("reload")
+        else
+            EnterVoid()
+        end
         disengageAt = 0
         return
     end
 
-    if IdleKOEnabled and IdleState ~= "none" then
+    if IdleKOEnabled and IsTargetKO(target) then
+        if IdleState ~= "hiding" then
+            EnterIdle("ko")
+        else
+            EnterVoid()
+        end
         disengageAt = 0
         return
     end
 
     if IsTargetKO(target) and not IdleKOEnabled then
         StartDisengage()
-        return
-    end
-
-    if IsTargetKO(target) and IdleKOEnabled then
-        disengageAt = 0
         return
     end
 
@@ -11183,6 +11259,47 @@ function Orbit()
     if not _orbitTargetValid(target) then return end
 
     disengageAt = 0
+
+    -- IdleSpam state machine
+    if IdleSpamEnabled then
+        local now = tick()
+        if IdleState == "none" then
+            if IdleSpamState ~= "strafing" then
+                IdleSpamState = "strafing"
+                IdleSpamSwitchAt = now + IdleSpamStrafeTime
+                IdleSpamFirst = not IdleSpamKnown[target]
+                IdleSpamKnown[target] = true
+            elseif now >= IdleSpamSwitchAt then
+                if IdleSpamFirst then
+                    IdleSpamSwitchAt = now + IdleSpamStrafeTime
+                else
+                    IdleSpamState = "idling"
+                    IdleSpamSwitchAt = now + IdleSpamIdleTime
+                    EnterIdle("spam")
+                    return
+                end
+            end
+        else
+            if IdleSpamState ~= "idling" then
+                IdleSpamState = "idling"
+                IdleSpamSwitchAt = now + IdleSpamIdleTime
+                EnterIdle("spam")
+                return
+            elseif now >= IdleSpamSwitchAt then
+                if isDead(target) or not _orbitTargetValid(target) or IsWaitingForRespawn(target) then
+                    IdleSpamSwitchAt = now + 0.25
+                    EnterVoid()
+                    return
+                end
+                IdleSpamState = "strafing"
+                IdleSpamSwitchAt = now + IdleSpamStrafeTime
+                ExitIdle(false)
+            else
+                EnterVoid()
+                return
+            end
+        end
+    end
 
     local hrp = GetSelfHRP()
     if not hrp then return end
@@ -11201,6 +11318,9 @@ function Orbit()
         lastTargetCharacter = nil
         respawnPending = false
         lastSnapTime = 0
+        IdleSpamState = "none"
+        IdleSpamSwitchAt = 0
+        IdleSpamFirst = false
         predictionLastPos = nil
         predictionLastTime = 0
         predictionVelocity = Vector3.new(0, 0, 0)
@@ -11235,6 +11355,7 @@ function StartOrbit()
     EngagementActive = false
     Disengaging = false
     IdleState = "none"
+    IdleReason = nil
     OrbitTarget = nil
     lastValidTargetPos = nil
     lastValidTargetCFrame = nil
@@ -11254,10 +11375,13 @@ function StartOrbit()
     LastAnchorLook = nil
     OrbitLastRadius = nil
     OrbitLastHeight = nil
+    IdleSpamState = "none"
+    IdleSpamSwitchAt = 0
+    IdleSpamFirst = false
     UpdateSelfAnchor()
 
     OrbitConnection = RunService.Heartbeat:Connect(Orbit)
-    if IdleKOEnabled or IdleReloadEnabled then StartIdle() end
+    if IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled then StartIdle() end
 end
 
 function StopOrbit()
@@ -11273,6 +11397,7 @@ function StopOrbit()
     OrbitAngle = 0
     OrbitNetworkClaimed = false
     IdleState = "none"
+    IdleReason = nil
     lastValidTargetPos = nil
     lastValidTargetCFrame = nil
     orbitRandomOffset = nil
@@ -11280,6 +11405,9 @@ function StopOrbit()
     respawnPending = false
     lastSnapTime = 0
     disengageAt = 0
+    IdleSpamState = "none"
+    IdleSpamSwitchAt = 0
+    IdleSpamFirst = false
     predictionLastPos = nil
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
@@ -11306,7 +11434,7 @@ Toggles.OrbitToggle:OnChanged(function(value)
     OrbitEnabled = value
     if value then
         StartOrbit()
-        if IdleKOEnabled or IdleReloadEnabled then StartIdle() end
+        if IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled then StartIdle() end
     else
         StopOrbit()
     end
@@ -11375,7 +11503,7 @@ Toggles.IdleOnKO:OnChanged(function(value)
     IdleKOEnabled = value
     if value and OrbitEnabled then
         StartIdle()
-    elseif not IdleReloadEnabled then
+    elseif not IdleReloadEnabled and not IdleSpamEnabled then
         StopIdle()
     end
 end)
@@ -11384,7 +11512,7 @@ Toggles.IdleOnReload:OnChanged(function(value)
     IdleReloadEnabled = value
     if value and OrbitEnabled then
         StartIdle()
-    elseif not IdleKOEnabled then
+    elseif not IdleKOEnabled and not IdleSpamEnabled then
         StopIdle()
     end
 end)
@@ -11395,6 +11523,21 @@ if Toggles.Resolver then
         if not v then ResolverClear() end
     end)
 end
+
+Toggles.IdleSpam:OnChanged(function(v)
+    IdleSpamEnabled = v
+    IdleSpamState = "none"
+    IdleSpamSwitchAt = 0
+    IdleSpamFirst = false
+    if v then
+        IdleSpamKnown = setmetatable({}, { __mode = "k" })
+    end
+    if v and OrbitEnabled then
+        StartIdle()
+    elseif not v and not IdleKOEnabled and not IdleReloadEnabled then
+        StopIdle()
+    end
+end)
 
 if Options.ResolverSmoothing then
     Options.ResolverSmoothing:OnChanged(function(v) ResolverSmoothing = v end)
@@ -11424,11 +11567,15 @@ if Options.AntiAimStaticYaw then
     Options.AntiAimStaticYaw:OnChanged(function(v) AntiAimStaticYaw = v end)
 end
 
+Options.IdleSpamStrafeTime:OnChanged(function(v) IdleSpamStrafeTime = v end)
+Options.IdleSpamIdleTime:OnChanged(function(v) IdleSpamIdleTime = v end)
+
 _51.PlayerRemoving:Connect(function(player)
     if OrbitTarget == player or _104.targetplayer == player then
         HandleTargetLost()
     end
     ResolverClear(player)
+    IdleSpamKnown[player] = nil
 end)
 
 _56.CharacterAdded:Connect(function()
@@ -11439,6 +11586,7 @@ _56.CharacterAdded:Connect(function()
     EngagementActive = false
     Disengaging = false
     IdleState = "none"
+    IdleReason = nil
     OrbitNetworkClaimed = false
     OrbitTarget = nil
     OrbitAngle = 0
@@ -11463,6 +11611,9 @@ _56.CharacterAdded:Connect(function()
     LastAnchorLook = nil
     OrbitLastRadius = nil
     OrbitLastHeight = nil
+    IdleSpamState = "none"
+    IdleSpamSwitchAt = 0
+    IdleSpamFirst = false
     StompWasIdleActive = false
     if ResolverStates then ResolverClear() end
     if OrbitEnabled then StartOrbit() end
@@ -11577,7 +11728,7 @@ end)
 
 -- inf ammo <3
 do -- Tact Restock 
-    (function(...)
+    (function()
     local Player2 = game:GetService("Players")
     local ReplicatedStorage2 = game:GetService("ReplicatedStorage")
 
@@ -12028,7 +12179,7 @@ do -- Tact Restock
     if player2.Character then
         bootAfterRespawn(player2.Character)
     end
-    end)(...)
+    end)()
 end
 
 -- face le target
@@ -13801,6 +13952,340 @@ Options.SkeletonColor:OnChanged(function()
         end
     end
 end)
+
+-- Status HUD
+do
+    Players_S       = game:GetService("Players")
+    RunService_S    = game:GetService("RunService")
+    TweenService_S  = game:GetService("TweenService")
+    Stats_S         = game:GetService("Stats")
+
+    StatusHud = StatusHud or {}
+    StatusHud.enabled        = false
+    StatusHud.color          = Color3.fromRGB(255, 255, 255)
+    StatusHud.shadowColor    = Color3.fromRGB(0, 0, 0)
+    StatusHud.position       = UDim2.new(0.5, 0, 1, -125)
+    StatusHud.size           = UDim2.new(0, 560, 0, 0)
+    StatusHud.maxWidth       = 560
+    StatusHud.gui            = nil
+    StatusHud.container      = nil
+    StatusHud.targetLabel    = nil
+    StatusHud.rageLabel      = nil
+    StatusHud.activeLabel    = nil
+    StatusHud.watermarkLabel = nil
+    StatusHud.conn           = nil
+    StatusHud.activeLast     = ""
+    StatusHud.visible        = false
+    _G.StatusHudSettings     = StatusHud
+
+    StatusHud.Features = {
+        { key = "Enabled",          label = "Silent Aim" },
+        { key = "CFrameFly",        label = "Cframe Fly" },
+        { key = "WalkSpeedEnabled", label = "WalkSpeed" },
+        { key = "ESPEnabled",       label = "ESP" },
+    }
+
+    function StatusHud_makeLabel(parent, order, size)
+        local lbl = Instance.new("TextLabel")
+        lbl.BackgroundTransparency = 1
+        lbl.BorderSizePixel = 0
+        lbl.Size = UDim2.new(1, 0, 0, size)
+        lbl.Font = Enum.Font.Code
+        lbl.TextSize = size
+        lbl.TextColor3 = StatusHud.color
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
+        lbl.TextStrokeTransparency = 0.2
+        lbl.TextStrokeColor3 = StatusHud.shadowColor
+        lbl.TextWrapped = true
+        lbl.Text = ""
+        lbl.LayoutOrder = order
+        lbl.Parent = parent
+        return lbl
+    end
+
+    function StatusHud_destroyGui()
+        if StatusHud.gui then
+            pcall(function() StatusHud.gui:Destroy() end)
+        end
+        StatusHud.gui            = nil
+        StatusHud.container      = nil
+        StatusHud.targetLabel    = nil
+        StatusHud.rageLabel      = nil
+        StatusHud.activeLabel    = nil
+        StatusHud.watermarkLabel = nil
+        StatusHud.visible        = false
+    end
+
+    function StatusHud_createGui()
+        if StatusHud.gui and StatusHud.gui.Parent then return end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "\0StatusHud"
+        gui.ResetOnSpawn = false
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 999
+
+        local parented = false
+        pcall(function()
+            if gethui then
+                gui.Parent = gethui()
+                parented = true
+            end
+        end)
+        if not parented then
+            pcall(function()
+                if syn and syn.protect_gui then
+                    syn.protect_gui(gui)
+                end
+            end)
+            local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
+            if ok and gui.Parent then
+                parented = true
+            end
+        end
+        if not parented then
+            local lp = Players_S.LocalPlayer
+            local pg = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+            if pg then
+                gui.Parent = pg
+            end
+        end
+
+        if not gui.Parent then
+            warn("no valid parent for status")
+            return
+        end
+
+        local container = Instance.new("Frame")
+        container.Name = "Container"
+        container.BackgroundTransparency = 1
+        container.BorderSizePixel = 0
+        container.AnchorPoint = Vector2.new(0.5, 1)
+        container.Position = UDim2.new(0.5, 0, 1, -20)
+        container.Size = UDim2.new(0, StatusHud.maxWidth, 0, 0)
+        container.AutomaticSize = Enum.AutomaticSize.Y
+        container.ClipsDescendants = true
+        container.Visible = false
+        container.Parent = gui
+
+        local layout = Instance.new("UIListLayout")
+        layout.FillDirection = Enum.FillDirection.Vertical
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        layout.Padding = UDim.new(0, 2)
+        layout.Parent = container
+
+        StatusHud.targetLabel    = StatusHud_makeLabel(container, 1, 15)
+        StatusHud.rageLabel      = StatusHud_makeLabel(container, 2, 15)
+        StatusHud.activeLabel    = StatusHud_makeLabel(container, 3, 15)
+        StatusHud.watermarkLabel = StatusHud_makeLabel(container, 4, 13)
+
+        StatusHud.container = container
+        StatusHud.gui = gui
+        StatusHud.visible = false
+    end
+
+    function StatusHud_getPing()
+        local net = Stats_S:FindFirstChild("Network")
+        if not net then return nil end
+        local ssi = net:FindFirstChild("ServerStatsItem")
+        if not ssi then return nil end
+        local dp = ssi:FindFirstChild("Data Ping")
+        if not dp then return nil end
+        local ok, v = pcall(function() return dp:GetValue() end)
+        if ok and type(v) == "number" then return math.floor(v) end
+        return nil
+    end
+
+    function StatusHud_getTargetStatus(target)
+        if not target or not target.Parent then
+            return "N/A", "N/A"
+        end
+        local char = target.Character
+        if not char or not char.Parent then
+            return target.Name, "N/A"
+        end
+        if isDead and isDead(target) then
+            return target.Name, "Dead"
+        end
+        if IsTargetKO and IsTargetKO(target) then
+            return target.Name, "K.O"
+        end
+        if _orbitTargetValid and _orbitTargetValid(target) then
+            return target.Name, "Alive"
+        end
+        return target.Name, "N/A"
+    end
+
+    function StatusHud_getRagebotStatus()
+        if not OrbitEnabled then return "N/A" end
+        if Disengaging then return "Disengaging" end
+        if IdleState == "hiding" then
+            if IdleReason == "spam"   then return "Idle Spam (Void)" end
+            if IdleReason == "ko"     then return "Idle K.O (Void)" end
+            if IdleReason == "reload" then return "Idle Reload (Void)" end
+            return "Idling (Void)"
+        end
+        if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
+        if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
+        if stomping then return "Stomping" end
+        if EngagementActive then return "Orbiting" end
+        return "On"
+    end
+
+    function StatusHud_isToggleOn(key)
+        local t = Toggles and Toggles[key]
+        if not t then return false end
+        return t.Value == true
+    end
+
+    function StatusHud_getActiveFeatures()
+        local list = {}
+        local feats = StatusHud.Features
+        for i = 1, #feats do
+            local f = feats[i]
+            if StatusHud_isToggleOn(f.key) then
+                list[#list + 1] = f.label
+            end
+        end
+        if #list == 0 then return "N/A" end
+        return table.concat(list, ", ")
+    end
+
+    function StatusHud_popContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = StatusHud.position
+        }):Play()
+    end
+
+    function StatusHud_popOutContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = UDim2.new(0.5, 0, 1, -20)
+        }):Play()
+    end
+
+    function StatusHud_flashLabel(lbl)
+        if not lbl then return end
+        local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
+        lbl.TextColor3 = Color3.fromRGB(180, 255, 180)
+        TweenService_S:Create(lbl, info, { TextColor3 = StatusHud.color }):Play()
+    end
+
+    function StatusHud_update()
+        if not StatusHud.targetLabel or not StatusHud.targetLabel.Parent then return end
+        local target = _104 and _104.targetplayer
+        local tName, tStatus = StatusHud_getTargetStatus(target)
+        local rb = StatusHud_getRagebotStatus()
+
+        local activeStr = StatusHud_getActiveFeatures()
+        local hasActive  = activeStr ~= "N/A"
+        local hasTarget  = target ~= nil
+        local rbOn       = OrbitEnabled == true
+
+        local shouldShow = hasActive or hasTarget or rbOn or StatusHud.enabled
+        if not shouldShow then
+            if StatusHud.visible then
+                StatusHud.visible = false
+                StatusHud_popOutContainer()
+                task.delay(0.2, function()
+                    if StatusHud.container and not StatusHud.visible then
+                        StatusHud.container.Visible = false
+                    end
+                end)
+            end
+            return
+        end
+
+        if not StatusHud.visible then
+            StatusHud.visible = true
+            StatusHud.container.Visible = true
+            StatusHud.container.Position = UDim2.new(0.5, 0, 1, -20)
+            StatusHud_popContainer()
+        end
+
+        StatusHud.targetLabel.Text    = string.format("Target: %s [%s]", tName, tStatus)
+        StatusHud.rageLabel.Text      = string.format("Ragebot Status: %s", rb)
+
+        if activeStr ~= StatusHud.activeLast then
+            StatusHud.activeLabel.Text = "Active: " .. activeStr
+            StatusHud_flashLabel(StatusHud.activeLabel)
+            StatusHud.activeLast = activeStr
+        end
+
+        StatusHud.watermarkLabel.Text = "Rawr.xyz <3 | discord.gg/eMpUQzFrNG"
+    end
+
+    function StatusHud_start()
+        StatusHud_createGui()
+        StatusHud.activeLast = "\0"
+        if StatusHud.conn then return end
+        StatusHud.conn = RunService_S.RenderStepped:Connect(function()
+            pcall(StatusHud_update)
+        end)
+    end
+
+    function StatusHud_stop()
+        if StatusHud.conn then
+            StatusHud.conn:Disconnect()
+            StatusHud.conn = nil
+        end
+        StatusHud_destroyGui()
+    end
+
+    function StatusHud_setEnabled(v)
+        StatusHud.enabled = v and true or false
+        if StatusHud.enabled then
+            StatusHud_start()
+        else
+            StatusHud_stop()
+        end
+    end
+
+    function StatusHud_setTextColor(v)
+        StatusHud.color = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextColor3 = v end
+        end
+    end
+
+    function StatusHud_setShadowColor(v)
+        StatusHud.shadowColor = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextStrokeColor3 = v end
+        end
+    end
+
+    _62:AddToggle('StatusHud', {
+        Text = 'Status',
+        Default = false,
+        Tooltip = 'status of everything',
+    }):AddColorPicker('StatusHudTextColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Text Color',
+    }):AddColorPicker('StatusHudShadowColor', {
+        Default = Color3.fromRGB(0, 0, 0),
+        Title = 'Shadow Color',
+    })
+
+    Toggles.StatusHud:OnChanged(function(v)
+        StatusHud_setEnabled(v)
+    end)
+
+    Options.StatusHudTextColor:OnChanged(function(v)
+        StatusHud_setTextColor(v)
+    end)
+
+    Options.StatusHudShadowColor:OnChanged(function(v)
+        StatusHud_setShadowColor(v)
+    end)
+end
 
 -- < Box Core > --
 
