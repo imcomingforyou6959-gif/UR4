@@ -2742,6 +2742,362 @@ _62:AddDropdown('WatermarkPosition', {
     Default = 'Cursor',
 })
 
+-- Status HUD
+do
+    Players_S       = game:GetService("Players")
+    RunService_S    = game:GetService("RunService")
+    TweenService_S  = game:GetService("TweenService")
+    Stats_S         = game:GetService("Stats")
+
+    StatusHud = StatusHud or {}
+    StatusHud.enabled        = false
+    StatusHud.color          = Color3.fromRGB(255, 255, 255)
+    StatusHud.shadowColor    = Color3.fromRGB(0, 0, 0)
+    StatusHud.position       = UDim2.new(0.5, 0, 1, -125)
+    StatusHud.size           = UDim2.new(0, 560, 0, 0)
+    StatusHud.maxWidth       = 560
+    StatusHud.gui            = nil
+    StatusHud.container      = nil
+    StatusHud.targetLabel    = nil
+    StatusHud.rageLabel      = nil
+    StatusHud.activeLabel    = nil
+    StatusHud.watermarkLabel = nil
+    StatusHud.conn           = nil
+    StatusHud.activeLast     = ""
+    StatusHud.visible        = false
+    StatusHud._hideTask      = nil
+    _G.StatusHudSettings     = StatusHud
+
+    StatusHud.Features = {
+        { key = "Enabled",          label = "Silent Aim" },
+        { key = "CFrameFly",        label = "Cframe Fly" },
+        { key = "WalkSpeedEnabled", label = "WalkSpeed" },
+        { key = "ESPEnabled",       label = "ESP" },
+    }
+
+    function StatusHud_makeLabel(parent, order, size)
+        local lbl = Instance.new("TextLabel")
+        lbl.BackgroundTransparency = 1
+        lbl.BorderSizePixel = 0
+        lbl.Size = UDim2.new(1, 0, 0, size)
+        lbl.Font = Enum.Font.Code
+        lbl.TextSize = size
+        lbl.TextColor3 = StatusHud.color
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
+        lbl.TextStrokeTransparency = 0.2
+        lbl.TextStrokeColor3 = StatusHud.shadowColor
+        lbl.TextWrapped = true
+        lbl.Text = ""
+        lbl.LayoutOrder = order
+        lbl.Parent = parent
+        return lbl
+    end
+
+    function StatusHud_destroyGui()
+        if StatusHud.gui then
+            pcall(function() StatusHud.gui:Destroy() end)
+        end
+        StatusHud.gui            = nil
+        StatusHud.container      = nil
+        StatusHud.targetLabel    = nil
+        StatusHud.rageLabel      = nil
+        StatusHud.activeLabel    = nil
+        StatusHud.watermarkLabel = nil
+        StatusHud.visible        = false
+    end
+
+    function StatusHud_createGui()
+        if StatusHud.gui and StatusHud.gui.Parent then return end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "\0StatusHud"
+        gui.ResetOnSpawn = false
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 999
+
+        local parented = false
+        pcall(function()
+            if gethui then
+                gui.Parent = gethui()
+                parented = true
+            end
+        end)
+        if not parented then
+            pcall(function()
+                if syn and syn.protect_gui then
+                    syn.protect_gui(gui)
+                end
+            end)
+            local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
+            if ok and gui.Parent then
+                parented = true
+            end
+        end
+        if not parented then
+            local lp = Players_S.LocalPlayer
+            local pg = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+            if pg then
+                gui.Parent = pg
+            end
+        end
+
+        if not gui.Parent then
+            warn("no valid parent for status")
+            return
+        end
+
+        local container = Instance.new("Frame")
+        container.Name = "Container"
+        container.BackgroundTransparency = 1
+        container.BorderSizePixel = 0
+        container.AnchorPoint = Vector2.new(0.5, 1)
+        container.Position = UDim2.new(0.5, 0, 1, -20)
+        container.Size = UDim2.new(0, StatusHud.maxWidth, 0, 0)
+        container.AutomaticSize = Enum.AutomaticSize.Y
+        container.ClipsDescendants = true
+        container.Visible = false
+        container.Parent = gui
+
+        local layout = Instance.new("UIListLayout")
+        layout.FillDirection = Enum.FillDirection.Vertical
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        layout.Padding = UDim.new(0, 2)
+        layout.Parent = container
+
+        StatusHud.targetLabel    = StatusHud_makeLabel(container, 1, 15)
+        StatusHud.rageLabel      = StatusHud_makeLabel(container, 2, 15)
+        StatusHud.activeLabel    = StatusHud_makeLabel(container, 3, 15)
+        StatusHud.watermarkLabel = StatusHud_makeLabel(container, 4, 13)
+
+        StatusHud.container = container
+        StatusHud.gui = gui
+        StatusHud.visible = false
+    end
+
+    function StatusHud_getPing()
+        local net = Stats_S:FindFirstChild("Network")
+        if not net then return nil end
+        local ssi = net:FindFirstChild("ServerStatsItem")
+        if not ssi then return nil end
+        local dp = ssi:FindFirstChild("Data Ping")
+        if not dp then return nil end
+        local ok, v = pcall(function() return dp:GetValue() end)
+        if ok and type(v) == "number" then return math.floor(v) end
+        return nil
+    end
+
+    function StatusHud_getTargetStatus(target)
+        if not target or not target.Parent then
+            return "N/A", "N/A"
+        end
+        local char = target.Character
+        if not char or not char.Parent then
+            return target.Name, "N/A"
+        end
+        if isDead and isDead(target) then
+            return target.Name, "Dead"
+        end
+        if IsTargetKO and IsTargetKO(target) then
+            return target.Name, "K.O"
+        end
+        if _orbitTargetValid and _orbitTargetValid(target) then
+            return target.Name, "Alive"
+        end
+        return target.Name, "N/A"
+    end
+
+    function StatusHud_getRagebotStatus()
+        if not OrbitEnabled then return "N/A" end
+        if Disengaging then return "Disengaging" end
+        if IdleState == "hiding" then
+            if IdleReason == "spam"   then return "Idle Spam (Void)" end
+            if IdleReason == "ko"     then return "Idle K.O (Void)" end
+            if IdleReason == "reload" then return "Idle Reload (Void)" end
+            return "Idling (Void)"
+        end
+        if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
+        if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
+        if stomping then return "Stomping" end
+        if EngagementActive then return "Orbiting" end
+        return "On"
+    end
+
+    function StatusHud_isToggleOn(key)
+        local t = Toggles and Toggles[key]
+        if not t then return false end
+        return t.Value == true
+    end
+
+    function StatusHud_getActiveFeatures()
+        local list = {}
+        local feats = StatusHud.Features
+        for i = 1, #feats do
+            local f = feats[i]
+            if StatusHud_isToggleOn(f.key) then
+                list[#list + 1] = f.label
+            end
+        end
+        if #list == 0 then return "N/A" end
+        return table.concat(list, ", ")
+    end
+
+    function StatusHud_popContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = StatusHud.position
+        }):Play()
+    end
+
+    function StatusHud_popOutContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = UDim2.new(0.5, 0, 1, -20)
+        }):Play()
+    end
+
+    function StatusHud_flashLabel(lbl)
+        if not lbl then return end
+        local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
+        lbl.TextColor3 = Color3.fromRGB(180, 255, 180)
+        TweenService_S:Create(lbl, info, { TextColor3 = StatusHud.color }):Play()
+    end
+
+    function StatusHud_update()
+        if not StatusHud.targetLabel or not StatusHud.targetLabel.Parent then return end
+        local target = _104 and _104.targetplayer
+        local tName, tStatus = StatusHud_getTargetStatus(target)
+        local rb = StatusHud_getRagebotStatus()
+
+        local activeStr = StatusHud_getActiveFeatures()
+        local hasActive  = activeStr ~= "N/A"
+        local hasTarget  = target ~= nil
+        local rbOn       = OrbitEnabled == true
+
+        local shouldShow = hasActive or hasTarget or rbOn or StatusHud.enabled
+        if not shouldShow then
+            if StatusHud.visible then
+                StatusHud.visible = false
+                StatusHud_popOutContainer()
+                if StatusHud._hideTask then
+                    pcall(task.cancel, StatusHud._hideTask)
+                    StatusHud._hideTask = nil
+                end
+                StatusHud._hideTask = task.delay(0.2, function()
+                    StatusHud._hideTask = nil
+                    if StatusHud.container and not StatusHud.visible then
+                        StatusHud.container.Visible = false
+                    end
+                end)
+            end
+            return
+        end
+
+        if not StatusHud.visible then
+            StatusHud.visible = true
+            StatusHud.container.Visible = true
+            StatusHud.container.Position = UDim2.new(0.5, 0, 1, -20)
+            StatusHud_popContainer()
+        end
+
+        StatusHud.targetLabel.Text    = string.format("Target: %s [%s]", tName, tStatus)
+        StatusHud.rageLabel.Text      = string.format("Ragebot Status: %s", rb)
+
+        if activeStr ~= StatusHud.activeLast then
+            StatusHud.activeLabel.Text = "Active: " .. activeStr
+            StatusHud_flashLabel(StatusHud.activeLabel)
+            StatusHud.activeLast = activeStr
+        end
+
+        StatusHud.watermarkLabel.Text = "Rawr.xyz <3 | discord.gg/eMpUQzFrNG"
+    end
+
+    function StatusHud_start()
+        StatusHud_createGui()
+        StatusHud.activeLast = "\0"
+        if StatusHud.conn then return end
+        StatusHud.conn = RunService_S.RenderStepped:Connect(function()
+            pcall(StatusHud_update)
+        end)
+    end
+
+    function StatusHud_stop()
+        if StatusHud.conn then
+            StatusHud.conn:Disconnect()
+            StatusHud.conn = nil
+        end
+        if StatusHud._hideTask then
+            pcall(task.cancel, StatusHud._hideTask)
+            StatusHud._hideTask = nil
+        end
+        StatusHud_destroyGui()
+    end
+
+    function StatusHud_setEnabled(v)
+        StatusHud.enabled = v and true or false
+        if StatusHud.enabled then
+            StatusHud_start()
+        else
+            StatusHud_stop()
+        end
+    end
+
+    function StatusHud_setTextColor(v)
+        StatusHud.color = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextColor3 = v end
+        end
+    end
+
+    function StatusHud_setShadowColor(v)
+        StatusHud.shadowColor = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextStrokeColor3 = v end
+        end
+    end
+
+    function StatusHud_cleanup()
+        if StatusHud.conn then
+            pcall(function() StatusHud.conn:Disconnect() end)
+            StatusHud.conn = nil
+        end
+        if StatusHud._hideTask then
+            pcall(task.cancel, StatusHud._hideTask)
+            StatusHud._hideTask = nil
+        end
+        StatusHud_destroyGui()
+    end
+
+    _62:AddToggle('StatusHud', {
+        Text = 'Status',
+        Default = false,
+        Tooltip = 'status of everything',
+    }):AddColorPicker('StatusHudTextColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Text Color',
+    }):AddColorPicker('StatusHudShadowColor', {
+        Default = Color3.fromRGB(0, 0, 0),
+        Title = 'Shadow Color',
+    })
+
+    Toggles.StatusHud:OnChanged(function(v)
+        StatusHud_setEnabled(v)
+    end)
+
+    Options.StatusHudTextColor:OnChanged(function(v)
+        StatusHud_setTextColor(v)
+    end)
+
+    Options.StatusHudShadowColor:OnChanged(function(v)
+        StatusHud_setShadowColor(v)
+    end)
+end
+
 local _66 = _60.Main:AddLeftTabbox()
 local _67 = _66:AddTab('Target')
 _G._67 = _67
@@ -13971,340 +14327,6 @@ Options.SkeletonColor:OnChanged(function()
     end
 end)
 
--- Status HUD
-do
-    Players_S       = game:GetService("Players")
-    RunService_S    = game:GetService("RunService")
-    TweenService_S  = game:GetService("TweenService")
-    Stats_S         = game:GetService("Stats")
-
-    StatusHud = StatusHud or {}
-    StatusHud.enabled        = false
-    StatusHud.color          = Color3.fromRGB(255, 255, 255)
-    StatusHud.shadowColor    = Color3.fromRGB(0, 0, 0)
-    StatusHud.position       = UDim2.new(0.5, 0, 1, -125)
-    StatusHud.size           = UDim2.new(0, 560, 0, 0)
-    StatusHud.maxWidth       = 560
-    StatusHud.gui            = nil
-    StatusHud.container      = nil
-    StatusHud.targetLabel    = nil
-    StatusHud.rageLabel      = nil
-    StatusHud.activeLabel    = nil
-    StatusHud.watermarkLabel = nil
-    StatusHud.conn           = nil
-    StatusHud.activeLast     = ""
-    StatusHud.visible        = false
-    _G.StatusHudSettings     = StatusHud
-
-    StatusHud.Features = {
-        { key = "Enabled",          label = "Silent Aim" },
-        { key = "CFrameFly",        label = "Cframe Fly" },
-        { key = "WalkSpeedEnabled", label = "WalkSpeed" },
-        { key = "ESPEnabled",       label = "ESP" },
-    }
-
-    function StatusHud_makeLabel(parent, order, size)
-        local lbl = Instance.new("TextLabel")
-        lbl.BackgroundTransparency = 1
-        lbl.BorderSizePixel = 0
-        lbl.Size = UDim2.new(1, 0, 0, size)
-        lbl.Font = Enum.Font.Code
-        lbl.TextSize = size
-        lbl.TextColor3 = StatusHud.color
-        lbl.TextXAlignment = Enum.TextXAlignment.Center
-        lbl.TextYAlignment = Enum.TextYAlignment.Center
-        lbl.TextStrokeTransparency = 0.2
-        lbl.TextStrokeColor3 = StatusHud.shadowColor
-        lbl.TextWrapped = true
-        lbl.Text = ""
-        lbl.LayoutOrder = order
-        lbl.Parent = parent
-        return lbl
-    end
-
-    function StatusHud_destroyGui()
-        if StatusHud.gui then
-            pcall(function() StatusHud.gui:Destroy() end)
-        end
-        StatusHud.gui            = nil
-        StatusHud.container      = nil
-        StatusHud.targetLabel    = nil
-        StatusHud.rageLabel      = nil
-        StatusHud.activeLabel    = nil
-        StatusHud.watermarkLabel = nil
-        StatusHud.visible        = false
-    end
-
-    function StatusHud_createGui()
-        if StatusHud.gui and StatusHud.gui.Parent then return end
-
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "\0StatusHud"
-        gui.ResetOnSpawn = false
-        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        gui.IgnoreGuiInset = true
-        gui.DisplayOrder = 999
-
-        local parented = false
-        pcall(function()
-            if gethui then
-                gui.Parent = gethui()
-                parented = true
-            end
-        end)
-        if not parented then
-            pcall(function()
-                if syn and syn.protect_gui then
-                    syn.protect_gui(gui)
-                end
-            end)
-            local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
-            if ok and gui.Parent then
-                parented = true
-            end
-        end
-        if not parented then
-            local lp = Players_S.LocalPlayer
-            local pg = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
-            if pg then
-                gui.Parent = pg
-            end
-        end
-
-        if not gui.Parent then
-            warn("no valid parent for status")
-            return
-        end
-
-        local container = Instance.new("Frame")
-        container.Name = "Container"
-        container.BackgroundTransparency = 1
-        container.BorderSizePixel = 0
-        container.AnchorPoint = Vector2.new(0.5, 1)
-        container.Position = UDim2.new(0.5, 0, 1, -20)
-        container.Size = UDim2.new(0, StatusHud.maxWidth, 0, 0)
-        container.AutomaticSize = Enum.AutomaticSize.Y
-        container.ClipsDescendants = true
-        container.Visible = false
-        container.Parent = gui
-
-        local layout = Instance.new("UIListLayout")
-        layout.FillDirection = Enum.FillDirection.Vertical
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        layout.Padding = UDim.new(0, 2)
-        layout.Parent = container
-
-        StatusHud.targetLabel    = StatusHud_makeLabel(container, 1, 15)
-        StatusHud.rageLabel      = StatusHud_makeLabel(container, 2, 15)
-        StatusHud.activeLabel    = StatusHud_makeLabel(container, 3, 15)
-        StatusHud.watermarkLabel = StatusHud_makeLabel(container, 4, 13)
-
-        StatusHud.container = container
-        StatusHud.gui = gui
-        StatusHud.visible = false
-    end
-
-    function StatusHud_getPing()
-        local net = Stats_S:FindFirstChild("Network")
-        if not net then return nil end
-        local ssi = net:FindFirstChild("ServerStatsItem")
-        if not ssi then return nil end
-        local dp = ssi:FindFirstChild("Data Ping")
-        if not dp then return nil end
-        local ok, v = pcall(function() return dp:GetValue() end)
-        if ok and type(v) == "number" then return math.floor(v) end
-        return nil
-    end
-
-    function StatusHud_getTargetStatus(target)
-        if not target or not target.Parent then
-            return "N/A", "N/A"
-        end
-        local char = target.Character
-        if not char or not char.Parent then
-            return target.Name, "N/A"
-        end
-        if isDead and isDead(target) then
-            return target.Name, "Dead"
-        end
-        if IsTargetKO and IsTargetKO(target) then
-            return target.Name, "K.O"
-        end
-        if _orbitTargetValid and _orbitTargetValid(target) then
-            return target.Name, "Alive"
-        end
-        return target.Name, "N/A"
-    end
-
-    function StatusHud_getRagebotStatus()
-        if not OrbitEnabled then return "N/A" end
-        if Disengaging then return "Disengaging" end
-        if IdleState == "hiding" then
-            if IdleReason == "spam"   then return "Idle Spam (Void)" end
-            if IdleReason == "ko"     then return "Idle K.O (Void)" end
-            if IdleReason == "reload" then return "Idle Reload (Void)" end
-            return "Idling (Void)"
-        end
-        if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
-        if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
-        if stomping then return "Stomping" end
-        if EngagementActive then return "Orbiting" end
-        return "On"
-    end
-
-    function StatusHud_isToggleOn(key)
-        local t = Toggles and Toggles[key]
-        if not t then return false end
-        return t.Value == true
-    end
-
-    function StatusHud_getActiveFeatures()
-        local list = {}
-        local feats = StatusHud.Features
-        for i = 1, #feats do
-            local f = feats[i]
-            if StatusHud_isToggleOn(f.key) then
-                list[#list + 1] = f.label
-            end
-        end
-        if #list == 0 then return "N/A" end
-        return table.concat(list, ", ")
-    end
-
-    function StatusHud_popContainer()
-        if not StatusHud.container then return end
-        local info = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0)
-        TweenService_S:Create(StatusHud.container, info, {
-            Position = StatusHud.position
-        }):Play()
-    end
-
-    function StatusHud_popOutContainer()
-        if not StatusHud.container then return end
-        local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
-        TweenService_S:Create(StatusHud.container, info, {
-            Position = UDim2.new(0.5, 0, 1, -20)
-        }):Play()
-    end
-
-    function StatusHud_flashLabel(lbl)
-        if not lbl then return end
-        local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-        lbl.TextColor3 = Color3.fromRGB(180, 255, 180)
-        TweenService_S:Create(lbl, info, { TextColor3 = StatusHud.color }):Play()
-    end
-
-    function StatusHud_update()
-        if not StatusHud.targetLabel or not StatusHud.targetLabel.Parent then return end
-        local target = _104 and _104.targetplayer
-        local tName, tStatus = StatusHud_getTargetStatus(target)
-        local rb = StatusHud_getRagebotStatus()
-
-        local activeStr = StatusHud_getActiveFeatures()
-        local hasActive  = activeStr ~= "N/A"
-        local hasTarget  = target ~= nil
-        local rbOn       = OrbitEnabled == true
-
-        local shouldShow = hasActive or hasTarget or rbOn or StatusHud.enabled
-        if not shouldShow then
-            if StatusHud.visible then
-                StatusHud.visible = false
-                StatusHud_popOutContainer()
-                task.delay(0.2, function()
-                    if StatusHud.container and not StatusHud.visible then
-                        StatusHud.container.Visible = false
-                    end
-                end)
-            end
-            return
-        end
-
-        if not StatusHud.visible then
-            StatusHud.visible = true
-            StatusHud.container.Visible = true
-            StatusHud.container.Position = UDim2.new(0.5, 0, 1, -20)
-            StatusHud_popContainer()
-        end
-
-        StatusHud.targetLabel.Text    = string.format("Target: %s [%s]", tName, tStatus)
-        StatusHud.rageLabel.Text      = string.format("Ragebot Status: %s", rb)
-
-        if activeStr ~= StatusHud.activeLast then
-            StatusHud.activeLabel.Text = "Active: " .. activeStr
-            StatusHud_flashLabel(StatusHud.activeLabel)
-            StatusHud.activeLast = activeStr
-        end
-
-        StatusHud.watermarkLabel.Text = "Rawr.xyz <3 | discord.gg/eMpUQzFrNG"
-    end
-
-    function StatusHud_start()
-        StatusHud_createGui()
-        StatusHud.activeLast = "\0"
-        if StatusHud.conn then return end
-        StatusHud.conn = RunService_S.RenderStepped:Connect(function()
-            pcall(StatusHud_update)
-        end)
-    end
-
-    function StatusHud_stop()
-        if StatusHud.conn then
-            StatusHud.conn:Disconnect()
-            StatusHud.conn = nil
-        end
-        StatusHud_destroyGui()
-    end
-
-    function StatusHud_setEnabled(v)
-        StatusHud.enabled = v and true or false
-        if StatusHud.enabled then
-            StatusHud_start()
-        else
-            StatusHud_stop()
-        end
-    end
-
-    function StatusHud_setTextColor(v)
-        StatusHud.color = v
-        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
-            if l then l.TextColor3 = v end
-        end
-    end
-
-    function StatusHud_setShadowColor(v)
-        StatusHud.shadowColor = v
-        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
-            if l then l.TextStrokeColor3 = v end
-        end
-    end
-
-    _62:AddToggle('StatusHud', {
-        Text = 'Status',
-        Default = false,
-        Tooltip = 'status of everything',
-    }):AddColorPicker('StatusHudTextColor', {
-        Default = Color3.fromRGB(255, 255, 255),
-        Title = 'Text Color',
-    }):AddColorPicker('StatusHudShadowColor', {
-        Default = Color3.fromRGB(0, 0, 0),
-        Title = 'Shadow Color',
-    })
-
-    Toggles.StatusHud:OnChanged(function(v)
-        StatusHud_setEnabled(v)
-    end)
-
-    Options.StatusHudTextColor:OnChanged(function(v)
-        StatusHud_setTextColor(v)
-    end)
-
-    Options.StatusHudShadowColor:OnChanged(function(v)
-        StatusHud_setShadowColor(v)
-    end)
-end
-
 -- < Box Core > --
 
 Options.BoxESPColor:OnChanged(function()
@@ -15955,6 +15977,7 @@ _48:OnUnload(function()
     pcall(_193)
     pcall(cleanupCircleVisuals)
     pcall(cleanupAllSkeletons)
+    if StatusHud_cleanup then pcall(StatusHud_cleanup) end
 
     if StopOrbit then pcall(StopOrbit) end
     OrbitEnabled = false
