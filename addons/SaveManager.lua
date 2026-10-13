@@ -319,6 +319,10 @@ local SaveManager = {} do
 		return true
 	end
 
+	function SaveManager:GetExportPath(name)
+		return self.Folder .. '/exports/' .. name .. '.json'
+	end
+
 	function SaveManager:Export()
 		local data = self:BuildData()
 		local name = sanitizeName(self.LoadedConfig) or 'exported'
@@ -329,12 +333,19 @@ local SaveManager = {} do
 			return false, encodeErr
 		end
 
-		local copied, copyErr = self:CopyToClipboard(encoded)
-		if not copied then
-			return false, copyErr
+		if not isfolder(self.Folder .. '/exports') then
+			makefolder(self.Folder .. '/exports')
 		end
 
-		return true, name
+		local path = self:GetExportPath(name)
+		local written, writeErr = pcall(writefile, path, encoded)
+		if not written then
+			return false, 'failed to write file: ' .. tostring(writeErr)
+		end
+
+		local copied = self:CopyToClipboard(encoded)
+
+		return true, name, path, copied
 	end
 
 	function SaveManager:Import(text)
@@ -374,7 +385,8 @@ local SaveManager = {} do
 		local paths = {
 			self.Folder,
 			self.Folder .. '/themes',
-			self.Folder .. '/settings'
+			self.Folder .. '/settings',
+			self.Folder .. '/exports'
 		}
 
 		for i = 1, #paths do
@@ -520,12 +532,19 @@ local SaveManager = {} do
 		section:AddDivider()
 
 		section:AddInput('SaveManager_ImportText', { Text = 'Importing Configurations', Placeholder = 'json here' })
-
+		
 		section:AddButton('Export', function()
-			local ok, result = self:Export()
+			local ok, result, path, copied = self:Export()
 			if not ok then
 				return self.Library:Notify('Failed to export: ' .. tostring(result), 3)
 			end
+
+			if copied then
+				self.Library:Notify(string.format('Exported %q to %s.json and copied to clipboard', result, result), 3)
+			else
+				self.Library:Notify(string.format('Exported %q to %s.json', result, result), 3)
+			end
+		end):AddButton('Import', function()
 
 			self.Library:Notify(string.format('Copied %q to clipboard', result), 2)
 		end):AddButton('Import', function()
