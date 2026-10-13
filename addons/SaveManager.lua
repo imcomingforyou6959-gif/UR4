@@ -381,6 +381,15 @@ local SaveManager = {} do
 		})
 	end
 
+	-- optional: call this if you do NOT want the background image / transparency saved in configs
+	function SaveManager:IgnoreBackgroundSettings()
+		self:SetIgnoreIndexes({
+			'ThemeManager_BackgroundSource', 'ThemeManager_BackgroundScale',
+			'ThemeManager_BackgroundImageTransparency', 'ThemeManager_WindowTransparency',
+			'ThemeManager_GroupTransparency', 'ThemeManager_InlineTransparency',
+		})
+	end
+
 	function SaveManager:BuildFolderTree()
 		local paths = {
 			self.Folder,
