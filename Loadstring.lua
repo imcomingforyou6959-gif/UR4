@@ -117,10 +117,10 @@ workspace.FallenPartsDestroyHeight = -0 / 0
 
 if not cloneref then cloneref = function(x) return x end end
 
-local Players = cloneref(game:GetService("Players"))
-local HttpService = cloneref(game:GetService("HttpService"))
-local UserInputService = cloneref(game:GetService("UserInputService"))
-local LocalPlayer = Players.LocalPlayer
+Players = cloneref(game:GetService("Players"))
+HttpService = cloneref(game:GetService("HttpService"))
+UserInputService = cloneref(game:GetService("UserInputService"))
+LocalPlayer = Players.LocalPlayer
 Workspace = cloneref(game:GetService("Workspace"))
 Lighting = cloneref(game:GetService("Lighting"))
 MaterialService = cloneref(game:GetService("MaterialService"))
