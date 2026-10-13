@@ -544,10 +544,9 @@ local SaveManager = {} do
 			else
 				self.Library:Notify(string.format('Exported %q to %s.json', result, result), 3)
 			end
-		end):AddButton('Import', function()
+		end)
 
-			self.Library:Notify(string.format('Copied %q to clipboard', result), 2)
-		end):AddButton('Import', function()
+		section:AddButton('Import', function()
 			local text = Options.SaveManager_ImportText.Value
 
 			if type(text) ~= 'string' or text:match('^%s*$') then
