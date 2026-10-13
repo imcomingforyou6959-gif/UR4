@@ -684,6 +684,7 @@ end)
 AuraSection:AddToggle('FakeRobloxFF', {
     Text = 'Fake Roblox Forcefield',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.FakeRobloxFF:OnChanged(function()
@@ -874,6 +875,7 @@ end
 EmoteTab:AddToggle('EmotesEnabled', {
     Text = 'Enabled',
     Default = false,
+    Searchable = true,
 })
 
 EmoteTab:AddDropdown('EmoteSelect', {
@@ -1016,6 +1018,7 @@ end
 TrailSection:AddToggle('TrailToggle', {
     Text = 'Trail',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.TrailToggle:OnChanged(function()
@@ -1252,6 +1255,7 @@ end
 WeatherSection:AddToggle('WeatherToggle', {
     Text = 'Weather',
     Default = false,
+    Searchable = true,
 }):AddColorPicker('WeatherColor', {
     Default = Color3.fromRGB(255, 255, 255),
     Title = 'Weather Color',
@@ -1349,6 +1353,7 @@ end
 BackgroundNoiseSection:AddToggle('BackgroundNoise', {
     Text = 'Background Noise',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.BackgroundNoise:OnChanged(function()
@@ -1408,6 +1413,7 @@ LightingModeSection = WorldTab:AddLeftGroupbox('Lighting Mode')
 LightingModeSection:AddToggle('LightingMode', {
     Text = 'Lighting Mode',
     Default = false,
+    Searchable = true,
 })
 
 LightingModeSection:AddDropdown('LightingModeValue', {
@@ -1436,6 +1442,7 @@ WorldTimeSection = WorldTab:AddLeftGroupbox('World Time')
 WorldTimeSection:AddToggle('WorldTime', {
     Text = 'World Time',
     Default = false,
+    Searchable = true,
 })
 
 WorldTimeSection:AddSlider('WorldTimeValue', {
@@ -1466,6 +1473,7 @@ AtmosphereSection = WorldTab:AddLeftGroupbox('Atmosphere')
 AtmosphereSection:AddToggle('Atmosphere', {
     Text = 'Atmosphere',
     Default = false,
+    Searchable = true,
 })
 
 AtmosphereObject = nil
@@ -1556,6 +1564,7 @@ end
 ColorCorrectionSection:AddToggle('Saturation', {
     Text = 'Saturation',
     Default = false,
+    Searchable = true,
 })
 
 ColorCorrectionSection:AddSlider('SaturationValue', {
@@ -1583,6 +1592,7 @@ end)
 ColorCorrectionSection:AddToggle('Contrast', {
     Text = 'Contrast',
     Default = false,
+    Searchable = true,
 })
 
 ColorCorrectionSection:AddSlider('ContrastValue', {
@@ -1621,6 +1631,7 @@ getgenv().AspectRatioEnabled = false
 AspectRatioSection:AddToggle('AspectRatio', {
     Text = 'Aspect Ratio',
     Default = false,
+    Searchable = true,
 })
 
 AspectRatioSection:AddSlider('AspectRatioHorizontalSlider', {
@@ -1677,6 +1688,7 @@ end)
 AspectRatioSection:AddToggle('DisableRendering', {
     Text = 'Disable Rendering',
     Default = false,
+    Searchable = true,
     Callback = function(value)
         pcall(function()
             RunService:Set3dRenderingEnabled(not value)
@@ -1690,6 +1702,7 @@ TexturesSection = WorldTab:AddRightGroupbox('Textures')
 TexturesSection:AddToggle('Textures', {
     Text = 'Textures',
     Default = false,
+    Searchable = true,
 })
 
 TexturesSection:AddDropdown('TexturesPack', {
@@ -1843,6 +1856,7 @@ AmbientSection = WorldTab:AddRightGroupbox('Ambient')
 AmbientSection:AddToggle('Ambient', {
     Text = 'Ambient',
     Default = false,
+    Searchable = true,
 })
 
 AmbientSection:AddLabel('Ambient Color'):AddColorPicker('AmbientColor', {
@@ -1972,6 +1986,7 @@ SenderRateGroup:AddToggle('SenderRateValue', {
     Text = 'Physics Sender Rate',
     Default = false,
     Tooltip = 'Overrides S2PhysicsSenderRate.',
+    Searchable = true,
 })
 
 SenderRatePhysicsDep = SenderRateGroup:AddDependencyBox()
@@ -2009,6 +2024,7 @@ SenderRateGroup:AddToggle('DataSenderRateValue', {
     Text = 'Data Sender Rate',
     Default = false,
     Tooltip = 'Overrides DFIntDataSenderRate.',
+    Searchable = true,
 })
 
 SenderRateDataDep = SenderRateGroup:AddDependencyBox()
@@ -2046,6 +2062,7 @@ DeflectGroup:AddToggle('Deflect', {
     Text = 'Deflect [BETA]',
     Default = false,
     Tooltip = 'Automatically target at whoever shot you - still in testing may have some false positives',
+    Searchable = true,
 })
 
 BehaviorB = Ragebot:AddRightGroupbox('Behaviors')
@@ -2060,12 +2077,14 @@ BehaviorB:AddToggle('IdleOnKO', {
     Text = 'Idle on K.O',
     Default = false,
     Tooltip = 'Void out and idle when the target gets knocked.',
+    Searchable = true,
 })
 
 BehaviorB:AddToggle('IdleOnReload', {
     Text = 'Idle on Reload',
     Default = false,
     Tooltip = 'Void out and idle while you are reloading.',
+    Searchable = true,
 })
 
 BehaviorB:AddToggle('IdleSpam', {
@@ -2212,6 +2231,7 @@ InfiniteAmmoSection:AddToggle('TactRestock', {
     Text = 'Inf ammo',
     Default = false,
     Tooltip = 'Inf Ammo method works on some zee/des hoods',
+    Searchable = true,
 })
 
 _60['UI Settings'] = _59:AddTab('UI Settings')
@@ -2579,6 +2599,7 @@ fovToggle = _visualizer:AddToggle('FovEnabled', {
     Text = 'FOV',
     Default = _G.FOV.enabled,
     Tooltip = 'fov circle, when on silent aim follows it in targeting',
+    Searchable = true,
 })
 fovToggle:AddColorPicker('FovOutlineColor1', {
     Default = _G.FOV.outline_color1,
@@ -2712,6 +2733,7 @@ end)
 local _63 = _62:AddToggle('Enabled', {
     Text = 'Silent Aim',
     Default = false,
+    Searchable = true,
 })
 
 local _64 = _63:AddKeyPicker('EnabledKeybind', {
@@ -2730,10 +2752,12 @@ local _65 = _62:AddDropdown('Mode', {
 _62:AddToggle('ManipulatedText', {
     Text = 'Show Watermark',
     Default = false,
+    Searchable = true,
 })
 _62:AddToggle('TargetInfo', {
     Text = 'Target Info',
     Default = false,
+    Searchable = true,
 })
 
 _62:AddDropdown('WatermarkPosition', {
@@ -2742,361 +2766,18 @@ _62:AddDropdown('WatermarkPosition', {
     Default = 'Cursor',
 })
 
--- Status HUD
-do
-    Players_S       = game:GetService("Players")
-    RunService_S    = game:GetService("RunService")
-    TweenService_S  = game:GetService("TweenService")
-    Stats_S         = game:GetService("Stats")
-
-    StatusHud = StatusHud or {}
-    StatusHud.enabled        = false
-    StatusHud.color          = Color3.fromRGB(255, 255, 255)
-    StatusHud.shadowColor    = Color3.fromRGB(0, 0, 0)
-    StatusHud.position       = UDim2.new(0.5, 0, 1, -125)
-    StatusHud.size           = UDim2.new(0, 560, 0, 0)
-    StatusHud.maxWidth       = 560
-    StatusHud.gui            = nil
-    StatusHud.container      = nil
-    StatusHud.targetLabel    = nil
-    StatusHud.rageLabel      = nil
-    StatusHud.activeLabel    = nil
-    StatusHud.watermarkLabel = nil
-    StatusHud.conn           = nil
-    StatusHud.activeLast     = ""
-    StatusHud.visible        = false
-    StatusHud._hideTask      = nil
-    _G.StatusHudSettings     = StatusHud
-
-    StatusHud.Features = {
-        { key = "Enabled",          label = "Silent Aim" },
-        { key = "CFrameFly",        label = "Cframe Fly" },
-        { key = "WalkSpeedEnabled", label = "WalkSpeed" },
-        { key = "ESPEnabled",       label = "ESP" },
-    }
-
-    function StatusHud_makeLabel(parent, order, size)
-        local lbl = Instance.new("TextLabel")
-        lbl.BackgroundTransparency = 1
-        lbl.BorderSizePixel = 0
-        lbl.Size = UDim2.new(1, 0, 0, size)
-        lbl.Font = Enum.Font.Code
-        lbl.TextSize = size
-        lbl.TextColor3 = StatusHud.color
-        lbl.TextXAlignment = Enum.TextXAlignment.Center
-        lbl.TextYAlignment = Enum.TextYAlignment.Center
-        lbl.TextStrokeTransparency = 0.2
-        lbl.TextStrokeColor3 = StatusHud.shadowColor
-        lbl.TextWrapped = true
-        lbl.Text = ""
-        lbl.LayoutOrder = order
-        lbl.Parent = parent
-        return lbl
-    end
-
-    function StatusHud_destroyGui()
-        if StatusHud.gui then
-            pcall(function() StatusHud.gui:Destroy() end)
-        end
-        StatusHud.gui            = nil
-        StatusHud.container      = nil
-        StatusHud.targetLabel    = nil
-        StatusHud.rageLabel      = nil
-        StatusHud.activeLabel    = nil
-        StatusHud.watermarkLabel = nil
-        StatusHud.visible        = false
-    end
-
-    function StatusHud_createGui()
-        if StatusHud.gui and StatusHud.gui.Parent then return end
-
-        local gui = Instance.new("ScreenGui")
-        gui.Name = "\0StatusHud"
-        gui.ResetOnSpawn = false
-        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-        gui.IgnoreGuiInset = true
-        gui.DisplayOrder = 999
-
-        local parented = false
-        pcall(function()
-            if gethui then
-                gui.Parent = gethui()
-                parented = true
-            end
-        end)
-        if not parented then
-            pcall(function()
-                if syn and syn.protect_gui then
-                    syn.protect_gui(gui)
-                end
-            end)
-            local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
-            if ok and gui.Parent then
-                parented = true
-            end
-        end
-        if not parented then
-            local lp = Players_S.LocalPlayer
-            local pg = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
-            if pg then
-                gui.Parent = pg
-            end
-        end
-
-        if not gui.Parent then
-            warn("no valid parent for status")
-            return
-        end
-
-        local container = Instance.new("Frame")
-        container.Name = "Container"
-        container.BackgroundTransparency = 1
-        container.BorderSizePixel = 0
-        container.AnchorPoint = Vector2.new(0.5, 1)
-        container.Position = UDim2.new(0.5, 0, 1, -20)
-        container.Size = UDim2.new(0, StatusHud.maxWidth, 0, 0)
-        container.AutomaticSize = Enum.AutomaticSize.Y
-        container.ClipsDescendants = true
-        container.Visible = false
-        container.Parent = gui
-
-        local layout = Instance.new("UIListLayout")
-        layout.FillDirection = Enum.FillDirection.Vertical
-        layout.SortOrder = Enum.SortOrder.LayoutOrder
-        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-        layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        layout.Padding = UDim.new(0, 2)
-        layout.Parent = container
-
-        StatusHud.targetLabel    = StatusHud_makeLabel(container, 1, 15)
-        StatusHud.rageLabel      = StatusHud_makeLabel(container, 2, 15)
-        StatusHud.activeLabel    = StatusHud_makeLabel(container, 3, 15)
-        StatusHud.watermarkLabel = StatusHud_makeLabel(container, 4, 13)
-
-        StatusHud.container = container
-        StatusHud.gui = gui
-        StatusHud.visible = false
-    end
-
-    function StatusHud_getPing()
-        local net = Stats_S:FindFirstChild("Network")
-        if not net then return nil end
-        local ssi = net:FindFirstChild("ServerStatsItem")
-        if not ssi then return nil end
-        local dp = ssi:FindFirstChild("Data Ping")
-        if not dp then return nil end
-        local ok, v = pcall(function() return dp:GetValue() end)
-        if ok and type(v) == "number" then return math.floor(v) end
-        return nil
-    end
-
-    function StatusHud_getTargetStatus(target)
-        if not target or not target.Parent then
-            return "N/A", "N/A"
-        end
-        local char = target.Character
-        if not char or not char.Parent then
-            return target.Name, "N/A"
-        end
-        if isDead and isDead(target) then
-            return target.Name, "Dead"
-        end
-        if IsTargetKO and IsTargetKO(target) then
-            return target.Name, "K.O"
-        end
-        if _orbitTargetValid and _orbitTargetValid(target) then
-            return target.Name, "Alive"
-        end
-        return target.Name, "N/A"
-    end
-
-    function StatusHud_getRagebotStatus()
-        if not OrbitEnabled then return "N/A" end
-        if Disengaging then return "Disengaging" end
-        if IdleState == "hiding" then
-            if IdleReason == "spam"   then return "Idle Spam (Void)" end
-            if IdleReason == "ko"     then return "Idle K.O (Void)" end
-            if IdleReason == "reload" then return "Idle Reload (Void)" end
-            return "Idling (Void)"
-        end
-        if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
-        if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
-        if stomping then return "Stomping" end
-        if EngagementActive then return "Orbiting" end
-        return "On"
-    end
-
-    function StatusHud_isToggleOn(key)
-        local t = Toggles and Toggles[key]
-        if not t then return false end
-        return t.Value == true
-    end
-
-    function StatusHud_getActiveFeatures()
-        local list = {}
-        local feats = StatusHud.Features
-        for i = 1, #feats do
-            local f = feats[i]
-            if StatusHud_isToggleOn(f.key) then
-                list[#list + 1] = f.label
-            end
-        end
-        if #list == 0 then return "N/A" end
-        return table.concat(list, ", ")
-    end
-
-    function StatusHud_popContainer()
-        if not StatusHud.container then return end
-        local info = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0)
-        TweenService_S:Create(StatusHud.container, info, {
-            Position = StatusHud.position
-        }):Play()
-    end
-
-    function StatusHud_popOutContainer()
-        if not StatusHud.container then return end
-        local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
-        TweenService_S:Create(StatusHud.container, info, {
-            Position = UDim2.new(0.5, 0, 1, -20)
-        }):Play()
-    end
-
-    function StatusHud_flashLabel(lbl)
-        if not lbl then return end
-        local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
-        lbl.TextColor3 = Color3.fromRGB(180, 255, 180)
-        TweenService_S:Create(lbl, info, { TextColor3 = StatusHud.color }):Play()
-    end
-
-    function StatusHud_update()
-        if not StatusHud.targetLabel or not StatusHud.targetLabel.Parent then return end
-        local target = _104 and _104.targetplayer
-        local tName, tStatus = StatusHud_getTargetStatus(target)
-        local rb = StatusHud_getRagebotStatus()
-
-        local activeStr = StatusHud_getActiveFeatures()
-        local hasActive  = activeStr ~= "N/A"
-        local hasTarget  = target ~= nil
-        local rbOn       = OrbitEnabled == true
-
-        local shouldShow = hasActive or hasTarget or rbOn or StatusHud.enabled
-        if not shouldShow then
-            if StatusHud.visible then
-                StatusHud.visible = false
-                StatusHud_popOutContainer()
-                if StatusHud._hideTask then
-                    pcall(task.cancel, StatusHud._hideTask)
-                    StatusHud._hideTask = nil
-                end
-                StatusHud._hideTask = task.delay(0.2, function()
-                    StatusHud._hideTask = nil
-                    if StatusHud.container and not StatusHud.visible then
-                        StatusHud.container.Visible = false
-                    end
-                end)
-            end
-            return
-        end
-
-        if not StatusHud.visible then
-            StatusHud.visible = true
-            StatusHud.container.Visible = true
-            StatusHud.container.Position = UDim2.new(0.5, 0, 1, -20)
-            StatusHud_popContainer()
-        end
-
-        StatusHud.targetLabel.Text    = string.format("Target: %s [%s]", tName, tStatus)
-        StatusHud.rageLabel.Text      = string.format("Ragebot Status: %s", rb)
-
-        if activeStr ~= StatusHud.activeLast then
-            StatusHud.activeLabel.Text = "Active: " .. activeStr
-            StatusHud_flashLabel(StatusHud.activeLabel)
-            StatusHud.activeLast = activeStr
-        end
-
-        StatusHud.watermarkLabel.Text = "Rawr.xyz <3 | discord.gg/eMpUQzFrNG"
-    end
-
-    function StatusHud_start()
-        StatusHud_createGui()
-        StatusHud.activeLast = "\0"
-        if StatusHud.conn then return end
-        StatusHud.conn = RunService_S.RenderStepped:Connect(function()
-            pcall(StatusHud_update)
-        end)
-    end
-
-    function StatusHud_stop()
-        if StatusHud.conn then
-            StatusHud.conn:Disconnect()
-            StatusHud.conn = nil
-        end
-        if StatusHud._hideTask then
-            pcall(task.cancel, StatusHud._hideTask)
-            StatusHud._hideTask = nil
-        end
-        StatusHud_destroyGui()
-    end
-
-    function StatusHud_setEnabled(v)
-        StatusHud.enabled = v and true or false
-        if StatusHud.enabled then
-            StatusHud_start()
-        else
-            StatusHud_stop()
-        end
-    end
-
-    function StatusHud_setTextColor(v)
-        StatusHud.color = v
-        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
-            if l then l.TextColor3 = v end
-        end
-    end
-
-    function StatusHud_setShadowColor(v)
-        StatusHud.shadowColor = v
-        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
-            if l then l.TextStrokeColor3 = v end
-        end
-    end
-
-    function StatusHud_cleanup()
-        if StatusHud.conn then
-            pcall(function() StatusHud.conn:Disconnect() end)
-            StatusHud.conn = nil
-        end
-        if StatusHud._hideTask then
-            pcall(task.cancel, StatusHud._hideTask)
-            StatusHud._hideTask = nil
-        end
-        StatusHud_destroyGui()
-    end
-
-    _62:AddToggle('StatusHud', {
-        Text = 'Status',
-        Default = false,
-        Tooltip = 'status of everything',
-    }):AddColorPicker('StatusHudTextColor', {
-        Default = Color3.fromRGB(255, 255, 255),
-        Title = 'Text Color',
-    }):AddColorPicker('StatusHudShadowColor', {
-        Default = Color3.fromRGB(0, 0, 0),
-        Title = 'Shadow Color',
-    })
-
-    Toggles.StatusHud:OnChanged(function(v)
-        StatusHud_setEnabled(v)
-    end)
-
-    Options.StatusHudTextColor:OnChanged(function(v)
-        StatusHud_setTextColor(v)
-    end)
-
-    Options.StatusHudShadowColor:OnChanged(function(v)
-        StatusHud_setShadowColor(v)
-    end)
-end
+_62:AddToggle('StatusHud', {
+    Text = 'Status',
+    Default = false,
+    Tooltip = 'status of everything',
+    Searchable = true,
+}):AddColorPicker('StatusHudTextColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Text Color',
+}):AddColorPicker('StatusHudShadowColor', {
+    Default = Color3.fromRGB(0, 0, 0),
+    Title = 'Shadow Color',
+})
 
 local _66 = _60.Main:AddLeftTabbox()
 local _67 = _66:AddTab('Target')
@@ -3105,11 +2786,13 @@ _G._67 = _67
 local _68 = _67:AddToggle('Spectate', {
     Text = 'Spectate Target',
     Default = false,
+    Searchable = true,
 })
 
 local _69 = _67:AddToggle('Highlight', {
     Text = 'Player Highlight',
     Default = false,
+    Searchable = true,
 })
 
 local _70 = _69:AddColorPicker('HighlightFillColor', {
@@ -3127,6 +2810,7 @@ local _71 = _69:AddColorPicker('HighlightOutlineColor', {
 local _72 = _67:AddToggle('Line', {
     Text = 'Snap Lines',
     Default = false,
+    Searchable = true,
 })
 
 local _73 = _72:AddColorPicker('LineColor', {
@@ -3138,16 +2822,19 @@ local _73 = _72:AddColorPicker('LineColor', {
 local _74 = _67:AddToggle('AutoShoot', {
     Text = 'Auto Shoot',
     Default = false,
+    Searchable = true,
 })
 
 _67:AddToggle('FaceTarget', {
     Text = 'Face Target',
     Default = false,
+    Searchable = true,
 })
 
 _67:AddToggle('HitNotifications', {
     Text = 'Hit Notifications',
     Default = false,
+    Searchable = true,
 })
 
 HitNotifyBox = _67:AddDependencyBox()
@@ -3193,6 +2880,7 @@ HitEffects.Textures = {
 HitEffects.Toggle = _67:AddToggle("HitEffects", {
     Text = "Hit Effects",
     Default = false,
+    Searchable = true,
 })
 
 HitEffects.Toggle:AddColorPicker("HitEffectColorPicker", {
@@ -3463,6 +3151,7 @@ end
 _Extra2:AddToggle('UnlockCameraDistance', {
     Text = 'Unlock Camera Distance',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.UnlockCameraDistance:OnChanged(function(value)
@@ -3549,6 +3238,7 @@ _Extra2:AddToggle('AntiSit', {
     Text    = 'Anti Sit',
     Default = false,
     Tooltip = 'Prevents the game from seating u',
+    Searchable = true,
 })
 
 Toggles.AntiSit:OnChanged(function()
@@ -3579,6 +3269,7 @@ end)
 _Extra2:AddToggle('ShowChat', {
     Text = 'Show Chat',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.ShowChat:OnChanged(function()
@@ -3623,6 +3314,7 @@ _G.antiFlingConnections = {} -- unused but keepin it jus because
 _Extra2:AddToggle('AntiFling', {
     Text = 'Anti-Fling',
     Default = true,
+    Searchable = true,
 })
 
 _G.setAntiFling = function(value)
@@ -3659,6 +3351,7 @@ _78:AddLabel('Movement')
 local _79 = _78:AddToggle('VoidHide', {
     Text = 'Void Hide',
     Default = false,
+    Searchable = true,
 })
 
 local _80 = _79:AddKeyPicker('VoidHideKeybind', {
@@ -3672,6 +3365,7 @@ local _80 = _79:AddKeyPicker('VoidHideKeybind', {
 local _247 = _78:AddToggle('CFrameFly', {
     Text = 'CFrame Fly',
     Default = false,
+    Searchable = true,
 })
 
 _247:AddKeyPicker('CFrameFlyKeybind', {
@@ -3693,11 +3387,13 @@ _78:AddSlider('FlySpeed', {
 local _NoclipToggle = _78:AddToggle('Noclip', {
     Text = 'NoClip',
     Default = false,
+    Searchable = true,
 })
 
 normalone = _78:AddToggle('Spinbot', {
     Text = 'Spinbot',
     Default = false,
+    Searchable = true,
 })
 
 _78:AddSlider('SpinbotSpeed', {
@@ -3795,6 +3491,7 @@ _78:AddSlider('WalkSpeed', {
 local _JPToggle = _78:AddToggle('JumpPowerEnabled', {
     Text = 'Jump Power',
     Default = false,
+    Searchable = true,
 })
 
 _JPToggle:AddKeyPicker('JumpPowerKeybind', {
@@ -3819,6 +3516,7 @@ _78:AddLabel('#Love ur neighbors')
 _78:AddToggle('SpreadEnabled', {
     Text = 'Spread Modifier',
     Default = false,
+    Searchable = true,
 })
 
 _78:AddSlider('SpreadAmount', {
@@ -3852,6 +3550,7 @@ _78:AddDivider()
 Toolmat = _78:AddToggle('ToolMat', {
     Text = 'Tool Material',
     Default = false,
+    Searchable = true,
 })
 Toolmat:AddColorPicker('ToolMatColor', {
     Default = Color3.fromRGB(142, 242, 255),
@@ -3976,18 +3675,21 @@ local _AR_Toggle = _78:AddToggle('AutoReload', {
     Text = 'Auto Reload',
     Default = true,
     Tooltip = 'reloads for u',
+    Searchable = true,
 })
 
 local _AutoEquipDBToggle = _78:AddToggle('AutoEquipDB', {
     Text = 'Auto Equip DB',
     Default = false,
     Tooltip = 'its in the name',
+    Searchable = true,
 })
 
 local _ForceRestToggle = _78:AddToggle('ForceRest', {
     Text = 'Auto Force Reset',
     Default = false,
     Tooltip = 'auto reset on death',
+    Searchable = true,
 })
 _ForceRestToggle:OnChanged(function(value)
     _ForceRestEnabled = value
@@ -3997,6 +3699,7 @@ _78:AddToggle('RapidFireEnabled', {
     Text = 'Rapid Fire',
     Default = false,
     Tooltip = 'makes ur gun shoot le fast',
+    Searchable = true,
 })
 
 RapidDep = _78:AddDependencyBox()
@@ -4814,12 +4517,14 @@ _78:AddToggle('AutoStim', {
     Text = 'Auto Stim',
     Default = false,
     Tooltip = 'gets a stim for u and uses it',
+    Searchable = true,
 })
 
 _78:AddToggle('BuyStim', {
     Text = 'Buy Stim',
     Default = false,
     Tooltip = 'buys a stim when u dont have one on u - turn on auto stim',
+    Searchable = true,
 })
 
 _78:AddSlider('AutoStimThreshold', {
@@ -5213,6 +4918,7 @@ _78:AddToggle('AutoMask', {
     Text = 'Auto Mask',
     Default = false,
     Tooltip = 'automatically grabs and puts on a mask for u',
+    Searchable = true,
 })
 
 Toggles.AutoMask:OnChanged(function(value)
@@ -5240,6 +4946,7 @@ local _AutoArmorToggle = _78:AddToggle('AutoArmor', {
     Text = 'Auto Armor',
     Default = false,
     Tooltip = 'gets armor for u',
+    Searchable = true,
 })
 
 local _AutoArmorThresholdSlider = _78:AddSlider('AutoArmorThreshold', {
@@ -5261,18 +4968,22 @@ _78:AddLabel('Player ESP')
 local _ESPEnabled = _78:AddToggle('ESPEnabled', {
     Text = 'ESP Enabled',
     Default = true,
+    Searchable = true,
 })
 _78:AddToggle('ESPShowNames', {
     Text = 'Player Names',
     Default = true,
+    Searchable = true,
 })
 _78:AddToggle('ESPShowDistance', {
     Text = 'Distance',
     Default = false,
+    Searchable = true,
 })
 _78:AddToggle('ESPShowHealth', {
     Text = 'Health',
     Default = false,
+    Searchable = true,
 })
 
 _G.box_esp_connection = nil
@@ -5284,6 +4995,7 @@ _G.box_esp_bar_types = {}
 BoxESPToggle = _78:AddToggle('BoxESPEnabled', {
     Text = 'Box ESP',
     Default = false,
+    Searchable = true,
 })
 
 BoxESPColor = BoxESPToggle:AddColorPicker('BoxESPColor', {
@@ -5307,6 +5019,7 @@ BoxESPDep:SetupDependencies({
 local _SkeletonToggle = _78:AddToggle('ESPShowSkeleton', {
     Text = 'Skeleton',
     Default = false,
+    Searchable = true,
 })
 local _SkeletonColor = _SkeletonToggle:AddColorPicker('SkeletonColor', {
     Default = Color3.fromRGB(255, 255, 255),
@@ -5538,6 +5251,7 @@ end
 _78:AddToggle('MarinESP', {
     Text = 'Marin ESP',
     Default = false,
+    Searchable = true,
     Callback = function(value)
         ImageESP_Enabled = value
         if value then
@@ -5828,6 +5542,7 @@ function ChinaHat:setOffsetY(o) offsetY = o end
 chinahattoggle = _78:AddToggle("ChinaHatEnabled", {
     Text = "China Hat",
     Default = false,
+    Searchable = true,
 })
 
 ChinaHatDep = _78:AddDependencyBox()
@@ -5855,6 +5570,7 @@ chinahattoggle:AddColorPicker("ChinaHatColor4", {
 ChinaHatDep:AddToggle("ChinaHatSelfEnabled", {
     Text = "Self China Hat",
     Default = false,
+    Searchable = true,
 })
 
 ChinaHatDep:AddSlider("ChinaHatRadius", {
@@ -6153,6 +5869,7 @@ GunVisuals:AddToggle('PlayerBulletTracers', {
     Text = 'Bullet Tracers',
     Default = false,
     Callback = function(v) BT_Enabled = v BT_Refresh() end,
+    Searchable = true,
 })
 
 GunVisuals:AddDropdown('PlayerBulletTracersType', {
@@ -6472,6 +6189,7 @@ end)
 AnimationSection:AddToggle('AnimSetEnabled', {
     Text = 'Apply Animation',
     Default = false,
+    Searchable = true,
 })
 
 AnimationSection:AddDropdown('AnimSet', {
@@ -6894,6 +6612,7 @@ _78:AddDivider()
 SC_Toggle = _78:AddToggle("SelfChamsToggle", {
     Text = "Character Material",
     Default = false,
+    Searchable = true,
 })
 
 SC_Toggle:AddColorPicker("SelfChamsColor", {
@@ -6940,6 +6659,7 @@ SC_DepBox:AddDropdown("SelfChamsAddEffect", {
 SC_ParticleToggle = SC_DepBox:AddToggle("SelfChamsParticlesEnabled", {
     Text = "Particle Settings",
     Default = false,
+    Searchable = true,
 })
 
 SC_ParticleToggle:AddColorPicker("SelfChamsParticleColor", {
@@ -7137,6 +6857,7 @@ _78:AddLabel('Extra')
 local _afkto = _78:AddToggle('AntiAFK', {
     Text = 'Anti AFK',
     Default = false,
+    Searchable = true,
 })
 
 _afkConn = nil
@@ -7233,6 +6954,7 @@ end
 local antiStompToggle = _78:AddToggle('AntiStompEnabled', {
     Text = 'Anti Stomp',
     Default = false,
+    Searchable = true,
 })
 
 antiStompToggle:OnChanged(function()
@@ -7255,6 +6977,7 @@ _78:AddToggle("AntiSlowdown", {
     Text = "Anti Slowdown",
     Default = false,
     Tooltip = "Prevents walk speed from going below 25",
+    Searchable = true,
     Callback = function(Value)
         if Value then
             task.spawn(function()
@@ -7273,6 +6996,7 @@ _78:AddToggle("AntiSlowdown", {
 _78:AddToggle("AntiJumpCooldown", {
     Text = "Anti Jump Cooldown",
     Default = false,
+    Searchable = true,
     Tooltip = "Prevents jump power from being reduced",
     Callback = function(Value)
         if Value then
@@ -7355,6 +7079,7 @@ _G.serverHopOnMod = false
 _78:AddToggle('ModDetectorEnabled', {
     Text = 'Mod Detector',
     Default = false,
+    Searchable = true,
 })
 
 Toggles.ModDetectorEnabled:OnChanged(function(v3k7m9n2)
@@ -7628,6 +7353,7 @@ local StompEnabled = false
 local StompToggle = _78:AddToggle('AutoStomp', {
     Text = 'Auto Stomp',
     Default = false,
+    Searchable = true,
 })
 
 StompDep = _78:AddDependencyBox()
@@ -7692,6 +7418,7 @@ GRAB_REMOTES = {
 GrabToggle = _78:AddToggle('AutoGrab', {
     Text = 'Auto Grab',
     Default = false,
+    Searchable = true,
 })
 
 -- Circle Defense
@@ -7718,6 +7445,7 @@ DefenseCircleIsControlling = false
 local DefenseCircleToggle = _67ha:AddToggle('DefenseCircleToggle', {
     Text = 'Defense Circle',
     Default = false,
+    Searchable = true,
 })
 DefenseCircleToggle:AddColorPicker('DefenseCircleColor', {
     Default = Color3.fromRGB(255, 50, 50),
@@ -7745,6 +7473,7 @@ local DefenseCircleRadiusSlider = _67ha:AddSlider('DefenseCircleRadius', {
 local DefenseCircleVisualToggle = _67ha:AddToggle('DefenseCircleVisual', {
     Text = 'Show Circle Visual',
     Default = true,
+    Searchable = true,
 })
 
 local _95 = _83(_82)
@@ -12657,6 +12386,7 @@ end
 AFKToggle = _78:AddToggle('AlwaysAFK', {
     Text = 'Always AFK',
     Default = false,
+    Searchable = true,
 })
 
 AFKToggle:OnChanged(function(value)
@@ -15962,6 +15692,350 @@ if Toggles.Deflect then
         end
     end)
 end
+
+-- Status HUD
+do
+    Players_S       = game:GetService("Players")
+    RunService_S    = game:GetService("RunService")
+    TweenService_S  = game:GetService("TweenService")
+    Stats_S         = game:GetService("Stats")
+
+    StatusHud = StatusHud or {}
+    StatusHud.enabled        = false
+    StatusHud.color          = Color3.fromRGB(255, 255, 255)
+    StatusHud.shadowColor    = Color3.fromRGB(0, 0, 0)
+    StatusHud.position       = UDim2.new(0.5, 0, 1, -125)
+    StatusHud.size           = UDim2.new(0, 560, 0, 0)
+    StatusHud.maxWidth       = 560
+    StatusHud.gui            = nil
+    StatusHud.container      = nil
+    StatusHud.targetLabel    = nil
+    StatusHud.rageLabel      = nil
+    StatusHud.activeLabel    = nil
+    StatusHud.watermarkLabel = nil
+    StatusHud.conn           = nil
+    StatusHud.activeLast     = ""
+    StatusHud.visible        = false
+    StatusHud._hideTask      = nil
+    _G.StatusHudSettings     = StatusHud
+
+    StatusHud.Features = {
+        { key = "Enabled",          label = "Silent Aim" },
+        { key = "CFrameFly",        label = "Cframe Fly" },
+        { key = "WalkSpeedEnabled", label = "WalkSpeed" },
+        { key = "ESPEnabled",       label = "ESP" },
+    }
+
+    function StatusHud_makeLabel(parent, order, size)
+        local lbl = Instance.new("TextLabel")
+        lbl.BackgroundTransparency = 1
+        lbl.BorderSizePixel = 0
+        lbl.Size = UDim2.new(1, 0, 0, size)
+        lbl.Font = Enum.Font.Code
+        lbl.TextSize = size
+        lbl.TextColor3 = StatusHud.color
+        lbl.TextXAlignment = Enum.TextXAlignment.Center
+        lbl.TextYAlignment = Enum.TextYAlignment.Center
+        lbl.TextStrokeTransparency = 0.2
+        lbl.TextStrokeColor3 = StatusHud.shadowColor
+        lbl.TextWrapped = true
+        lbl.Text = ""
+        lbl.LayoutOrder = order
+        lbl.Parent = parent
+        return lbl
+    end
+
+    function StatusHud_destroyGui()
+        if StatusHud.gui then
+            pcall(function() StatusHud.gui:Destroy() end)
+        end
+        StatusHud.gui            = nil
+        StatusHud.container      = nil
+        StatusHud.targetLabel    = nil
+        StatusHud.rageLabel      = nil
+        StatusHud.activeLabel    = nil
+        StatusHud.watermarkLabel = nil
+        StatusHud.visible        = false
+    end
+
+    function StatusHud_createGui()
+        if StatusHud.gui and StatusHud.gui.Parent then return end
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "\0StatusHud"
+        gui.ResetOnSpawn = false
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 999
+
+        local parented = false
+        pcall(function()
+            if gethui then
+                gui.Parent = gethui()
+                parented = true
+            end
+        end)
+        if not parented then
+            pcall(function()
+                if syn and syn.protect_gui then
+                    syn.protect_gui(gui)
+                end
+            end)
+            local ok = pcall(function() gui.Parent = game:GetService("CoreGui") end)
+            if ok and gui.Parent then
+                parented = true
+            end
+        end
+        if not parented then
+            local lp = Players_S.LocalPlayer
+            local pg = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+            if pg then
+                gui.Parent = pg
+            end
+        end
+
+        if not gui.Parent then
+            warn("no valid parent for status")
+            return
+        end
+
+        local container = Instance.new("Frame")
+        container.Name = "Container"
+        container.BackgroundTransparency = 1
+        container.BorderSizePixel = 0
+        container.AnchorPoint = Vector2.new(0.5, 1)
+        container.Position = UDim2.new(0.5, 0, 1, -20)
+        container.Size = UDim2.new(0, StatusHud.maxWidth, 0, 0)
+        container.AutomaticSize = Enum.AutomaticSize.Y
+        container.ClipsDescendants = true
+        container.Visible = false
+        container.Parent = gui
+
+        local layout = Instance.new("UIListLayout")
+        layout.FillDirection = Enum.FillDirection.Vertical
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        layout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        layout.Padding = UDim.new(0, 2)
+        layout.Parent = container
+
+        StatusHud.targetLabel    = StatusHud_makeLabel(container, 1, 15)
+        StatusHud.rageLabel      = StatusHud_makeLabel(container, 2, 15)
+        StatusHud.activeLabel    = StatusHud_makeLabel(container, 3, 15)
+        StatusHud.watermarkLabel = StatusHud_makeLabel(container, 4, 13)
+
+        StatusHud.container = container
+        StatusHud.gui = gui
+        StatusHud.visible = false
+    end
+
+    function StatusHud_getPing()
+        local net = Stats_S:FindFirstChild("Network")
+        if not net then return nil end
+        local ssi = net:FindFirstChild("ServerStatsItem")
+        if not ssi then return nil end
+        local dp = ssi:FindFirstChild("Data Ping")
+        if not dp then return nil end
+        local ok, v = pcall(function() return dp:GetValue() end)
+        if ok and type(v) == "number" then return math.floor(v) end
+        return nil
+    end
+
+    function StatusHud_getTargetStatus(target)
+        if not target or not target.Parent then
+            return "N/A", "N/A"
+        end
+        local char = target.Character
+        if not char or not char.Parent then
+            return target.Name, "N/A"
+        end
+        if isDead and isDead(target) then
+            return target.Name, "Dead"
+        end
+        if IsTargetKO and IsTargetKO(target) then
+            return target.Name, "K.O"
+        end
+        if _orbitTargetValid and _orbitTargetValid(target) then
+            return target.Name, "Alive"
+        end
+        return target.Name, "N/A"
+    end
+
+    function StatusHud_getRagebotStatus()
+        if not OrbitEnabled then return "N/A" end
+        if Disengaging then return "Disengaging" end
+        if IdleState == "hiding" then
+            if IdleReason == "spam"   then return "Idle Spam (Void)" end
+            if IdleReason == "ko"     then return "Idle K.O (Void)" end
+            if IdleReason == "reload" then return "Idle Reload (Void)" end
+            return "Idling (Void)"
+        end
+        if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
+        if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
+        if stomping then return "Stomping" end
+        if EngagementActive then return "Orbiting" end
+        return "On"
+    end
+
+    function StatusHud_isToggleOn(key)
+        local t = Toggles and Toggles[key]
+        if not t then return false end
+        return t.Value == true
+    end
+
+    function StatusHud_getActiveFeatures()
+        local list = {}
+        local feats = StatusHud.Features
+        for i = 1, #feats do
+            local f = feats[i]
+            if StatusHud_isToggleOn(f.key) then
+                list[#list + 1] = f.label
+            end
+        end
+        if #list == 0 then return "N/A" end
+        return table.concat(list, ", ")
+    end
+
+    function StatusHud_popContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = StatusHud.position
+        }):Play()
+    end
+
+    function StatusHud_popOutContainer()
+        if not StatusHud.container then return end
+        local info = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0)
+        TweenService_S:Create(StatusHud.container, info, {
+            Position = UDim2.new(0.5, 0, 1, -20)
+        }):Play()
+    end
+
+    function StatusHud_flashLabel(lbl)
+        if not lbl then return end
+        local info = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
+        lbl.TextColor3 = Color3.fromRGB(180, 255, 180)
+        TweenService_S:Create(lbl, info, { TextColor3 = StatusHud.color }):Play()
+    end
+
+    function StatusHud_update()
+        if not StatusHud.targetLabel or not StatusHud.targetLabel.Parent then return end
+        local target = _104 and _104.targetplayer
+        local tName, tStatus = StatusHud_getTargetStatus(target)
+        local rb = StatusHud_getRagebotStatus()
+
+        local activeStr = StatusHud_getActiveFeatures()
+        local hasActive  = activeStr ~= "N/A"
+        local hasTarget  = target ~= nil
+        local rbOn       = OrbitEnabled == true
+
+        local shouldShow = hasActive or hasTarget or rbOn or StatusHud.enabled
+        if not shouldShow then
+            if StatusHud.visible then
+                StatusHud.visible = false
+                StatusHud_popOutContainer()
+                if StatusHud._hideTask then
+                    pcall(task.cancel, StatusHud._hideTask)
+                    StatusHud._hideTask = nil
+                end
+                StatusHud._hideTask = task.delay(0.2, function()
+                    StatusHud._hideTask = nil
+                    if StatusHud.container and not StatusHud.visible then
+                        StatusHud.container.Visible = false
+                    end
+                end)
+            end
+            return
+        end
+
+        if not StatusHud.visible then
+            StatusHud.visible = true
+            StatusHud.container.Visible = true
+            StatusHud.container.Position = UDim2.new(0.5, 0, 1, -20)
+            StatusHud_popContainer()
+        end
+
+        StatusHud.targetLabel.Text    = string.format("Target: %s [%s]", tName, tStatus)
+        StatusHud.rageLabel.Text      = string.format("Ragebot Status: %s", rb)
+
+        if activeStr ~= StatusHud.activeLast then
+            StatusHud.activeLabel.Text = "Active: " .. activeStr
+            StatusHud_flashLabel(StatusHud.activeLabel)
+            StatusHud.activeLast = activeStr
+        end
+
+        StatusHud.watermarkLabel.Text = "Rawr.xyz <3 | discord.gg/eMpUQzFrNG"
+    end
+
+    function StatusHud_start()
+        StatusHud_createGui()
+        StatusHud.activeLast = "\0"
+        if StatusHud.conn then return end
+        StatusHud.conn = RunService_S.RenderStepped:Connect(function()
+            pcall(StatusHud_update)
+        end)
+    end
+
+    function StatusHud_stop()
+        if StatusHud.conn then
+            StatusHud.conn:Disconnect()
+            StatusHud.conn = nil
+        end
+        if StatusHud._hideTask then
+            pcall(task.cancel, StatusHud._hideTask)
+            StatusHud._hideTask = nil
+        end
+        StatusHud_destroyGui()
+    end
+
+    function StatusHud_setEnabled(v)
+        StatusHud.enabled = v and true or false
+        if StatusHud.enabled then
+            StatusHud_start()
+        else
+            StatusHud_stop()
+        end
+    end
+
+    function StatusHud_setTextColor(v)
+        StatusHud.color = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextColor3 = v end
+        end
+    end
+
+    function StatusHud_setShadowColor(v)
+        StatusHud.shadowColor = v
+        for _, l in ipairs({ StatusHud.targetLabel, StatusHud.rageLabel, StatusHud.activeLabel, StatusHud.watermarkLabel }) do
+            if l then l.TextStrokeColor3 = v end
+        end
+    end
+
+    function StatusHud_cleanup()
+        if StatusHud.conn then
+            pcall(function() StatusHud.conn:Disconnect() end)
+            StatusHud.conn = nil
+        end
+        if StatusHud._hideTask then
+            pcall(task.cancel, StatusHud._hideTask)
+            StatusHud._hideTask = nil
+        end
+        StatusHud_destroyGui()
+    end
+end
+
+Toggles.StatusHud:OnChanged(function(v)
+    StatusHud_setEnabled(v)
+end)
+
+Options.StatusHudTextColor:OnChanged(function(v)
+    StatusHud_setTextColor(v)
+end)
+
+Options.StatusHudShadowColor:OnChanged(function(v)
+    StatusHud_setShadowColor(v)
+end)
 
 _48:OnUnload(function()
     _AR_Running = false
