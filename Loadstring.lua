@@ -13491,7 +13491,7 @@ local REFRESH_COOLDOWN = 3
 
 local currentTargetPlayer = nil
 
-local function updateCurrentTarget()
+function updateCurrentTarget()
     if _104 and _104.targetplayer then
         currentTargetPlayer = _104.targetplayer
     elseif shared and shared.hitman and shared.hitman.silent and shared.hitman.silent.target then
@@ -16255,7 +16255,7 @@ do
         return ignored:FindFirstChild("Shop")
     end
 
-    local function _AA_scanArmorValue()
+    function _AA_scanArmorValue()
         local char = _56.Character
         if not char then return nil end
         local be = char:FindFirstChild("BodyEffects")
