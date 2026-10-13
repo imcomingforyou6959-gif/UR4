@@ -7447,12 +7447,14 @@ _50:LoadAutoloadConfig()
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Watermark.lua'))()
 task.wait(1)
 
-setfflag("DebugRunParallelLuaOnMainThread", "true")
-setfflag("FFlagUserEnablePlayerCharacterDestroyBehavior", "true")
-setfflag("FIntRenderShadowIntensity", 0)
-setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
-setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
-setfflag("DFIntConnectionMTUSize", "1472")
+pcall(function()
+    setfflag("DebugRunParallelLuaOnMainThread", "true")
+    setfflag("FFlagUserEnablePlayerCharacterDestroyBehavior", "true")
+    setfflag("FIntRenderShadowIntensity", 0)
+    setfflag("DFIntCSGLevelOfDetailSwitchingDistance", 0)
+    setfflag("FIntTaskSchedulerAutoThreadLimit", "6")
+    setfflag("DFIntConnectionMTUSize", "1472")
+end)
 
 local _104 = {
     enabled = false,
@@ -11631,13 +11633,17 @@ do
 
     do_automatic_physics = function()
         if setfflag then
-            setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+            pcall(function()
+                setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+            end)
         end
     end
 
     do_automatic_data = function()
         if setfflag then
-            setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+            pcall(function()
+                setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+            end)
         end
     end
 
@@ -11648,12 +11654,18 @@ do
 
         if Toggles.SenderRateValue and Toggles.SenderRateValue.Value then
             if rateType == "custom" then
-                setfflag("S2PhysicsSenderRate", tostring(Options.SenderRateValueRate and Options.SenderRateValueRate.Value or 15))
+                pcall(function()
+                    setfflag("S2PhysicsSenderRate", tostring(Options.SenderRateValueRate and Options.SenderRateValueRate.Value or 15))
+                end)
             else
-                setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+                pcall(function()
+                    setfflag("S2PhysicsSenderRate", tostring(math.floor(local_fps or 60)))
+                end)
             end
         else
-            setfflag("S2PhysicsSenderRate", old_physics_rate)
+            pcall(function()
+                setfflag("S2PhysicsSenderRate", old_physics_rate)
+            end)
         end
     end
 
@@ -11664,12 +11676,18 @@ do
 
         if Toggles.DataSenderRateValue and Toggles.DataSenderRateValue.Value then
             if rateType == "custom" then
-                setfflag("DFIntDataSenderRate", tostring(Options.DataSenderRateValueRate and Options.DataSenderRateValueRate.Value or 15))
+                pcall(function()
+                    setfflag("DFIntDataSenderRate", tostring(Options.DataSenderRateValueRate and Options.DataSenderRateValueRate.Value or 15))
+                end)
             else
-                setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+                pcall(function()
+                    setfflag("DFIntDataSenderRate", tostring(math.floor(local_fps or 60)))
+                end)
             end
         else
-            setfflag("DFIntDataSenderRate", old_data_rate)
+            pcall(function()
+                setfflag("DFIntDataSenderRate", old_data_rate)
+            end)
         end
     end
 
