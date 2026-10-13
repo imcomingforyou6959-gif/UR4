@@ -2758,6 +2758,9 @@ _62:AddToggle('TargetInfo', {
     Text = 'Target Info',
     Default = false,
     Searchable = true,
+}):AddColorPicker('TargetInfoTextColor', {
+    Default = Color3.fromRGB(255, 255, 255),
+    Title = 'Text Color',
 })
 
 _62:AddDropdown('WatermarkPosition', {
@@ -3720,7 +3723,7 @@ RapidMethod = "new"
 RapidOldEnabled = false
 RapidOldFiring = false
 RapidOldTool = nil
-RapidOldFireRate = 0.03
+RapidOldFireRate = 0.01
 RapidOldCharConns = {}
 RapidOldToolConns = {}
 RapidOldInputBeganConn = nil
@@ -9649,6 +9652,11 @@ local function _194()
         _135.Text = ""
         return
     end
+
+    if shared.hitman and shared.hitman.visuals and shared.hitman.visuals.targetinfo then
+        _135.TextColor3 = shared.hitman.visuals.targetinfo.textcolor
+    end
+
     if _isMode("target all") or _isMode("multi") then
         local _174 = _173()
         local _195 = 0
@@ -9679,10 +9687,23 @@ local function _194()
                     end
                 end
                 _104.lasthealth[_154] = _148.Health
-                _135.Text = string.format("%s  %.0f/%.0f",
+
+                local _armor = 0
+                local _wp = workspace:FindFirstChild("Players")
+                local _wpEntry = _wp and _wp:FindFirstChild(_154.Name)
+                local _bodyFx = _wpEntry and _wpEntry:FindFirstChild("BodyEffects")
+                local _armorVal = _bodyFx and _bodyFx:FindFirstChild("Armor")
+                if _armorVal and _armorVal:IsA("NumberValue") then
+                    _armor = math.floor(_armorVal.Value)
+                elseif _armorVal and _armorVal:IsA("IntValue") then
+                    _armor = _armorVal.Value
+                end
+
+                _135.Text = string.format("%s  %.0f/%.0f  |  %d ARMOR",
                     _154.DisplayName,
                     math.floor(_148.Health),
-                    math.floor(_148.MaxHealth)
+                    math.floor(_148.MaxHealth),
+                    _armor
                 )
             else
                 _135.Text = _154.DisplayName .. " (Knocked wait...)"
@@ -13398,12 +13419,18 @@ Toggles.ManipulatedText:OnChanged(function(value)
 end)
 
 Toggles.TargetInfo:OnChanged(function(value)
+    shared.hitman.visuals.targetinfo.enabled = value
     if not value then
         _135.Visible = false
     elseif _104.active then
         _135.Visible = true
         _194()
     end
+end)
+
+Options.TargetInfoTextColor:OnChanged(function(v)
+    shared.hitman.visuals.targetinfo.textcolor = v
+    if _135 then _135.TextColor3 = v end
 end)
 
 Toggles.Line:OnChanged(function(value)
