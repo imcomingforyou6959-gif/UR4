@@ -441,6 +441,59 @@ function Library:GetDarkerColor(Color)
 end;
 Library.AccentColorDark = Library:GetDarkerColor(Library.AccentColor);
 
+-- =====================================================================
+-- Color transparency (driven by the color pickers in ThemeManager)
+-- Every frame whose BackgroundColor3 is registered to BackgroundColor / MainColor /
+-- AccentColor gets that color's transparency. Only the main window is affected.
+-- =====================================================================
+Library.ColorTransparency = { BackgroundColor = 0; MainColor = 0; AccentColor = 0; };
+Library.TransparencyCache = {};   -- shared with the open/close fade in CreateWindow
+Library.IsOpen = false;
+Library.WindowOuter = nil;
+
+-- sets a transparency prop and keeps the open/close fade cache in sync
+function Library:SetTransparencyProp(Inst, Prop, Value)
+    local Cache = Library.TransparencyCache[Inst];
+
+    if Cache and Cache[Prop] ~= nil then
+        Cache[Prop] = Value;
+        if not Library.IsOpen then
+            return; -- menu is faded out, it will fade in to the new value
+        end;
+    end;
+
+    Inst[Prop] = Value;
+end;
+
+-- applies the transparency of whatever color key an instance's background is registered to
+function Library:ApplyColorTransparency(Inst)
+    local Window = Library.WindowOuter;
+    if not Window or not Inst.Parent then return end;
+
+    local Reg = Library.RegistryMap[Inst];
+    if not Reg then return end;
+
+    local Key = Reg.Properties.BackgroundColor3;
+    if type(Key) ~= 'string' then return end;
+
+    local T = Library.ColorTransparency[Key];
+    if T == nil then return end;
+
+    -- only the main window, and not the search results list (zindex 30+)
+    if not Inst:IsDescendantOf(Window) or Inst.ZIndex >= 30 then return end;
+
+    Library:SetTransparencyProp(Inst, 'BackgroundTransparency', T);
+
+    -- the black outline frame behind an inset frame would show through, so match it
+    local Parent = Inst.Parent;
+    if Parent and Parent:IsA('Frame') and Inst.BorderMode == Enum.BorderMode.Inset then
+        local ParentReg = Library.RegistryMap[Parent];
+        if not (ParentReg and ParentReg.Properties.BackgroundColor3) then
+            Library:SetTransparencyProp(Parent, 'BackgroundTransparency', T);
+        end;
+    end;
+end;
+
 function Library:AddToRegistry(Instance, Properties, IsHud)
     local Idx = #Library.Registry + 1;
     local Data = {
@@ -454,6 +507,15 @@ function Library:AddToRegistry(Instance, Properties, IsHud)
 
     if IsHud then
         table.insert(Library.HudRegistry, Data);
+    end;
+
+    if Properties.BackgroundColor3 and Instance:IsA('GuiObject') then
+        -- some elements swap their background color at runtime (tabs, toggles), so re-apply when it changes
+        Instance:GetPropertyChangedSignal('BackgroundColor3'):Connect(function()
+            task.defer(Library.ApplyColorTransparency, Library, Instance);
+        end);
+
+        Library:ApplyColorTransparency(Instance);
     end;
 end;
 
@@ -478,16 +540,6 @@ function Library:RemoveFromRegistry(Instance)
 end;
 
 function Library:UpdateColorsUsingRegistry()
-    -- TODO: Could have an 'active' list of objects
-    -- where the active list only contains Visible objects.
-
-    -- IMPL: Could setup .Changed events on the AddToRegistry function
-    -- that listens for the 'Visible' propert being changed.
-    -- Visible: true => Add to active list, and call UpdateColors function
-    -- Visible: false => Remove from active list.
-
-    -- The above would be especially efficient for a rainbow menu color or live color-changing.
-
     for Idx, Object in next, Library.Registry do
         for Property, ColorIdx in next, Object.Properties do
             if type(ColorIdx) == 'string' then
@@ -496,249 +548,11 @@ function Library:UpdateColorsUsingRegistry()
                 Object.Instance[Property] = ColorIdx()
             end
         end;
-    end;
-end;
 
--- =====================================================================
--- Background image + transparency system
--- =====================================================================
-Library.Transparency = { Window = 0; Group = 0; Inline = 0; };
-Library.TransparencyTargets = {
-    Window = setmetatable({}, { __mode = 'k' });
-    Group  = setmetatable({}, { __mode = 'k' });
-    Inline = setmetatable({}, { __mode = 'k' });
-};
-Library.TransparencyCache = {};   -- shared with the open/close fade in CreateWindow
-Library.IsOpen = false;
-
-Library.BackgroundImageActive = false;
-Library.BackgroundImageLabel = nil;
-Library.BackgroundImageTransparency = 0;
-Library.BackgroundScaleType = 'Crop';
-Library.BackgroundScaleTypes = {
-    Crop = Enum.ScaleType.Crop;
-    Stretch = Enum.ScaleType.Stretch;
-    Fit = Enum.ScaleType.Fit;
-};
-Library.BackgroundRequest = 0;
-Library.BackgroundSource = '';
-Library.BackgroundFolder = 'woodie/assets/backgrounds';
-
-function Library:GetLayerTransparency(Layer)
-    -- while an image is active the window panels must be see-through or they'd cover it
-    if Layer == 'Window' and Library.BackgroundImageActive then
-        return 1;
-    end;
-    return Library.Transparency[Layer] or 0;
-end;
-
--- sets a transparency prop and keeps the open/close fade cache in sync
-function Library:SetTransparencyProp(Inst, Prop, Value)
-    local Cache = Library.TransparencyCache[Inst];
-
-    if Cache and Cache[Prop] ~= nil then
-        Cache[Prop] = Value;
-        if not Library.IsOpen then
-            return; -- menu is faded out, it will fade in to the new value
+        if Object.Properties.BackgroundColor3 then
+            Library:ApplyColorTransparency(Object.Instance);
         end;
     end;
-
-    Inst[Prop] = Value;
-end;
-
-function Library:AddTransparency(Layer, Inst, Prop, Condition)
-    Prop = Prop or 'BackgroundTransparency';
-    Library.TransparencyTargets[Layer][Inst] = { Prop = Prop; If = Condition; };
-
-    if (not Condition) or Condition() then
-        Library:SetTransparencyProp(Inst, Prop, Library:GetLayerTransparency(Layer));
-    end;
-end;
-
-function Library:AddTransparent(Layer, ...)
-    for _, Inst in next, { ... } do
-        Library:AddTransparency(Layer, Inst);
-    end;
-end;
-
-function Library:ApplyTransparency(Layer)
-    local Layers = Layer and { Layer } or { 'Window', 'Group', 'Inline' };
-
-    for _, Name in next, Layers do
-        local Value = Library:GetLayerTransparency(Name);
-
-        for Inst, Data in next, Library.TransparencyTargets[Name] do
-            if Inst.Parent and ((not Data.If) or Data.If()) then
-                Library:SetTransparencyProp(Inst, Data.Prop, Value);
-            end;
-        end;
-    end;
-end;
-
-function Library:SetLayerTransparency(Layer, Value)
-    Library.Transparency[Layer] = math.clamp(tonumber(Value) or 0, 0, 1);
-    Library:ApplyTransparency(Layer);
-end;
-
-function Library:SetBackgroundImageTransparency(Value)
-    Library.BackgroundImageTransparency = math.clamp(tonumber(Value) or 0, 0, 1);
-
-    if Library.BackgroundImageLabel then
-        Library:SetTransparencyProp(Library.BackgroundImageLabel, 'ImageTransparency', Library.BackgroundImageTransparency);
-    end;
-end;
-
-function Library:SetBackgroundScaleType(Name)
-    if not Library.BackgroundScaleTypes[Name] then return end;
-
-    Library.BackgroundScaleType = Name;
-
-    if Library.BackgroundImageLabel then
-        Library.BackgroundImageLabel.ScaleType = Library.BackgroundScaleTypes[Name];
-    end;
-end;
-
-function Library:ClearBackgroundImage()
-    Library.BackgroundRequest = Library.BackgroundRequest + 1;
-    Library.BackgroundImageActive = false;
-    Library.BackgroundSource = '';
-
-    if Library.BackgroundImageLabel then
-        Library.BackgroundImageLabel.Visible = false;
-        Library.BackgroundImageLabel.Image = '';
-    end;
-
-    Library:ApplyTransparency('Window');
-end;
-
-local function IsImageData(Data)
-    if type(Data) ~= 'string' or #Data < 16 then return false end;
-    local Head = Data:sub(1, 4);
-    return Head == '\137PNG' or Head:sub(1, 3) == '\255\216\255'; -- png / jpg only (roblox can't read webp/gif)
-end;
-
-local function HashString(Str)
-    local H = 5381;
-    for i = 1, #Str do
-        H = (H * 33 + Str:byte(i)) % 4294967296;
-    end;
-    return string.format('%08x', H);
-end;
-
-local function EnsureFolder(Path)
-    local Built = '';
-    for Part in Path:gmatch('[^/]+') do
-        Built = (Built == '') and Part or (Built .. '/' .. Part);
-        if not isfolder(Built) then makefolder(Built) end;
-    end;
-end;
-
-function Library:ResolveBackgroundSource(Source)
-    if Source:match('^%d+$') then
-        return 'asset', 'rbxassetid://' .. Source;
-    end;
-
-    local Lower = Source:lower();
-
-    if Lower:find('^rbxassetid://') or Lower:find('^rbxasset://') or Lower:find('^rbxthumb://') then
-        return 'asset', Source;
-    end;
-
-    if Lower:find('^https?://') then
-        local Id = Source:match('roblox%.com/asset/?%?id=(%d+)')
-            or Source:match('roblox%.com/library/(%d+)')
-            or Source:match('roblox%.com/store/asset/(%d+)');
-
-        if Id then
-            return 'asset', 'rbxassetid://' .. Id;
-        end;
-
-        return 'url', Source;
-    end;
-
-    return nil;
-end;
-
-function Library:SetBackgroundImage(Source)
-    local Label = Library.BackgroundImageLabel;
-    if not Label then return end;
-
-    Source = (tostring(Source or ''):gsub('^%s+', ''):gsub('%s+$', ''));
-
-    if Source == '' then
-        return Library:ClearBackgroundImage();
-    end;
-
-    local Kind, Resolved = Library:ResolveBackgroundSource(Source);
-    if not Kind then
-        return Library:Notify('Background: use a direct image link or an rbxassetid', 4);
-    end;
-
-    Library.BackgroundRequest = Library.BackgroundRequest + 1;
-    local RequestId = Library.BackgroundRequest;
-
-    task.spawn(function()
-        if Kind == 'url' then
-            local GetAsset = getcustomasset or getsynasset;
-            if not GetAsset then
-                return Library:Notify('Background: your executor has no getcustomasset', 4);
-            end;
-
-            EnsureFolder(Library.BackgroundFolder);
-
-            local Base = Library.BackgroundFolder .. '/bg_' .. HashString(Resolved);
-            local Path = (isfile(Base .. '.png') and (Base .. '.png')) or (isfile(Base .. '.jpg') and (Base .. '.jpg'));
-
-            if not Path then
-                local Ok, Data = pcall(game.HttpGet, game, Resolved);
-
-                if not Ok or not IsImageData(Data) then
-                    return Library:Notify('Background: link must be a direct .png/.jpg (use the raw link)', 4);
-                end;
-
-                Path = Base .. ((Data:sub(1, 4) == '\137PNG') and '.png' or '.jpg');
-                writefile(Path, Data);
-            end;
-
-            local Ok, Asset = pcall(GetAsset, Path);
-            if not Ok or not Asset then
-                return Library:Notify('Background: failed to load the downloaded image', 4);
-            end;
-
-            Resolved = Asset;
-        elseif Resolved:find('^rbxassetid://') then
-            -- verify on a hidden probe so the visible background doesn't flicker
-            local ContentProvider = game:GetService('ContentProvider');
-            local Probe = Library:Create('ImageLabel', { Visible = false; Parent = ScreenGui; });
-
-            local function TryLoad(Content)
-                Probe.Image = Content;
-                pcall(ContentProvider.PreloadAsync, ContentProvider, { Probe });
-                return Probe.IsLoaded;
-            end;
-
-            if not TryLoad(Resolved) then
-                -- decal ids sometimes only resolve through the legacy asset url
-                local Legacy = 'http://www.roblox.com/asset/?id=' .. Resolved:match('%d+');
-
-                if TryLoad(Legacy) then
-                    Resolved = Legacy;
-                else
-                    Library:Notify("Background: couldn't confirm it loaded. If it stays blank, use the Image id (not the Decal id)", 5);
-                end;
-            end;
-
-            Probe:Destroy();
-        end;
-
-        if RequestId ~= Library.BackgroundRequest then return end; -- a newer request took over
-
-        Label.Image = Resolved;
-        Label.Visible = true;
-        Library.BackgroundSource = Source;
-        Library.BackgroundImageActive = true;
-        Library:ApplyTransparency('Window');
-    end);
 end;
 
 function Library:GiveSignal(Signal)
@@ -1406,7 +1220,6 @@ do
             BackgroundColor3 = 'BackgroundColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', PickOuter, PickInner);
 
         local DisplayLabel = Library:CreateLabel({
             Size = UDim2.new(1, 0, 1, 0);
@@ -1849,7 +1662,6 @@ do
                 BackgroundColor3 = 'MainColor';
                 BorderColor3 = 'OutlineColor';
             });
-            Library:AddTransparent('Inline', Outer, Inner);
 
             Library:OnHighlight(Outer, Outer,
                 { BorderColor3 = 'AccentColor' },
@@ -2008,7 +1820,6 @@ do
             BackgroundColor3 = 'MainColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', DividerOuter, DividerInner);
 
         Groupbox:AddBlank(9);
         Groupbox:Resize();
@@ -2060,7 +1871,6 @@ do
             BackgroundColor3 = 'MainColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', TextBoxOuter, TextBoxInner);
 
         Library:OnHighlight(TextBoxOuter, TextBoxOuter,
             { BorderColor3 = 'AccentColor' },
@@ -2242,7 +2052,6 @@ do
             BackgroundColor3 = 'MainColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', ToggleOuter, ToggleInner);
 
         local ToggleLabel = Library:CreateLabel({
             Size = UDim2.new(0, 216, 1, 0);
@@ -2288,6 +2097,8 @@ do
 
             Library.RegistryMap[ToggleInner].Properties.BackgroundColor3 = Toggle.Value and 'AccentColor' or 'MainColor';
             Library.RegistryMap[ToggleInner].Properties.BorderColor3 = Toggle.Value and 'AccentColorDark' or 'OutlineColor';
+
+            Library:ApplyColorTransparency(ToggleInner);
         end;
 
         function Toggle:OnChanged(Func)
@@ -2402,7 +2213,6 @@ do
             BackgroundColor3 = 'MainColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', SliderOuter, SliderInner);
 
         local Fill = Library:Create('Frame', {
             BackgroundColor3 = Library.AccentColor;
@@ -2617,8 +2427,7 @@ do
             BackgroundColor3 = 'MainColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Inline', DropdownOuter, DropdownInner);
-        
+
         Library:Create('UIGradient', {
             Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
@@ -3370,6 +3179,9 @@ function Library:CreateWindow(...)
         Parent = ScreenGui;
     });
 
+    -- everything inside this frame is affected by the color transparency system
+    Library.WindowOuter = Outer;
+
     local Inner = Library:Create('Frame', {
         BackgroundColor3 = Library.MainColor;
         BorderColor3 = Library.AccentColor;
@@ -3383,22 +3195,6 @@ function Library:CreateWindow(...)
     Library:AddToRegistry(Inner, {
         BackgroundColor3 = 'MainColor';
         BorderColor3 = 'AccentColor';
-    });
-
-    Library:AddTransparent('Window', Outer, Inner);
-
-    Library.BackgroundImageLabel = Library:Create('ImageLabel', {
-        Name = 'WindowBackground';
-        BackgroundTransparency = 1;
-        BorderSizePixel = 0;
-        Position = UDim2.fromOffset(1, 1);
-        Size = UDim2.new(1, -2, 1, -2);
-        Image = '';
-        ImageTransparency = Library.BackgroundImageTransparency;
-        ScaleType = Library.BackgroundScaleTypes[Library.BackgroundScaleType];
-        Visible = false;
-        ZIndex = 0;
-        Parent = Inner;
     });
 
     local LOGO_WIDTH  = 300
@@ -3489,8 +3285,6 @@ function Library:CreateWindow(...)
         BorderColor3 = 'OutlineColor';
     });
 
-    Library:AddTransparent('Window', MainSectionOuter, MainSectionInner, TabContainer);
-
     if Config.Search ~= false then
         local ROW_H, MAX_ROWS = 30, 6
 
@@ -3514,7 +3308,6 @@ function Library:CreateWindow(...)
         });
 
         Library:AddToRegistry(SearchInner, { BackgroundColor3 = 'MainColor'; BorderColor3 = 'OutlineColor'; });
-        Library:AddTransparent('Inline', SearchOuter, SearchInner);
         Library:OnHighlight(SearchOuter, SearchOuter, { BorderColor3 = 'AccentColor' }, { BorderColor3 = 'Black' });
 
         local SearchBox = Library:Create('TextBox', {
@@ -3731,7 +3524,6 @@ function Library:CreateWindow(...)
             BackgroundColor3 = 'BackgroundColor';
             BorderColor3 = 'OutlineColor';
         });
-        Library:AddTransparent('Window', TabButton);
 
         local TabButtonLabel = Library:CreateLabel({
             Position = UDim2.new(0, 0, 0, 0);
@@ -3741,12 +3533,13 @@ function Library:CreateWindow(...)
             Parent = TabButton;
         });
 
+        -- hidden via Visible (not transparency) so it doesn't fight the color transparency system
         local Blocker = Library:Create('Frame', {
             BackgroundColor3 = Library.MainColor;
             BorderSizePixel = 0;
             Position = UDim2.new(0, 0, 1, 0);
             Size = UDim2.new(1, 0, 0, 1);
-            BackgroundTransparency = 1;
+            Visible = false;
             ZIndex = 3;
             Parent = TabButton;
         });
@@ -3754,7 +3547,6 @@ function Library:CreateWindow(...)
         Library:AddToRegistry(Blocker, {
             BackgroundColor3 = 'MainColor';
         });
-        Library:AddTransparency('Window', Blocker, 'BackgroundTransparency', function() return Tab.Shown end);
 
         local TabFrame = Library:Create('Frame', {
             Name = 'TabFrame',
@@ -3819,18 +3611,18 @@ function Library:CreateWindow(...)
                 Tab:HideTab();
             end;
 
-            Tab.Shown = true;
-            Library:SetTransparencyProp(Blocker, 'BackgroundTransparency', Library:GetLayerTransparency('Window'));
+            Blocker.Visible = true;
             TabButton.BackgroundColor3 = Library.MainColor;
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = 'MainColor';
+            Library:ApplyColorTransparency(TabButton);
             TabFrame.Visible = true;
         end;
 
         function Tab:HideTab()
-            Tab.Shown = false;
-            Blocker.BackgroundTransparency = 1;
+            Blocker.Visible = false;
             TabButton.BackgroundColor3 = Library.BackgroundColor;
             Library.RegistryMap[TabButton].Properties.BackgroundColor3 = 'BackgroundColor';
+            Library:ApplyColorTransparency(TabButton);
             TabFrame.Visible = false;
         end;
 
@@ -3850,7 +3642,7 @@ function Library:CreateWindow(...)
                 ZIndex = 2;
                 Parent = Info.Side == 1 and LeftSide or RightSide;
             });
-                
+
             Library:AddToRegistry(BoxOuter, {
                 BackgroundColor3 = 'BackgroundColor';
                 BorderColor3 = 'OutlineColor';
@@ -3869,7 +3661,6 @@ function Library:CreateWindow(...)
             Library:AddToRegistry(BoxInner, {
                 BackgroundColor3 = 'BackgroundColor';
             });
-            Library:AddTransparent('Group', BoxOuter, BoxInner);
 
             local Highlight = Library:Create('Frame', {
                 BackgroundColor3 = Library.AccentColor;
@@ -3973,7 +3764,6 @@ function Library:CreateWindow(...)
             Library:AddToRegistry(BoxInner, {
                 BackgroundColor3 = 'BackgroundColor';
             });
-            Library:AddTransparent('Group', BoxOuter, BoxInner);
 
             local Highlight = Library:Create('Frame', {
                 BackgroundColor3 = Library.AccentColor;
@@ -4042,7 +3832,6 @@ function Library:CreateWindow(...)
                 Library:AddToRegistry(Block, {
                     BackgroundColor3 = 'BackgroundColor';
                 });
-                Library:AddTransparent('Group', Button, Block);
 
                 local Container = Library:Create('Frame', {
                     BackgroundTransparency = 1;
@@ -4069,6 +3858,7 @@ function Library:CreateWindow(...)
 
                     Button.BackgroundColor3 = Library.BackgroundColor;
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'BackgroundColor';
+                    Library:ApplyColorTransparency(Button);
 
                     Tab:Resize();
                 end;
@@ -4079,6 +3869,7 @@ function Library:CreateWindow(...)
 
                     Button.BackgroundColor3 = Library.MainColor;
                     Library.RegistryMap[Button].Properties.BackgroundColor3 = 'MainColor';
+                    Library:ApplyColorTransparency(Button);
                 end;
 
                 function Tab:Resize()
