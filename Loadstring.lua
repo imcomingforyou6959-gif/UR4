@@ -136,10 +136,10 @@ if not LocalPlayer then
     return
 end
 
-local _FRPlayers = cloneref and cloneref(game:GetService("Players")) or game:GetService("Players")
-local _FRPlayer = _FRPlayers.LocalPlayer
-local _ForceRestEnabled = false
-local _ForceRestHeartbeat = nil
+_FRPlayers = cloneref and cloneref(game:GetService("Players")) or game:GetService("Players")
+_FRPlayer = _FRPlayers.LocalPlayer
+_ForceRestEnabled = false
+_ForceRestHeartbeat = nil
 
 function forceReset()
     local character = _FRPlayer.Character
