@@ -14,6 +14,7 @@ local SaveManager = {} do
 	SaveManager.Folder = 'LinoriaLibSettings'
 	SaveManager.Ignore = {}
 	SaveManager.OnConfigLoaded = nil
+	SaveManager.LoadedConfig = nil
 	SaveManager.Parser = {
 		Toggle = {
 			Save = function(idx, object) 
@@ -241,8 +242,6 @@ local SaveManager = {} do
 		end)
 	end
 
-	-- ============ clipboard helpers ============
-
 	function SaveManager:CopyToClipboard(text)
 		local copy = setclipboard or toclipboard or (syn and syn.write_clipboard)
 		if not copy then
@@ -255,19 +254,6 @@ local SaveManager = {} do
 		end
 
 		return true
-	end
-
-	function SaveManager:ReadClipboard()
-		if not getclipboard then
-			return nil, 'your executor has no getclipboard function'
-		end
-
-		local ok, text = pcall(getclipboard)
-		if not ok or type(text) ~= 'string' then
-			return nil, 'could not read the clipboard'
-		end
-
-		return text
 	end
 
 	-- ============ save / load / delete ============
@@ -288,6 +274,7 @@ local SaveManager = {} do
 			return false, 'failed to write file: ' .. tostring(err)
 		end
 
+		self.LoadedConfig = name
 		return true
 	end
 
@@ -309,6 +296,7 @@ local SaveManager = {} do
 		end
 
 		self:ApplyData(decoded, name)
+		self.LoadedConfig = name
 		return true
 	end
 
@@ -332,40 +320,20 @@ local SaveManager = {} do
 			self:ClearAutoload()
 		end
 
+		if self.LoadedConfig == name then
+			self.LoadedConfig = nil
+		end
+
 		return true
 	end
 
-	-- ============ export / add ============
+	-- ============ export / import ============
 
-	-- Copies a config to the clipboard with its name embedded in the json.
-	-- If a saved config is selected it exports that one, otherwise it exports
-	-- your live settings under fallbackName.
-	function SaveManager:Export(selectedName, fallbackName)
-		local data, name
-
-		selectedName = sanitizeName(selectedName)
-		if selectedName then
-			local file = self:GetConfigPath(selectedName)
-			if not isfile(file) then
-				return false, 'config does not exist'
-			end
-
-			local readOk, contents = pcall(readfile, file)
-			if not readOk then
-				return false, 'failed to read file'
-			end
-
-			data = self:Decode(contents)
-			if not data then
-				return false, 'config file is corrupted'
-			end
-
-			name = selectedName
-		else
-			data = self:BuildData()
-			name = sanitizeName(fallbackName) or 'exported'
-		end
-
+	-- Copies the currently loaded settings to the clipboard. The json carries the
+	-- name of the loaded config so Import can recreate it under the same name.
+	function SaveManager:Export()
+		local data = self:BuildData()
+		local name = sanitizeName(self.LoadedConfig) or 'exported'
 		data.name = name
 
 		local encoded, encodeErr = self:Encode(data)
@@ -381,13 +349,13 @@ local SaveManager = {} do
 		return true, name
 	end
 
-	-- Takes exported json, reads the name inside it and saves it as a real config.
+	-- Takes pasted json, reads the name inside it and saves it as a real config.
 	-- If that name is taken it becomes "name (2)", "name (3)" and so on.
-	function SaveManager:AddConfig(text, fallbackName)
+	function SaveManager:Import(text)
 		local decoded, err = self:Decode(text)
 		if not decoded then return false, err end
 
-		local base = sanitizeName(decoded.name) or sanitizeName(fallbackName) or 'imported'
+		local base = sanitizeName(decoded.name) or 'imported'
 		local name = base
 		local n = 2
 
@@ -565,42 +533,37 @@ local SaveManager = {} do
 			self.Library:Notify('Cleared autoload config')
 		end)
 
-		-- ===== export / add =====
+		-- ===== export / import =====
 		section:AddDivider()
 
 		section:AddInput('SaveManager_ImportText', { Text = 'Paste config json', Placeholder = 'paste exported json here' })
 
 		section:AddButton('Export', function()
-			local ok, result = self:Export(Options.SaveManager_ConfigList.Value, Options.SaveManager_ConfigName.Value)
+			local ok, result = self:Export()
 			if not ok then
 				return self.Library:Notify('Failed to export: ' .. tostring(result), 3)
 			end
 
 			self.Library:Notify(string.format('Copied %q to clipboard', result), 2)
-		end):AddButton('Add', function()
+		end):AddButton('Import', function()
 			local text = Options.SaveManager_ImportText.Value
 
-			-- empty box? fall back to whatever is on the clipboard
 			if type(text) ~= 'string' or text:match('^%s*$') then
-				local clip, clipErr = self:ReadClipboard()
-				if not clip then
-					return self.Library:Notify('Paste the json first (' .. tostring(clipErr) .. ')', 3)
-				end
-				text = clip
+				return self.Library:Notify('Paste the config json in the box first', 3)
 			end
 
-			local ok, result, renamed = self:AddConfig(text, Options.SaveManager_ConfigName.Value)
+			local ok, result, renamed = self:Import(text)
 			if not ok then
-				return self.Library:Notify('Failed to add config: ' .. tostring(result), 3)
+				return self.Library:Notify('Failed to import: ' .. tostring(result), 3)
 			end
 
 			Options.SaveManager_ImportText:SetValue('')
 			refreshList(result)
 
 			if renamed then
-				self.Library:Notify(string.format('Added as %q (name was taken)', result), 3)
+				self.Library:Notify(string.format('Imported as %q (name was taken)', result), 3)
 			else
-				self.Library:Notify(string.format('Added config %q', result), 2)
+				self.Library:Notify(string.format('Imported config %q', result), 2)
 			end
 		end)
 
