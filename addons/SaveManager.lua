@@ -154,17 +154,10 @@ local SaveManager = {} do
 		return true
 	end
 
-	function SaveManager:Save(name)
-		name = sanitizeName(name)
-		if not name then
-			return false, 'no config file is selected'
-		end
+	-- ============ core data helpers (shared by save, load, import, export) ============
 
-		local fullPath = self:GetConfigPath(name)
-
-		local data = {
-			objects = {}
-		}
+	function SaveManager:BuildData()
+		local data = { objects = {} }
 
 		for idx, toggle in next, Toggles do
 			if self.Ignore[idx] then continue end
@@ -178,40 +171,39 @@ local SaveManager = {} do
 			if self.Ignore[idx] then continue end
 
 			table.insert(data.objects, self.Parser[option.Type].Save(idx, option))
-		end	
-
-		local success, encoded = pcall(httpService.JSONEncode, httpService, data)
-		if not success then
-			return false, 'failed to encode data'
 		end
 
-		local written, err = pcall(writefile, fullPath, encoded)
-		if not written then
-			return false, 'failed to write file: ' .. tostring(err)
-		end
-
-		return true
+		return data
 	end
 
-	function SaveManager:Load(name)
-		name = sanitizeName(name)
-		if not name then
-			return false, 'no config file is selected'
+	function SaveManager:Encode()
+		local ok, encoded = pcall(httpService.JSONEncode, httpService, self:BuildData())
+		if not ok then
+			return nil, 'failed to encode data'
 		end
-		
-		local file = self:GetConfigPath(name)
-		if not isfile(file) then return false, 'invalid file' end
+		return encoded
+	end
 
-		local readOk, contents = pcall(readfile, file)
-		if not readOk then return false, 'failed to read file' end
-
-		local success, decoded = pcall(httpService.JSONDecode, httpService, contents)
-		if not success or type(decoded) ~= 'table' or type(decoded.objects) ~= 'table' then
-			return false, 'decode error'
+	function SaveManager:Decode(text)
+		if type(text) ~= 'string' then
+			return nil, 'nothing to import'
 		end
 
-		-- Sort so parents-before-children style dependencies load predictably.
-		-- Toggles first (so callbacks that gate other options run before those options),
+		text = text:match('^%s*(.-)%s*$')
+		if text == '' then
+			return nil, 'nothing to import'
+		end
+
+		local ok, decoded = pcall(httpService.JSONDecode, httpService, text)
+		if not ok or type(decoded) ~= 'table' or type(decoded.objects) ~= 'table' then
+			return nil, 'invalid config json'
+		end
+
+		return decoded
+	end
+
+	function SaveManager:ApplyData(decoded, name)
+		-- Toggles first so callbacks that gate other options run before those options,
 		-- then everything else in its original order.
 		local ordered = {}
 		for _, option in next, decoded.objects do
@@ -247,7 +239,76 @@ local SaveManager = {} do
 				end
 			end
 		end)
+	end
 
+	-- ============ clipboard helpers ============
+
+	function SaveManager:CopyToClipboard(text)
+		local copy = setclipboard or toclipboard or (syn and syn.write_clipboard)
+		if not copy then
+			return false, 'your executor has no clipboard function'
+		end
+
+		local ok, err = pcall(copy, text)
+		if not ok then
+			return false, tostring(err)
+		end
+
+		return true
+	end
+
+	function SaveManager:ReadClipboard()
+		if not getclipboard then
+			return nil, 'your executor has no getclipboard function'
+		end
+
+		local ok, text = pcall(getclipboard)
+		if not ok or type(text) ~= 'string' then
+			return nil, 'could not read the clipboard'
+		end
+
+		return text
+	end
+
+	-- ============ save / load / delete ============
+
+	function SaveManager:Save(name)
+		name = sanitizeName(name)
+		if not name then
+			return false, 'no config file is selected'
+		end
+
+		local encoded, encodeErr = self:Encode()
+		if not encoded then
+			return false, encodeErr
+		end
+
+		local written, err = pcall(writefile, self:GetConfigPath(name), encoded)
+		if not written then
+			return false, 'failed to write file: ' .. tostring(err)
+		end
+
+		return true
+	end
+
+	function SaveManager:Load(name)
+		name = sanitizeName(name)
+		if not name then
+			return false, 'no config file is selected'
+		end
+
+		local file = self:GetConfigPath(name)
+		if not isfile(file) then return false, 'invalid file' end
+
+		local readOk, contents = pcall(readfile, file)
+		if not readOk then return false, 'failed to read file' end
+
+		local decoded = self:Decode(contents)
+		if not decoded then
+			return false, 'decode error'
+		end
+
+		self:ApplyData(decoded, name)
 		return true
 	end
 
@@ -273,6 +334,73 @@ local SaveManager = {} do
 
 		return true
 	end
+
+	-- ============ import / export (extra) ============
+
+	-- copies the live settings (no saved file needed) to the clipboard
+	function SaveManager:ExportCurrent()
+		local encoded, err = self:Encode()
+		if not encoded then return false, err end
+		return self:CopyToClipboard(encoded)
+	end
+
+	-- copies a saved config file to the clipboard
+	function SaveManager:ExportConfig(name)
+		name = sanitizeName(name)
+		if not name then
+			return false, 'no config file is selected'
+		end
+
+		local file = self:GetConfigPath(name)
+		if not isfile(file) then
+			return false, 'config does not exist'
+		end
+
+		local ok, contents = pcall(readfile, file)
+		if not ok then
+			return false, 'failed to read file'
+		end
+
+		return self:CopyToClipboard(contents)
+	end
+
+	-- applies json text to the current settings without saving a file
+	function SaveManager:ImportApply(text)
+		local decoded, err = self:Decode(text)
+		if not decoded then return false, err end
+
+		self:ApplyData(decoded, 'imported')
+		return true
+	end
+
+	-- saves json text as a new config file (refuses to overwrite)
+	function SaveManager:ImportAsConfig(name, text)
+		name = sanitizeName(name)
+		if not name then
+			return false, 'enter a config name first'
+		end
+
+		if self:ConfigExists(name) then
+			return false, string.format('config %q already exists', name)
+		end
+
+		local decoded, err = self:Decode(text)
+		if not decoded then return false, err end
+
+		local ok, encoded = pcall(httpService.JSONEncode, httpService, decoded)
+		if not ok then
+			return false, 'failed to encode data'
+		end
+
+		local written, werr = pcall(writefile, self:GetConfigPath(name), encoded)
+		if not written then
+			return false, 'failed to write file: ' .. tostring(werr)
+		end
+
+		return true
+	end
+
+	-- ============ misc ============
 
 	function SaveManager:IgnoreThemeSettings()
 		self:SetIgnoreIndexes({ 
@@ -428,6 +556,64 @@ local SaveManager = {} do
 			self.Library:Notify('Cleared autoload config')
 		end)
 
+		-- ===== import / export (extra) =====
+		section:AddDivider()
+
+		section:AddInput('SaveManager_ImportText', { Text = 'Import json', Placeholder = 'paste config json here' })
+
+		section:AddButton('Export current', function()
+			local ok, err = self:ExportCurrent()
+			if not ok then
+				return self.Library:Notify('Failed to export: ' .. tostring(err), 3)
+			end
+
+			self.Library:Notify('Copied current settings to clipboard', 2)
+		end):AddButton('Export selected', function()
+			local name = Options.SaveManager_ConfigList.Value
+
+			local ok, err = self:ExportConfig(name)
+			if not ok then
+				return self.Library:Notify('Failed to export: ' .. tostring(err), 3)
+			end
+
+			self.Library:Notify(string.format('Copied config %q to clipboard', name), 2)
+		end)
+
+		section:AddButton('Import & apply', function()
+			local ok, err = self:ImportApply(Options.SaveManager_ImportText.Value)
+			if not ok then
+				return self.Library:Notify('Failed to import: ' .. tostring(err), 3)
+			end
+
+			Options.SaveManager_ImportText:SetValue('')
+			self.Library:Notify('Applied imported settings', 2)
+		end):AddButton('From clipboard', function()
+			local text, readErr = self:ReadClipboard()
+			if not text then
+				return self.Library:Notify('Failed to import: ' .. tostring(readErr), 3)
+			end
+
+			local ok, err = self:ImportApply(text)
+			if not ok then
+				return self.Library:Notify('Failed to import: ' .. tostring(err), 3)
+			end
+
+			self.Library:Notify('Applied settings from clipboard', 2)
+		end)
+
+		section:AddButton('Import as config', function()
+			local name = sanitizeName(Options.SaveManager_ConfigName.Value)
+
+			local ok, err = self:ImportAsConfig(name, Options.SaveManager_ImportText.Value)
+			if not ok then
+				return self.Library:Notify('Failed to import: ' .. tostring(err), 3)
+			end
+
+			Options.SaveManager_ImportText:SetValue('')
+			refreshList(name)
+			self.Library:Notify(string.format('Imported config %q', name), 2)
+		end)
+
 		self.AutoloadLabel = section:AddLabel('Current autoload config: none', true)
 
 		local autoloadName = self:GetAutoloadName()
@@ -435,7 +621,7 @@ local SaveManager = {} do
 			self.AutoloadLabel:SetText('Current autoload config: ' .. autoloadName)
 		end
 
-		self:SetIgnoreIndexes({ 'SaveManager_ConfigList', 'SaveManager_ConfigName' })
+		self:SetIgnoreIndexes({ 'SaveManager_ConfigList', 'SaveManager_ConfigName', 'SaveManager_ImportText' })
 	end
 
 	SaveManager:BuildFolderTree()
