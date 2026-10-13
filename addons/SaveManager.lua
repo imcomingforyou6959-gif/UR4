@@ -155,8 +155,6 @@ local SaveManager = {} do
 		return true
 	end
 
-	-- ============ core data helpers ============
-
 	function SaveManager:BuildData()
 		local data = { objects = {} }
 
@@ -204,8 +202,6 @@ local SaveManager = {} do
 	end
 
 	function SaveManager:ApplyData(decoded, name)
-		-- Toggles first so callbacks that gate other options run before those options,
-		-- then everything else in its original order.
 		local ordered = {}
 		for _, option in next, decoded.objects do
 			if option.type == 'Toggle' then
@@ -229,9 +225,7 @@ local SaveManager = {} do
 				end)
 			end
 		end
-
-		-- Give all the SetValue callbacks a tick to settle (dropdowns, sliders,
-		-- colorpickers can yield internally), then fire the post-load hook.
+		
 		task.delay(0.15, function()
 			if self.OnConfigLoaded then
 				local ok, err = pcall(self.OnConfigLoaded, name)
@@ -255,8 +249,6 @@ local SaveManager = {} do
 
 		return true
 	end
-
-	-- ============ save / load / delete ============
 
 	function SaveManager:Save(name)
 		name = sanitizeName(name)
@@ -327,10 +319,6 @@ local SaveManager = {} do
 		return true
 	end
 
-	-- ============ export / import ============
-
-	-- Copies the currently loaded settings to the clipboard. The json carries the
-	-- name of the loaded config so Import can recreate it under the same name.
 	function SaveManager:Export()
 		local data = self:BuildData()
 		local name = sanitizeName(self.LoadedConfig) or 'exported'
@@ -349,8 +337,6 @@ local SaveManager = {} do
 		return true, name
 	end
 
-	-- Takes pasted json, reads the name inside it and saves it as a real config.
-	-- If that name is taken it becomes "name (2)", "name (3)" and so on.
 	function SaveManager:Import(text)
 		local decoded, err = self:Decode(text)
 		if not decoded then return false, err end
@@ -376,8 +362,6 @@ local SaveManager = {} do
 
 		return true, name, name ~= base
 	end
-
-	-- ============ misc ============
 
 	function SaveManager:IgnoreThemeSettings()
 		self:SetIgnoreIndexes({ 
@@ -533,10 +517,9 @@ local SaveManager = {} do
 			self.Library:Notify('Cleared autoload config')
 		end)
 
-		-- ===== export / import =====
 		section:AddDivider()
 
-		section:AddInput('SaveManager_ImportText', { Text = 'Paste config json', Placeholder = 'paste exported json here' })
+		section:AddInput('SaveManager_ImportText', { Text = 'Importing Configurations', Placeholder = 'json here' })
 
 		section:AddButton('Export', function()
 			local ok, result = self:Export()
