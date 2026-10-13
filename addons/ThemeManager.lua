@@ -15,20 +15,31 @@ local ThemeManager = {} do
 		['Quartz'] 			= { 8, httpService:JSONDecode('{"FontColor":"ffffff","MainColor":"232330","AccentColor":"426e87","BackgroundColor":"1d1b26","OutlineColor":"27232f"}') },
 	}
 
+	local ColorFields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
+	-- these pickers get a transparency bar and drive Library.ColorTransparency
+	local TransparencyFields = { "BackgroundColor", "MainColor", "AccentColor" }
+
 	function ThemeManager:ApplyTheme(theme)
 		local customThemeData = self:GetCustomTheme(theme)
-		local data = customThemeData or self.BuiltInThemes[theme]
+		local data = customThemeData or (self.BuiltInThemes[theme] and self.BuiltInThemes[theme][2])
 
 		if not data then return end
 
-		-- custom themes are just regular dictionaries instead of an array with { index, dictionary }
+		-- custom themes are plain dictionaries, built-in themes are { index, dictionary }
+		for _, idx in next, ColorFields do
+			local col = data[idx]
 
-		local scheme = data[2]
-		for idx, col in next, customThemeData or scheme do
-			self.Library[idx] = Color3.fromHex(col)
+			if type(col) == 'string' then
+				local color = Color3.fromHex(col)
+				self.Library[idx] = color
 
-			if Options[idx] then
-				Options[idx]:SetValueRGB(Color3.fromHex(col))
+				if Options[idx] then
+					-- custom themes can carry a saved transparency, otherwise keep the current one
+					local t = tonumber(data[idx .. 'Transparency'])
+					if t == nil then t = Options[idx].Transparency end
+
+					Options[idx]:SetValueRGB(color, t)
+				end
 			end
 		end
 
@@ -37,10 +48,15 @@ local ThemeManager = {} do
 
 	function ThemeManager:ThemeUpdate()
 		-- This allows us to force apply themes without loading the themes tab :)
-		local options = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
-		for i, field in next, options do
+		for i, field in next, ColorFields do
 			if Options and Options[field] then
 				self.Library[field] = Options[field].Value
+			end
+		end
+
+		for i, field in next, TransparencyFields do
+			if Options and Options[field] then
+				self.Library.ColorTransparency[field] = Options[field].Transparency or 0
 			end
 		end
 
@@ -76,9 +92,10 @@ local ThemeManager = {} do
 	end
 
 	function ThemeManager:CreateThemeManager(groupbox)
-		groupbox:AddLabel('Background color'):AddColorPicker('BackgroundColor', { Default = self.Library.BackgroundColor });
-		groupbox:AddLabel('Main color')	:AddColorPicker('MainColor', { Default = self.Library.MainColor });
-		groupbox:AddLabel('Accent color'):AddColorPicker('AccentColor', { Default = self.Library.AccentColor });
+		-- Transparency = 0 gives these pickers a transparency bar (left = clear, right = solid)
+		groupbox:AddLabel('Background color'):AddColorPicker('BackgroundColor', { Default = self.Library.BackgroundColor, Transparency = 0 });
+		groupbox:AddLabel('Main color')	:AddColorPicker('MainColor', { Default = self.Library.MainColor, Transparency = 0 });
+		groupbox:AddLabel('Accent color'):AddColorPicker('AccentColor', { Default = self.Library.AccentColor, Transparency = 0 });
 		groupbox:AddLabel('Outline color'):AddColorPicker('OutlineColor', { Default = self.Library.OutlineColor });
 		groupbox:AddLabel('Font color')	:AddColorPicker('FontColor', { Default = self.Library.FontColor });
 
@@ -140,65 +157,11 @@ local ThemeManager = {} do
 		Options.FontColor:OnChanged(UpdateTheme)
 	end
 
-	function ThemeManager:CreateBackgroundManager(groupbox)
-		local Library = self.Library
-
-		groupbox:AddInput('ThemeManager_BackgroundSource', {
-			Text = 'Background image',
-			Placeholder = 'raw link or rbxassetid',
-			Finished = true,
-			Tooltip = 'Direct .png/.jpg link (raw), or an rbxassetid / decal id. Press enter to apply.',
-			Callback = function(Value)
-				Library:SetBackgroundImage(Value)
-			end,
-		})
-
-		groupbox:AddButton('Apply image', function()
-			Library:SetBackgroundImage(Options.ThemeManager_BackgroundSource.Value)
-		end):AddButton('Clear image', function()
-			Options.ThemeManager_BackgroundSource:SetValue('')
-		end)
-
-		groupbox:AddDropdown('ThemeManager_BackgroundScale', {
-			Text = 'Image fit',
-			Values = { 'Crop', 'Stretch', 'Fit' },
-			Default = 1,
-			Callback = function(Value)
-				Library:SetBackgroundScaleType(Value)
-			end,
-		})
-
-		groupbox:AddSlider('ThemeManager_BackgroundImageTransparency', {
-			Text = 'Image transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
-			Callback = function(Value) Library:SetBackgroundImageTransparency(Value) end,
-		})
-
-		groupbox:AddDivider()
-
-		groupbox:AddSlider('ThemeManager_WindowTransparency', {
-			Text = 'Window transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
-			Tooltip = 'Main window / tab area. Ignored while a background image is active.',
-			Callback = function(Value) Library:SetLayerTransparency('Window', Value) end,
-		})
-
-		groupbox:AddSlider('ThemeManager_GroupTransparency', {
-			Text = 'Groupbox transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
-			Callback = function(Value) Library:SetLayerTransparency('Group', Value) end,
-		})
-
-		groupbox:AddSlider('ThemeManager_InlineTransparency', {
-			Text = 'Inline transparency', Default = 0, Min = 0, Max = 1, Rounding = 2,
-			Tooltip = 'Toggles, sliders, buttons, dropdowns, textboxes.',
-			Callback = function(Value) Library:SetLayerTransparency('Inline', Value) end,
-		})
-
-		groupbox:AddButton('Glass preset', function()
-			Options.ThemeManager_GroupTransparency:SetValue(0.45)
-			Options.ThemeManager_InlineTransparency:SetValue(0.35)
-		end)
-	end
-
 	function ThemeManager:GetCustomTheme(file)
+		if type(file) ~= 'string' or file == '' then
+			return nil
+		end
+
 		local path = self.Folder .. '/themes/' .. file
 		if not isfile(path) then
 			return nil
@@ -220,10 +183,14 @@ local ThemeManager = {} do
 		end
 
 		local theme = {}
-		local fields = { "FontColor", "MainColor", "AccentColor", "BackgroundColor", "OutlineColor" }
 
-		for _, field in next, fields do
+		for _, field in next, ColorFields do
 			theme[field] = Options[field].Value:ToHex()
+		end
+
+		-- also keep the transparency of the pickers that have one
+		for _, field in next, TransparencyFields do
+			theme[field .. 'Transparency'] = Options[field].Transparency or 0
 		end
 
 		writefile(self.Folder .. '/themes/' .. file .. '.json', httpService:JSONEncode(theme))
@@ -295,18 +262,11 @@ local ThemeManager = {} do
 		assert(self.Library, 'Must set ThemeManager.Library first!')
 		local groupbox = self:CreateGroupBox(tab)
 		self:CreateThemeManager(groupbox)
-
-		self:CreateBackgroundManager(tab:AddRightGroupbox('Background'))
 	end
 
-	-- backgroundGroupbox is optional; pass a second groupbox to also get the background controls
-	function ThemeManager:ApplyToGroupbox(groupbox, backgroundGroupbox)
+	function ThemeManager:ApplyToGroupbox(groupbox)
 		assert(self.Library, 'Must set ThemeManager.Library first!')
 		self:CreateThemeManager(groupbox)
-
-		if backgroundGroupbox then
-			self:CreateBackgroundManager(backgroundGroupbox)
-		end
 	end
 
 	ThemeManager:BuildFolderTree()
