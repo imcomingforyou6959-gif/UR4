@@ -1,7 +1,7 @@
 local AssetService = game:GetService("AssetService")
 local RunService = game:GetService("RunService")
 
-local GifDecoder = loadstring(Game:HttpGet("https://raw.githubusercontent.com/mental1illness/modules/refs/heads/main/GifDecoder.luau"))()
+local GifDecoder = loadstring(Game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/Rendering/refs/heads/main/GifDecoder.luau"))()
 
 export type Frame = {
 	Pixels: buffer,
