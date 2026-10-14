@@ -1,7 +1,5 @@
 --!nonstrict
--- GifDecoder v6
--- GIF87a / GIF89a + PNG / APNG. Big-endian PNG chunk parsing, zlib inflate,
--- APNG blend/dispose handled per spec, delta rects for GifRenderer.
+-- Decoder v7
 
 local bufferCreate = buffer.create
 local bufferLen    = buffer.len
@@ -21,7 +19,6 @@ local band   = bit32.band
 local lshift = bit32.lshift
 local rshift = bit32.rshift
 
--- PNG multi-byte integers are big-endian; GIF/Luau reads are little-endian.
 local function readu16BE(src, pos)
     return readu8(src, pos) * 256 + readu8(src, pos + 1)
 end
@@ -33,7 +30,7 @@ local function readu32BE(src, pos)
 end
 
 local GifDecoder = {}
-GifDecoder.Version = 6
+GifDecoder.Version = 7
 
 local MAX_CANVAS = 1024
 local MAX_FRAME_PIXELS = 16777216
@@ -1069,27 +1066,100 @@ local function decodePng(data, options)
 end
 
 -- ============================================================================
+-- Detection
+-- ============================================================================
+
+local function detectWebP(data, length)
+    if length < 12 then return false end
+    if data:sub(1, 4) ~= "RIFF" then return false end
+    if data:sub(9, 12) ~= "WEBP" then return false end
+    return true
+end
+
+local function detectBmp(data, length)
+    if length < 2 then return false end
+    return data:sub(1, 2) == "BM"
+end
+
+local function detectIco(data, length)
+    if length < 4 then return false end
+    local b1, b2, b3, b4 = data:byte(1, 4)
+    return b1 == 0x00 and b2 == 0x00 and (b3 == 0x01 or b3 == 0x02) and b4 == 0x00
+end
+
+local function detectTiff(data, length)
+    if length < 4 then return false end
+    return data:sub(1, 4) == "II\42\0" or data:sub(1, 4) == "MM\0\42"
+end
+
+local function detectHeic(data, length)
+    if length < 12 then return false end
+    if data:sub(5, 8) ~= "ftyp" then return false end
+    local brand = data:sub(9, 12)
+    return brand == "heic" or brand == "heix"
+        or brand == "hevc" or brand == "hevx"
+        or brand == "mif1" or brand == "msf1"
+end
+
+local function detectSvg(data, length)
+    if length < 4 then return false end
+    local head = data:sub(1, math.min(length, 512)):lower()
+    if head:match("^%s*<svg") then return true end
+    if head:match("^%s*<%?xml") and head:find("<svg", 1, true) then return true end
+    return false
+end
+
+-- ============================================================================
 -- public API
 -- ============================================================================
 
 function GifDecoder.detect(data)
-    if type(data) ~= "string" or #data < 8 then return "unknown" end
-    if data:sub(1, 8) == PNG_SIG then
+    if type(data) ~= "string" or #data < 4 then return "unknown" end
+    local length = #data
+
+    -- PNG / APNG
+    if length >= 8 and data:sub(1, 8) == PNG_SIG then
         if data:find("acTL", 1, true) then return "apng" end
         return "png"
     end
+
+    -- GIF
     local sig6 = data:sub(1, 6)
     if sig6 == "GIF87a" or sig6 == "GIF89a" then return "gif" end
+
+    -- JPEG
+    local b1, b2, b3 = data:byte(1, 3)
+    if b1 == 0xFF and b2 == 0xD8 and b3 == 0xFF then return "jpg" end
+
+    -- Other static formats (routed through getcustomasset by the renderer)
+    if detectWebP(data, length) then return "webp" end
+    if detectBmp(data, length) then return "bmp" end
+    if detectIco(data, length) then return "ico" end
+    if detectTiff(data, length) then return "tiff" end
+    if detectHeic(data, length) then return "heic" end
+    if detectSvg(data, length) then return "svg" end
+
     return "unknown"
 end
+
+-- Formats this module can actually produce RGBA frames for.
+local DECODABLE = {
+    gif = true,
+    apng = true,
+    png = true,
+}
 
 function GifDecoder.decode(data, options)
     assert(typeof(data) == "string", "decode expects bytes as a string")
     local kind = GifDecoder.detect(data)
+
     if kind == "gif" then
         return decodeGif(data, options)
     elseif kind == "apng" or kind == "png" then
         return decodePng(data, options)
+    elseif DECODABLE[kind] == nil and kind ~= "unknown" then
+        fail("decoder only handles GIF/APNG/PNG; " .. kind ..
+             " must be loaded via getcustomasset (static path)")
     else
         fail("unsupported file format")
     end
