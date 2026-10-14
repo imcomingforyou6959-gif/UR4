@@ -29,19 +29,19 @@ local LocalPlayer        = Players.LocalPlayer
 
 --# Modules
 
-local Utility = moehack.load_module("moehack.net/modules/utility.luau")
-local Skyboxes = moehack.load_module("moehack.net/modules/skyboxes.luau")
 local GifRenderer = loadstring(Game:HttpGet("https://raw.githubusercontent.com/mental1illness/modules/refs/heads/main/GifRenderer.luau"))()
 local GifDecoder = loadstring(Game:HttpGet("https://raw.githubusercontent.com/mental1illness/modules/refs/heads/main/GifDecoder.luau"))()
 
 --# Variables
 
-local HiddenFolder = Create("Folder", gethui and gethui() or GetService(Game, "CoreGui"))
+local HiddenFolder = Create("Folder")
+HiddenFolder.Parent = gethui and gethui() or GetService(Game, "CoreGui")
+
 local Library = getgenv().Library or FakeLibrary
 local Toggles, Options = getgenv().Toggles or Flags, getgenv().Options or Flags
 local Camera = workspace.CurrentCamera
 
-local Terrain    = workspace.Terrain
+local Terrain = workspace.Terrain
 
 local DefaultLighting = {
     Ambient = Lighting.Ambient,
@@ -83,8 +83,8 @@ Rain:SetLightInfluence(0.85)
 Rain:SetVolume(0.35)
 Rain:SetDirection(NewVector3(0.15, -1, 0.05))
 
-const SNOW_OFFSET  = NewCFrame(0, 10, 0) -- why do ppl think this is ai
-const BREADCRUMBS_SIZE = NewVector3(0.05, 0.05, 0.05)
+local SNOW_OFFSET = NewCFrame(0, 10, 0)
+local BREADCRUMBS_SIZE = NewVector3(0.05, 0.05, 0.05)
 
 local OldAppearanceId, OldAppearanceCharacter = 0, nil
 local LastPosition = NewVector3()
@@ -92,7 +92,7 @@ local LastBreadcrumbPosition
 
 local LastLinkData = {
     Link = nil,
-    Extension = nil, -- DAMN!!!
+    Extension = nil,
     CurrentImageLabel = nil,
     GifHandler = nil,
     Resolution = nil,
@@ -101,9 +101,56 @@ local LastLinkData = {
 
 local GifDataCache = {}
 
-local ScreenGui = Create("ScreenGui", gethui())
+-- Safe ScreenGui creation (fixes the orphaned GUI bug)
+local ScreenGui = Create("ScreenGui")
+ScreenGui.Name = "\0visuals_waifu"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local parented = false
+if gethui then
+    local ok, res = pcall(gethui)
+    if ok and res then
+        ScreenGui.Parent = res
+        parented = true
+    end
+end
+if not parented and syn and syn.protect_gui then
+    pcall(function() syn.protect_gui(ScreenGui) end)
+    ScreenGui.Parent = GetService(Game, "CoreGui")
+    parented = true
+end
+if not parented then
+    ScreenGui.Parent = GetService(Game, "CoreGui")
+end
+
+--# Inline file-type + resolution detection (no Utility dependency)
+
+local function DetectFileType(bytes)
+    if type(bytes) ~= "string" then return { Extension = "unknown" } end
+    if bytes:sub(1, 8) == "\137PNG\r\n\26\n" then return { Extension = "png" } end
+    if bytes:sub(1, 3) == "\255\216\255" then return { Extension = "jpg" } end
+    if bytes:sub(1, 6) == "GIF87a" or bytes:sub(1, 6) == "GIF89a" then return { Extension = "gif" } end
+    return { Extension = "unknown" }
+end
+
+local function GetImageResolution(bytes)
+    if type(bytes) ~= "string" then return { Width = 400, Height = 400 } end
+    if bytes:sub(1, 8) == "\137PNG\r\n\26\n" then
+        local w = bytes:byte(17) * 16777216 + bytes:byte(18) * 65536 + bytes:byte(19) * 256 + bytes:byte(20)
+        local h = bytes:byte(21) * 16777216 + bytes:byte(22) * 65536 + bytes:byte(23) * 256 + bytes:byte(24)
+        if w <= 0 or w > 4096 then w = 400 end
+        if h <= 0 or h > 4096 then h = 400 end
+        return { Width = w, Height = h }
+    end
+    if bytes:sub(1, 6) == "GIF87a" or bytes:sub(1, 6) == "GIF89a" then
+        local w = bytes:byte(7) + bytes:byte(8) * 256
+        local h = bytes:byte(9) + bytes:byte(10) * 256
+        return { Width = w, Height = h }
+    end
+    return { Width = 400, Height = 400 }
+end
 
 --# Main
 local Visuals = {}
@@ -151,13 +198,15 @@ Visuals.World = {} do
 
                     return
                 end
-            
+
                 if Visuals.World.Snow and Visuals.World.Snow.Parent == nil then
                     Visuals.World.Snow.Parent = Camera
                 end
-                Visuals.World.Snow.CFrame = Camera.CFrame  * SNOW_OFFSET
+                Visuals.World.Snow.CFrame = Camera.CFrame * SNOW_OFFSET
 
-                if Visuals.World.Snow and Visuals.World.SnowParticles.Rate ~= Options["visuals/world/snow/rate"].Value then Visuals.World.SnowParticles.Rate = Options["visuals/world/snow/rate"].Value end
+                if Visuals.World.Snow and Visuals.World.SnowParticles.Rate ~= Options["visuals/world/snow/rate"].Value then
+                    Visuals.World.SnowParticles.Rate = Options["visuals/world/snow/rate"].Value
+                end
             else
                 if Visuals.World.Snow and Visuals.World.Snow.Parent ~= nil then
                     Visuals.World.Snow.Parent = nil
@@ -175,7 +224,6 @@ Visuals.World = {} do
                     IsRainEnabled = false
                 end
             end
-
         else
             if IsRainEnabled then
                 Rain:Disable(TweenInfo.new(2, Enum.EasingStyle.Sine, Enum.EasingDirection.Out))
@@ -220,7 +268,7 @@ Visuals.World = {} do
             Visuals.World.SunRays.Name = "\0"
             Visuals.World.SunRays.Parent = Lighting
         end
-        
+
         if not Visuals.World.Atmosphere then
             Visuals.World.Atmosphere = Lighting:FindFirstChildOfClass("Atmosphere") or Create("Atmosphere")
             Visuals.World.Atmosphere.Name = "\0"
@@ -286,7 +334,6 @@ Visuals.World = {} do
             local FogStart = Options["visuals/world/fog/near"].Value
             local FogEnd = Options["visuals/world/fog/far"].Value
 
-
             if Lighting.FogColor ~= FogColor then Lighting.FogColor = FogColor end
             if Lighting.FogStart ~= FogStart then Lighting.FogStart = FogStart end
             if Lighting.FogEnd ~= FogEnd then Lighting.FogEnd = FogEnd end
@@ -331,7 +378,7 @@ Visuals.World = {} do
         if ColorCorrection.Enabled ~= ColorCorrectionEnabled then
             ColorCorrection.Enabled = ColorCorrectionEnabled
         end
-        
+
         if ColorCorrectionEnabled then
             local Saturation = Options["visuals/world/lighting/cc/saturation"].Value
             local Contrast = Options["visuals/world/lighting/cc/contrast"].Value
@@ -413,10 +460,8 @@ Visuals.World = {} do
 end
 
 Visuals.Camera = {} do
-    
+
     function Visuals.Camera.Tick()
-
-
         if moehack.data.game_name == "Arsenal" then
             if Toggles["visuals/camera/thirdperson"].Value then
                 local Dist = Options["visuals/camera/thirdperson/dist"].Value
@@ -453,7 +498,6 @@ Visuals.Camera = {} do
             end
         end
 
-
         if Toggles["visuals/camera/waifu"].Value then
             local Link = Options["visuals/camera/waifu/link"].Value
 
@@ -479,38 +523,34 @@ Visuals.Camera = {} do
                         return
                     end
 
-                    local FileData = Utility.DetectFileType(Bytes)
+                    local FileData = DetectFileType(Bytes)
 
-                    if FileData.Extension == "png" then
-                        writefile("temp.png", Bytes)
+                    if FileData.Extension == "png" or FileData.Extension == "jpg" then
+                        local tmp = FileData.Extension == "png" and "temp.png" or "temp.jpg"
+                        writefile(tmp, Bytes)
 
-                        local ResolutionData = Utility.GetImageResolution(Bytes)
+                        local ResolutionData = GetImageResolution(Bytes)
                         local NewImageLabel = Create("ImageLabel")
 
                         NewImageLabel.Parent = ScreenGui
                         NewImageLabel.BackgroundTransparency = 1
                         NewImageLabel.ImageTransparency = Options["visuals/camera/waifu/transparency"].Value
-                        NewImageLabel.Image = getcustomasset("temp.png")
+                        NewImageLabel.Image = getcustomasset(tmp)
 
                         if ResolutionData.Width and ResolutionData.Height then
-                            NewImageLabel.Size = FromOffset(
-                                ResolutionData.Width,
-                                ResolutionData.Height
-                            )
-
+                            NewImageLabel.Size = FromOffset(ResolutionData.Width, ResolutionData.Height)
                             LastLinkData.Resolution = ResolutionData
                         end
 
                         LastLinkData.Extension = FileData.Extension
                         LastLinkData.CurrentImageLabel = NewImageLabel
                     elseif FileData.Extension == "gif" then
-                        local ResolutionData = Utility.GetImageResolution(Bytes)
                         local NewImageLabel = Create("ImageLabel")
                         if not GifDataCache[Link] then
                             GifDataCache[Link] = GifDecoder.decode(Bytes)
                         end
                         local DecodedGif = GifDataCache[Link]
-                        
+
                         NewImageLabel.Parent = ScreenGui
                         NewImageLabel.BackgroundTransparency = 1
                         NewImageLabel.ImageTransparency = Options["visuals/camera/waifu/transparency"].Value
@@ -524,11 +564,7 @@ Visuals.Camera = {} do
                         })
 
                         if DecodedGif.Width and DecodedGif.Height then
-                            NewImageLabel.Size = FromOffset(
-                                DecodedGif.Width,
-                                DecodedGif.Height
-                            )
-
+                            NewImageLabel.Size = FromOffset(DecodedGif.Width, DecodedGif.Height)
                             LastLinkData.Resolution = {
                                 Width = DecodedGif.Width,
                                 Height = DecodedGif.Height
@@ -551,11 +587,11 @@ Visuals.Camera = {} do
                 local Y = Options["visuals/camera/waifu/y"].Value
                 local Transparency = Options["visuals/camera/waifu/transparency"].Value
                 local Scale = Options["visuals/camera/waifu/scale"].Value
-            
+
                 ImageLabel.Position = FromScale(X, Y)
                 ImageLabel.AnchorPoint = Vector2.new(X, Y)
                 ImageLabel.ImageTransparency = Transparency
-            
+
                 if LastLinkData.Resolution then
                     ImageLabel.Size = FromOffset(
                         LastLinkData.Resolution.Width * Scale,
@@ -585,7 +621,7 @@ end
 
 Visuals.Players = {} do
 
-    function Visuals.Players.ChangeAvatar(id: number) -- i used ai for this btw
+    function Visuals.Players.ChangeAvatar(id: number)
         local Character = LocalPlayer.Character
         if not Character then return false end
 
@@ -681,7 +717,6 @@ Visuals.Players = {} do
             end
         end
 
-        -- Rig:Destroy()
         return true
     end
 
@@ -767,7 +802,7 @@ Visuals.Players = {} do
     function Visuals.Players.Tick()
 
         if Toggles["visuals/player/appearance"].Value then
-            local Character = Utility.GetCharacter(LocalPlayer)
+            local Character = LocalPlayer.Character
             local AppearanceId = tonumber(Options["visuals/player/appearance/id"].Value)
 
             if Character and AppearanceId then
@@ -820,7 +855,7 @@ Visuals.Players = {} do
                 end
             end
 
-            local LastColorThatShouldBeBroImSoScaredMeSOSALYOU= Color3.fromRGB(
+            local LastColorThatShouldBeBroImSoScaredMeSOSALYOU = Color3.fromRGB(
                 Options['visuals/player/chinesehat/color'].Value.R * (100 * Options["visuals/player/chinesehat/glowfac"].Value),
                 Options['visuals/player/chinesehat/color'].Value.G * (100 * Options["visuals/player/chinesehat/glowfac"].Value),
                 Options['visuals/player/chinesehat/color'].Value.B * (100 * Options["visuals/player/chinesehat/glowfac"].Value)
@@ -830,7 +865,7 @@ Visuals.Players = {} do
                 Visuals.Players.ChineseHat.Color3 = LastColorThatShouldBeBroImSoScaredMeSOSALYOU
             end
 
-            local Character = Utility.GetCharacter(LocalPlayer)
+            local Character = LocalPlayer.Character
             if Character then
                 local Head = FindFirstChild(Character, "Head")
                 if Head then
@@ -849,7 +884,7 @@ Visuals.Players = {} do
                 Visuals.Players.ChineseHat.Adornee = nil
                 Visuals.Players.ChineseHat.Visible = false
             end
-            
+
         else
             if Visuals.Players.ChineseHat and Visuals.Players.ChineseHat.Visible then
                 Visuals.Players.ChineseHat.Visible = false
@@ -858,18 +893,18 @@ Visuals.Players = {} do
         end
 
         if Toggles["visuals/player/breadcrumbs"].Value then
-            local Character = Utility.GetCharacter(LocalPlayer)
+            local Character = LocalPlayer.Character
             if Character then
                 local PrimaryPart = Character.PrimaryPart
                 if PrimaryPart and PrimaryPart.Position ~= LastPosition then
-                    LastPosition = PrimaryPart.Position -- Thx
+                    LastPosition = PrimaryPart.Position
                     Visuals.Players.MakeBreadcrumbs(PrimaryPart.Position, PrimaryPart)
                 end
             end
         else
             LastBreadcrumbPosition = nil
         end
-        
+
     end
 
 end
@@ -945,31 +980,28 @@ do -- Other funcs M
 
         local EndThickness = Taper and 0 or Thickness
 
-        local Start = Utility.Create("Attachment", {
-            WorldPosition = Origin,
-            Parent = Terrain
-        })
+        local Start = Create("Attachment")
+        Start.WorldPosition = Origin
+        Start.Parent = Terrain
 
-        local End = Utility.Create("Attachment", {
-            WorldPosition = Origin,
-            Parent = Terrain
-        })
+        local End = Create("Attachment")
+        End.WorldPosition = Origin
+        End.Parent = Terrain
 
-        local Beam = Utility.Create("Beam", {
-            Attachment0   = Start,
-            Attachment1   = End,
-            Color         = ColorSequence.new(Color, Color2),
-            Width0        = Thickness,
-            Width1        = EndThickness,
-            FaceCamera    = true,
-            Segments      = 1,
-            Texture       = Texture or "",
-            TextureMode   = Enum.TextureMode.Stretch,
-            TextureLength = 1,
-            TextureSpeed  = 0,
-            Transparency  = NumberSequence.new(Transparency),
-            Parent        = Terrain
-        })
+        local Beam = Create("Beam")
+        Beam.Attachment0   = Start
+        Beam.Attachment1   = End
+        Beam.Color         = ColorSequence.new(Color, Color2)
+        Beam.Width0        = Thickness
+        Beam.Width1        = EndThickness
+        Beam.FaceCamera    = true
+        Beam.Segments      = 1
+        Beam.Texture       = Texture or ""
+        Beam.TextureMode   = Enum.TextureMode.Stretch
+        Beam.TextureLength = 1
+        Beam.TextureSpeed  = 0
+        Beam.Transparency  = NumberSequence.new(Transparency)
+        Beam.Parent        = Terrain
 
         TracerCount += 1
 
@@ -1019,7 +1051,7 @@ if moehack.data.game_name == "Arsenal" then
         end
         return Camera.CFrame.Position
     end
-    
+
     local HitObj; HitObj = Utility:Hook(Bridge.HitObject.Fire, function(Self, Target, HitPos, Normal, Gun, ...)
         if Toggles["visuals/world/bullettracers"].Value and HitPos then
             local Origin = GetOrigin()
