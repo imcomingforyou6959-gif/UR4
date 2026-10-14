@@ -1,14 +1,36 @@
---!native
---!optimize 2
+-- GifDecoder
+--
+-- GifDecoder.decode(data, options?) -> DecodedGif
+--
+-- options:
+--   Yield      : number?  task.wait() every N decoded frames (keeps big GIFs from freezing the client)
+--   FullFrames : boolean? true = every frame is a full-canvas RGBA buffer (old behaviour, uses a lot more memory)
+--                         false/nil = frames after the first only store the rectangle that changed
+--   RawDelays  : boolean? true = keep 0/10ms delays as is, otherwise they become 100ms like browsers do
+--
+-- Frame = { Pixels: buffer (RGBA, Width*Height*4), X, Y, Width, Height, Duration }
+-- Frame 1 always covers the whole canvas, so playing frames in order on one canvas reproduces the GIF.
 
 local bit32 = bit32
-local bufferWriteu8 = buffer.writeu8
-local bufferWriteu32 = buffer.writeu32
-local bufferReadu8 = buffer.readu8
+local bufferCreate = buffer.create
+local bufferLen = buffer.len
 local bufferCopy = buffer.copy
+local bufferFill = buffer.fill
+local bufferFromString = buffer.fromstring
+local bufferReadString = buffer.readstring
+local readu8 = buffer.readu8
+local readu16 = buffer.readu16
+local readu32 = buffer.readu32
+local writeu8 = buffer.writeu8
+local writeu16 = buffer.writeu16
+local writeu32 = buffer.writeu32
 
 export type DecodedFrame = {
 	Pixels: buffer,
+	X: number,
+	Y: number,
+	Width: number,
+	Height: number,
 	Duration: number,
 }
 
@@ -17,244 +39,273 @@ export type DecodedGif = {
 	Height: number,
 	Frames: {DecodedFrame},
 	LoopCount: number?,
+	Duration: number,
 }
 
+export type DecodeOptions = {
+	Yield: number?,
+	FullFrames: boolean?,
+	RawDelays: boolean?,
+}
+
+local MAX_CANVAS = 1024
+local MAX_FRAME_PIXELS = 16777216
+
 local GifDecoder = {}
+GifDecoder.Version = 2
 
 local function fail(message: string): never
-	error("GifDecoder: " .. message, 2)
+	error("GifDecoder: " .. message, 3)
 end
 
-local function u8(data: string, position: number): number
-	if position > #data then
+local function need(length: number, position: number, count: number)
+	if position < 0 or position + count > length then
 		fail("unexpected end of data")
 	end
-	return string.byte(data, position)
 end
 
-local function u16(data: string, position: number): number
-	return u8(data, position) + u8(data, position + 1) * 256
-end
-
-local function skipSubBlocks(data: string, position: number): number
-	while true do
-		local size = u8(data, position)
+-- walks a chain of sub-blocks, returns the position after the terminator
+local function skipSubBlocks(src: buffer, length: number, position: number): number
+	while position < length do
+		local size = readu8(src, position)
 		position += 1
 		if size == 0 then
 			return position
 		end
-		if position + size > #data + 1 then
-			fail("truncated sub-block")
-		end
 		position += size
 	end
+	return length
 end
 
-local function readSubBlocks(data: string, position: number): (string, number)
-	local chunks = table.create(8)
-	local count = 0
-	while true do
-		local size = u8(data, position)
-		position += 1
+-- joins a chain of sub-blocks into one buffer; tolerates a truncated tail
+local function readSubBlocks(src: buffer, length: number, position: number): (buffer, number, number)
+	local scan = position
+	local total = 0
+	while scan < length do
+		local size = readu8(src, scan)
+		scan += 1
 		if size == 0 then
-			return table.concat(chunks), position
+			break
 		end
-		if position + size > #data + 1 then
-			fail("truncated sub-block")
-		end
-		count += 1
-		chunks[count] = string.sub(data, position, position + size - 1)
-		position += size
+		total += math.min(size, length - scan)
+		scan += size
 	end
+
+	local joined = bufferCreate(math.max(total, 1))
+	local write = 0
+	scan = position
+	while scan < length do
+		local size = readu8(src, scan)
+		scan += 1
+		if size == 0 then
+			break
+		end
+		local available = math.min(size, length - scan)
+		bufferCopy(joined, write, src, scan, available)
+		write += available
+		scan += size
+	end
+	return joined, total, math.min(scan, length)
 end
 
-local function readPalette(data: string, position: number, count: number): ({number}, number)
-	local packed = table.create(count)
-	for index = 0, count - 1 do
-		local red = u8(data, position)
-		local green = u8(data, position + 1)
-		local blue = u8(data, position + 2)
-		packed[index] = red + green * 256 + blue * 65536 + 4278190080
+-- palette is always 256 RGBA entries so a bad pixel index can never read out of range
+local function readPalette(src: buffer, length: number, position: number, count: number): (buffer, number)
+	need(length, position, count * 3)
+	local palette = bufferCreate(256 * 4)
+	local write = 0
+	for _ = 1, count do
+		local red = readu8(src, position)
+		local green = readu8(src, position + 1)
+		local blue = readu8(src, position + 2)
+		writeu32(palette, write, red + green * 256 + blue * 65536 + 4278190080)
 		position += 3
+		write += 4
 	end
-	return packed, position
+	return palette, position
 end
 
-local function clearCanvas(canvas: buffer, width: number, height: number, r: number, g: number, b: number, a: number)
-	for y = 0, height - 1 do
-		local p = y * width * 4
-		for _ = 0, width - 1 do
-			bufferWriteu8(canvas, p, r)
-			bufferWriteu8(canvas, p + 1, g)
-			bufferWriteu8(canvas, p + 2, b)
-			bufferWriteu8(canvas, p + 3, a)
-			p += 4
-		end
-	end
+-- clips a rect to the canvas, returns x0, y0, x1, y1 (empty when x0 >= x1 or y0 >= y1)
+local function clampRect(left: number, top: number, width: number, height: number, canvasWidth: number, canvasHeight: number)
+	return math.max(left, 0), math.max(top, 0), math.min(left + width, canvasWidth), math.min(top + height, canvasHeight)
 end
 
-local function copyBuffer(source: buffer): buffer
-	local length = buffer.len(source)
-	local result = buffer.create(length)
-	bufferCopy(result, 0, source, 0, length)
-	return result
-end
-
-local function saveRect(canvas: buffer, left: number, top: number, width: number, height: number, canvasWidth: number, canvasHeight: number)
-	local x0 = math.max(left, 0)
-	local y0 = math.max(top, 0)
-	local x1 = math.min(left + width, canvasWidth)
-	local y1 = math.min(top + height, canvasHeight)
-	if x0 >= x1 or y0 >= y1 then
-		return nil
-	end
-
-	local saved = buffer.create((x1 - x0) * (y1 - y0) * 4)
-	local destination = 0
+local function extractRect(canvas: buffer, canvasWidth: number, x0: number, y0: number, x1: number, y1: number): buffer
+	local rowBytes = (x1 - x0) * 4
+	local out = bufferCreate(rowBytes * (y1 - y0))
+	local write = 0
 	for y = y0, y1 - 1 do
-		local source = (y * canvasWidth + x0) * 4
-		local rowBytes = (x1 - x0) * 4
-		bufferCopy(saved, destination, canvas, source, rowBytes)
-		destination += rowBytes
+		bufferCopy(out, write, canvas, (y * canvasWidth + x0) * 4, rowBytes)
+		write += rowBytes
 	end
-	return saved, x0, y0, x1, y1
+	return out
 end
 
-local function restoreRect(canvas: buffer, saved: buffer, x0: number, y0: number, x1: number, y1: number, canvasWidth: number)
-	local source = 0
+local function restoreRect(canvas: buffer, saved: buffer, canvasWidth: number, x0: number, y0: number, x1: number, y1: number)
+	local rowBytes = (x1 - x0) * 4
+	local read = 0
+	for y = y0, y1 - 1 do
+		bufferCopy(canvas, (y * canvasWidth + x0) * 4, saved, read, rowBytes)
+		read += rowBytes
+	end
+end
+
+local function clearRect(canvas: buffer, canvasWidth: number, x0: number, y0: number, x1: number, y1: number)
 	local rowBytes = (x1 - x0) * 4
 	for y = y0, y1 - 1 do
-		bufferCopy(canvas, (y * canvasWidth + x0) * 4, saved, source, rowBytes)
-		source += rowBytes
+		bufferFill(canvas, (y * canvasWidth + x0) * 4, 0, rowBytes)
 	end
 end
 
-local function clearRect(canvas: buffer, left: number, top: number, width: number, height: number, canvasWidth: number, canvasHeight: number, r: number, g: number, b: number)
-	local x0 = math.max(left, 0)
-	local y0 = math.max(top, 0)
-	local x1 = math.min(left + width, canvasWidth)
-	local y1 = math.min(top + height, canvasHeight)
-	for y = y0, y1 - 1 do
-		local p = (y * canvasWidth + x0) * 4
-		for _ = x0, x1 - 1 do
-			bufferWriteu8(canvas, p, r)
-			bufferWriteu8(canvas, p + 1, g)
-			bufferWriteu8(canvas, p + 2, b)
-			bufferWriteu8(canvas, p + 3, 0)
-			p += 4
-		end
-	end
-end
+type LzwTables = {
+	prefix: buffer,
+	suffix: buffer,
+	length: buffer,
+	first: buffer,
+}
 
--- lenient LZW: a missing end code, extra pixels or a short stream no longer throw,
--- since lots of real-world GIFs do one of those. Missing pixels stay index 0.
-local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPixels: number): buffer
+-- LZW decoder. Every dictionary entry stores its prefix, last pixel, total length and first pixel,
+-- so a code is written straight into the output from the back. No stack, no per-pixel calls.
+-- Lenient on purpose: a missing end code, truncated data or bad code ends the frame early and the
+-- rest is padded instead of throwing away the whole GIF.
+-- `output` needs room for expected + 4100 bytes.
+local function lzwDecode(
+	src: buffer,
+	srcLength: number,
+	minimumCodeSize: number,
+	expected: number,
+	output: buffer,
+	tables: LzwTables,
+	padValue: number
+)
 	if minimumCodeSize < 2 or minimumCodeSize > 8 then
 		fail("invalid LZW minimum code size")
 	end
 
+	local prefix, suffix, length, first = tables.prefix, tables.suffix, tables.length, tables.first
+
 	local clearCode = bit32.lshift(1, minimumCodeSize)
 	local endCode = clearCode + 1
+	for code = 0, clearCode - 1 do
+		writeu8(suffix, code, code)
+		writeu8(first, code, code)
+		writeu16(length, code * 2, 1)
+	end
+
 	local codeSize = minimumCodeSize + 1
+	local sizeLimit = bit32.lshift(1, codeSize)
+	local codeMask = sizeLimit - 1
 	local available = clearCode + 2
 	local oldCode = -1
-	local first = 0
-	local bytePosition = 1
+
+	local bytePosition = 0
 	local bitBuffer = 0
-	local bitsInBuffer = 0
-	local compressedLength = #compressed
-	local prefix = table.create(4096)
-	local suffix = table.create(4096)
-	local stack = table.create(4096)
-	local output = buffer.create(expectedPixels) -- zero filled
-	local outputCount = 0
+	local bitCount = 0
+	local outCount = 0
 
-	local function readCode(): number?
-		while bitsInBuffer < codeSize do
-			if bytePosition > compressedLength then
-				return nil
-			end
-			bitBuffer = bit32.bor(bitBuffer, bit32.lshift(string.byte(compressed, bytePosition), bitsInBuffer))
+	while outCount < expected do
+		while bitCount < codeSize and bytePosition < srcLength do
+			bitBuffer = bit32.bor(bitBuffer, bit32.lshift(readu8(src, bytePosition), bitCount))
 			bytePosition += 1
-			bitsInBuffer += 8
+			bitCount += 8
 		end
-		local mask = bit32.lshift(1, codeSize) - 1
-		local code = bit32.band(bitBuffer, mask)
-		bitBuffer = bit32.rshift(bitBuffer, codeSize)
-		bitsInBuffer -= codeSize
-		return code
-	end
-
-	local function emit(value: number)
-		if outputCount < expectedPixels then
-			bufferWriteu8(output, outputCount, value)
-			outputCount += 1
-		end
-	end
-
-	while outputCount < expectedPixels do
-		local code = readCode()
-		if code == nil or code == endCode then
+		if bitCount < codeSize then
 			break
-		elseif code == clearCode then
+		end
+		local code = bit32.band(bitBuffer, codeMask)
+		bitBuffer = bit32.rshift(bitBuffer, codeSize)
+		bitCount -= codeSize
+
+		if code == clearCode then
 			codeSize = minimumCodeSize + 1
+			sizeLimit = bit32.lshift(1, codeSize)
+			codeMask = sizeLimit - 1
 			available = clearCode + 2
 			oldCode = -1
-		else
-			if code >= available and (code ~= available or oldCode < 0) then
-				break -- corrupt stream, keep what we have
+		elseif code == endCode then
+			break
+		elseif oldCode < 0 then
+			if code >= clearCode then
+				break
 			end
-			local inCode = code
-			local stackCount = 0
-			if oldCode < 0 then
-				if code >= clearCode then
-					break
-				end
-				first = code
-				emit(code)
-				oldCode = code
-			else
-				if code == available then
-					stackCount += 1
-					stack[stackCount] = first
-					code = oldCode
-				end
-				local corrupt = false
-				while code >= clearCode do
-					if code >= 4096 or suffix[code] == nil or stackCount >= 4096 then
-						corrupt = true
+			writeu8(output, outCount, code)
+			outCount += 1
+			oldCode = code
+		else
+			local firstPixel
+			local stringLength
+			if code < available then
+				stringLength = readu16(length, code * 2)
+				firstPixel = readu8(first, code)
+				local position = outCount + stringLength - 1
+				local walk = code
+				while true do
+					writeu8(output, position, readu8(suffix, walk))
+					if readu16(length, walk * 2) == 1 then
 						break
 					end
-					stackCount += 1
-					stack[stackCount] = suffix[code]
-					code = prefix[code]
+					walk = readu16(prefix, walk * 2)
+					position -= 1
 				end
-				if corrupt then
-					break
-				end
-				first = code
-				stackCount += 1
-				stack[stackCount] = first
-				for index = stackCount, 1, -1 do
-					emit(stack[index])
-				end
-				if available < 4096 then
-					prefix[available] = oldCode
-					suffix[available] = first
-					available += 1
-					if available == bit32.lshift(1, codeSize) and codeSize < 12 then
-						codeSize += 1
+			elseif code == available and available < 4096 then
+				-- the "KwKwK" case: previous string plus its own first pixel
+				firstPixel = readu8(first, oldCode)
+				stringLength = readu16(length, oldCode * 2) + 1
+				local position = outCount + stringLength - 1
+				writeu8(output, position, firstPixel)
+				position -= 1
+				local walk = oldCode
+				while true do
+					writeu8(output, position, readu8(suffix, walk))
+					if readu16(length, walk * 2) == 1 then
+						break
 					end
+					walk = readu16(prefix, walk * 2)
+					position -= 1
 				end
-				oldCode = inCode
+			else
+				break
 			end
+			outCount += stringLength
+
+			if available < 4096 then
+				writeu16(prefix, available * 2, oldCode)
+				writeu8(suffix, available, firstPixel)
+				writeu16(length, available * 2, readu16(length, oldCode * 2) + 1)
+				writeu8(first, available, readu8(first, oldCode))
+				available += 1
+				if available == sizeLimit and codeSize < 12 then
+					codeSize += 1
+					sizeLimit *= 2
+					codeMask = sizeLimit - 1
+				end
+			end
+			oldCode = code
 		end
 	end
 
-	if outputCount == 0 then
-		fail("LZW produced no pixels")
+	if outCount < expected then
+		bufferFill(output, outCount, padValue, expected - outCount)
 	end
-	return output
+end
+
+-- maps the nth stored row of an interlaced image to its real row
+local function interlacedRow(row: number, height: number): number
+	local pass1 = (height + 7) // 8
+	if row < pass1 then
+		return row * 8
+	end
+	row -= pass1
+	local pass2 = (height + 3) // 8
+	if row < pass2 then
+		return 4 + row * 8
+	end
+	row -= pass2
+	local pass3 = (height + 1) // 4
+	if row < pass3 then
+		return 2 + row * 4
+	end
+	row -= pass3
+	return 1 + row * 2
 end
 
 local function compositeIndices(
@@ -266,217 +317,270 @@ local function compositeIndices(
 	height: number,
 	canvasWidth: number,
 	canvasHeight: number,
-	palette: {number},
+	palette: buffer,
 	transparentIndex: number?,
 	interlaced: boolean
 )
-	local source = 0
 	local x0 = math.max(left, 0)
-	local x1 = math.min(left + width, canvasWidth)
-	local skipLeft = x0 - left
-	local visibleWidth = math.max(x1 - x0, 0)
-
-	local function drawRow(y: number)
-		if y < 0 or y >= canvasHeight then
-			source += width
-			return
-		end
-		source += skipLeft
-		local destination = (y * canvasWidth + x0) * 4
-		for _ = 1, visibleWidth do
-			local index = bufferReadu8(indices, source)
-			source += 1
-			if index ~= transparentIndex then
-				local color = palette[index]
-				if color then -- index past the palette is ignored instead of crashing
-					bufferWriteu32(canvas, destination, color)
-				end
-			end
-			destination += 4
-		end
-		source += width - skipLeft - visibleWidth
-	end
-
-	if not interlaced then
-		for y = 0, height - 1 do
-			drawRow(top + y)
-		end
+	local visibleWidth = math.min(left + width, canvasWidth) - x0
+	if visibleWidth <= 0 then
 		return
 	end
+	local skipLeft = x0 - left
+	local transparent = transparentIndex or -1
 
-	local passStarts = {0, 4, 2, 1}
-	local passSteps = {8, 8, 4, 2}
-	for pass = 1, 4 do
-		local y = passStarts[pass]
-		while y < height do
-			drawRow(top + y)
-			y += passSteps[pass]
+	for row = 0, height - 1 do
+		local y = top + (if interlaced then interlacedRow(row, height) else row)
+		if y >= 0 and y < canvasHeight then
+			local source = row * width + skipLeft
+			local destination = (y * canvasWidth + x0) * 4
+			if transparent < 0 then
+				for _ = 1, visibleWidth do
+					writeu32(canvas, destination, readu32(palette, readu8(indices, source) * 4))
+					source += 1
+					destination += 4
+				end
+			else
+				for _ = 1, visibleWidth do
+					local index = readu8(indices, source)
+					if index ~= transparent then
+						writeu32(canvas, destination, readu32(palette, index * 4))
+					end
+					source += 1
+					destination += 4
+				end
+			end
 		end
 	end
 end
 
--- options.Yield: call task.wait() every N frames so a big GIF doesn't freeze the game
-function GifDecoder.decode(data: string, options: {Yield: number?}?): DecodedGif
+function GifDecoder.decode(data: string, options: DecodeOptions?): DecodedGif
 	assert(typeof(data) == "string", "decode expects GIF bytes as a string")
-	if #data < 13 then
+	local yieldEvery = options and options.Yield
+	local fullFrames = options ~= nil and options.FullFrames == true
+	local rawDelays = options ~= nil and options.RawDelays == true
+
+	local length = #data
+	if length < 13 then
 		fail("file is too short")
 	end
-	local signature = string.sub(data, 1, 6)
+	local src = bufferFromString(data)
+
+	local signature = bufferReadString(src, 0, 6)
 	if signature ~= "GIF87a" and signature ~= "GIF89a" then
-		fail("invalid GIF signature (is this really a .gif link, and is the download binary safe?)")
+		fail("invalid GIF signature")
 	end
 
-	local yieldEvery = options and options.Yield or 0
-
-	local position = 7
-	local canvasWidth = u16(data, position)
-	local canvasHeight = u16(data, position + 2)
-	position += 4
+	local canvasWidth = readu16(src, 6)
+	local canvasHeight = readu16(src, 8)
 	if canvasWidth == 0 or canvasHeight == 0 then
 		fail("invalid logical screen size")
 	end
-	if canvasWidth > 1024 or canvasHeight > 1024 then
-		fail("logical screen exceeds 1024x1024")
+	if canvasWidth > MAX_CANVAS or canvasHeight > MAX_CANVAS then
+		fail("logical screen exceeds " .. MAX_CANVAS .. "x" .. MAX_CANVAS)
 	end
 
-	local packed = u8(data, position)
-	local backgroundIndex = u8(data, position + 1)
-	position += 3
+	local screenPacked = readu8(src, 10)
+	local position = 13
 
-	local globalPalette: {number}?
-	if bit32.band(packed, 0x80) ~= 0 then
-		local count = bit32.lshift(2, bit32.band(packed, 0x07))
-		globalPalette, position = readPalette(data, position, count)
+	local globalPalette: buffer? = nil
+	if bit32.band(screenPacked, 0x80) ~= 0 then
+		local count = bit32.lshift(2, bit32.band(screenPacked, 0x07))
+		globalPalette, position = readPalette(src, length, position, count)
 	end
 
-	local backgroundR, backgroundG, backgroundB = 0, 0, 0
-	if globalPalette and globalPalette[backgroundIndex] ~= nil then
-		local background = globalPalette[backgroundIndex]
-		backgroundR = bit32.band(background, 255)
-		backgroundG = bit32.band(bit32.rshift(background, 8), 255)
-		backgroundB = bit32.band(bit32.rshift(background, 16), 255)
-	end
-
-	local canvas = buffer.create(canvasWidth * canvasHeight * 4)
-	clearCanvas(canvas, canvasWidth, canvasHeight, backgroundR, backgroundG, backgroundB, 0)
+	-- a fresh buffer is zero filled = fully transparent, which is what disposal 2 clears to as well
+	local canvas = bufferCreate(canvasWidth * canvasHeight * 4)
+	local tables: LzwTables = {
+		prefix = bufferCreate(4096 * 2),
+		suffix = bufferCreate(4096),
+		length = bufferCreate(4096 * 2),
+		first = bufferCreate(4096),
+	}
+	local indexBuffer: buffer? = nil
 
 	local frames: {DecodedFrame} = {}
+	local frameCount = 0
+	local totalDuration = 0
 	local loopCount: number? = nil
+
 	local gceDelay = 0
 	local gceTransparent: number? = nil
 	local gceDisposal = 0
 
-	while position <= #data do
-		local introducer = u8(data, position)
+	-- area the previous frame's disposal changed, it has to be part of the next patch
+	local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
+	local hasPending = false
+
+	while position < length do
+		local introducer = readu8(src, position)
 		position += 1
+
 		if introducer == 0x3B then
 			break
 		elseif introducer == 0x21 then
-			local label = u8(data, position)
+			need(length, position, 1)
+			local label = readu8(src, position)
 			position += 1
+
 			if label == 0xF9 then
-				local blockSize = u8(data, position)
-				position += 1
-				if blockSize ~= 4 then
-					fail("invalid graphic control extension")
+				need(length, position, 6)
+				if readu8(src, position) == 4 then
+					local gcePacked = readu8(src, position + 1)
+					gceDelay = readu16(src, position + 2) * 0.01
+					if bit32.band(gcePacked, 1) ~= 0 then
+						gceTransparent = readu8(src, position + 4)
+					else
+						gceTransparent = nil
+					end
+					gceDisposal = bit32.band(bit32.rshift(gcePacked, 2), 7)
 				end
-				local gcePacked = u8(data, position)
-				gceDelay = u16(data, position + 1) * 0.01
-				local transparent = u8(data, position + 3)
-				position += 4
-				if u8(data, position) ~= 0 then
-					fail("invalid graphic control terminator")
-				end
-				position += 1
-				gceTransparent = if bit32.band(gcePacked, 1) ~= 0 then transparent else nil
-				gceDisposal = bit32.band(bit32.rshift(gcePacked, 2), 7)
+				position = skipSubBlocks(src, length, position)
 			elseif label == 0xFF then
-				local appSize = u8(data, position)
+				need(length, position, 1)
+				local appSize = readu8(src, position)
 				position += 1
-				local appId = string.sub(data, position, position + appSize - 1)
+				local idLength = math.min(appSize, length - position)
+				local appId = bufferReadString(src, position, idLength)
 				position += appSize
-				local appData: string
-				appData, position = readSubBlocks(data, position)
-				if appId == "NETSCAPE2.0" and #appData >= 3 and string.byte(appData, 1) == 1 then
-					loopCount = string.byte(appData, 2) + string.byte(appData, 3) * 256
+				local appData, appSizeUsed
+				appData, appSizeUsed, position = readSubBlocks(src, length, position)
+				if appId == "NETSCAPE2.0" and appSizeUsed >= 3 and readu8(appData, 0) == 1 then
+					loopCount = readu16(appData, 1)
 				end
-			elseif label == 0x01 then
-				local blockSize = u8(data, position)
-				position += 1
-				if position + blockSize > #data + 1 then
-					fail("truncated plain text extension")
-				end
-				position += blockSize
-				position = skipSubBlocks(data, position)
 			else
-				position = skipSubBlocks(data, position)
+				position = skipSubBlocks(src, length, position)
 			end
 		elseif introducer == 0x2C then
-			local left = u16(data, position)
-			local top = u16(data, position + 2)
-			local width = u16(data, position + 4)
-			local height = u16(data, position + 6)
-			local imagePacked = u8(data, position + 8)
+			need(length, position, 9)
+			local left = readu16(src, position)
+			local top = readu16(src, position + 2)
+			local width = readu16(src, position + 4)
+			local height = readu16(src, position + 6)
+			local imagePacked = readu8(src, position + 8)
 			position += 9
 			if width == 0 or height == 0 then
 				fail("invalid image dimensions")
+			end
+			local expected = width * height
+			if expected > MAX_FRAME_PIXELS then
+				fail("image is too large")
 			end
 
 			local palette = globalPalette
 			if bit32.band(imagePacked, 0x80) ~= 0 then
 				local count = bit32.lshift(2, bit32.band(imagePacked, 0x07))
-				palette, position = readPalette(data, position, count)
+				palette, position = readPalette(src, length, position, count)
 			end
 			if not palette then
 				fail("image has no color table")
 			end
 
-			local minimumCodeSize = u8(data, position)
+			need(length, position, 1)
+			local minimumCodeSize = readu8(src, position)
 			position += 1
-			local compressed: string
-			compressed, position = readSubBlocks(data, position)
-			local indices = lzwDecode(compressed, minimumCodeSize, width * height)
+			local compressed, compressedLength
+			compressed, compressedLength, position = readSubBlocks(src, length, position)
 
-			local saved, savedX0, savedY0, savedX1, savedY1
-			if gceDisposal == 3 then
-				saved, savedX0, savedY0, savedX1, savedY1 = saveRect(canvas, left, top, width, height, canvasWidth, canvasHeight)
+			local required = expected + 4100
+			if not indexBuffer or bufferLen(indexBuffer) < required then
+				indexBuffer = bufferCreate(required)
+			end
+			local indices = indexBuffer :: buffer
+			lzwDecode(compressed, compressedLength, minimumCodeSize, expected, indices, tables, gceTransparent or 0)
+
+			local x0, y0, x1, y1 = clampRect(left, top, width, height, canvasWidth, canvasHeight)
+			local hasRect = x0 < x1 and y0 < y1
+
+			local saved: buffer? = nil
+			if gceDisposal == 3 and hasRect then
+				saved = extractRect(canvas, canvasWidth, x0, y0, x1, y1)
 			end
 
-			compositeIndices(canvas, indices, left, top, width, height, canvasWidth, canvasHeight, palette, gceTransparent, bit32.band(imagePacked, 0x40) ~= 0)
+			compositeIndices(
+				canvas, indices, left, top, width, height, canvasWidth, canvasHeight,
+				palette, gceTransparent, bit32.band(imagePacked, 0x40) ~= 0
+			)
 
-			-- browsers treat a delay of 0 or 1 centisecond as 0.1s, so do the same
+			-- work out which part of the canvas differs from what the previous frame showed
+			local dx0, dy0, dx1, dy1
+			if frameCount == 0 or fullFrames then
+				dx0, dy0, dx1, dy1 = 0, 0, canvasWidth, canvasHeight
+			else
+				local has = false
+				if hasRect then
+					dx0, dy0, dx1, dy1 = x0, y0, x1, y1
+					has = true
+				end
+				if hasPending then
+					if has then
+						dx0 = math.min(dx0, pendingX0)
+						dy0 = math.min(dy0, pendingY0)
+						dx1 = math.max(dx1, pendingX1)
+						dy1 = math.max(dy1, pendingY1)
+					else
+						dx0, dy0, dx1, dy1 = pendingX0, pendingY0, pendingX1, pendingY1
+						has = true
+					end
+				end
+				if not has then
+					dx0, dy0, dx1, dy1 = 0, 0, 1, 1
+				end
+			end
+
 			local duration = gceDelay
-			if duration <= 0.01 then
+			if not rawDelays and duration <= 0.01 then
 				duration = 0.1
 			end
-			frames[#frames + 1] = {Pixels = copyBuffer(canvas), Duration = duration}
+			totalDuration += duration
 
-			if gceDisposal == 2 then
-				clearRect(canvas, left, top, width, height, canvasWidth, canvasHeight, backgroundR, backgroundG, backgroundB)
-			elseif gceDisposal == 3 and saved and savedX0 and savedY0 and savedX1 and savedY1 then
-				restoreRect(canvas, saved, savedX0, savedY0, savedX1, savedY1, canvasWidth)
+			frameCount += 1
+			frames[frameCount] = {
+				Pixels = extractRect(canvas, canvasWidth, dx0, dy0, dx1, dy1),
+				X = dx0,
+				Y = dy0,
+				Width = dx1 - dx0,
+				Height = dy1 - dy0,
+				Duration = duration,
+			}
+
+			hasPending = false
+			if gceDisposal == 2 and hasRect then
+				clearRect(canvas, canvasWidth, x0, y0, x1, y1)
+				pendingX0, pendingY0, pendingX1, pendingY1 = x0, y0, x1, y1
+				hasPending = true
+			elseif gceDisposal == 3 and saved then
+				restoreRect(canvas, saved :: buffer, canvasWidth, x0, y0, x1, y1)
+				pendingX0, pendingY0, pendingX1, pendingY1 = x0, y0, x1, y1
+				hasPending = true
 			end
 
 			gceDelay = 0
 			gceTransparent = nil
 			gceDisposal = 0
 
-			if yieldEvery > 0 and #frames % yieldEvery == 0 then
+			if yieldEvery and yieldEvery > 0 and frameCount % yieldEvery == 0 then
 				task.wait()
 			end
 		else
+			-- unknown byte: keep whatever decoded fine instead of throwing it all away
+			if frameCount > 0 then
+				break
+			end
 			fail(string.format("unknown block introducer 0x%02X", introducer))
 		end
 	end
 
-	if #frames == 0 then
+	if frameCount == 0 then
 		fail("GIF contains no frames")
 	end
+
 	return {
 		Width = canvasWidth,
 		Height = canvasHeight,
 		Frames = frames,
 		LoopCount = loopCount,
+		Duration = totalDuration,
 	}
 end
 
