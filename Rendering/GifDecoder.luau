@@ -15,6 +15,11 @@ local writeu8  = buffer.writeu8
 local writeu16 = buffer.writeu16
 local writeu32 = buffer.writeu32
 
+local bor  = bit32.bor
+local band = bit32.band
+local lshift = bit32.lshift
+local rshift = bit32.rshift
+
 local GifDecoder = {}
 GifDecoder.Version = 4
 
@@ -101,10 +106,8 @@ end
 -- GIF
 -- ============================================================================
 
-type LzwTables = { prefix: buffer, suffix: buffer, length: buffer, first: buffer }
-
-local pooledTables: LzwTables? = nil
-local function getTables(): LzwTables
+local pooledTables = nil
+local function getTables()
     local t = pooledTables
     if t then return t end
     t = {
@@ -135,7 +138,7 @@ end
 local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, padValue)
     if minCodeSize < 2 or minCodeSize > 8 then fail("invalid LZW minimum code size") end
     local prefix, suffix, length, first = tables.prefix, tables.suffix, tables.length, tables.first
-    local clearCode = bit32.lshift(1, minCodeSize)
+    local clearCode = lshift(1, minCodeSize)
     local endCode = clearCode + 1
     for code = 0, clearCode - 1 do
         writeu8(suffix, code, code)
@@ -143,7 +146,7 @@ local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, 
         writeu16(length, code * 2, 1)
     end
     local codeSize = minCodeSize + 1
-    local sizeLimit = bit32.lshift(1, codeSize)
+    local sizeLimit = lshift(1, codeSize)
     local codeMask = sizeLimit - 1
     local available = clearCode + 2
     local oldCode = -1
@@ -151,18 +154,18 @@ local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, 
     local bytePosition, bitBuffer, bitCount, outCount = 0, 0, 0, 0
     while outCount < expected do
         while bitCount < codeSize and bytePosition < srcLength do
-            bitBuffer = bit32.bor(bitBuffer, bit32.lshift(readu8(src, bytePosition), bitCount))
+            bitBuffer = bor(bitBuffer, lshift(readu8(src, bytePosition), bitCount))
             bytePosition += 1
             bitCount += 8
         end
         if bitCount < codeSize then break end
-        local code = bit32.band(bitBuffer, codeMask)
-        bitBuffer = bit32.rshift(bitBuffer, codeSize)
+        local code = band(bitBuffer, codeMask)
+        bitBuffer = rshift(bitBuffer, codeSize)
         bitCount -= codeSize
 
         if code == clearCode then
             codeSize = minCodeSize + 1
-            sizeLimit = bit32.lshift(1, codeSize)
+            sizeLimit = lshift(1, codeSize)
             codeMask = sizeLimit - 1
             available = clearCode + 2
             oldCode = -1
@@ -291,8 +294,8 @@ local function decodeGif(data, options)
     local position = 13
 
     local globalPalette = nil
-    if bit32.band(screenPacked, 0x80) ~= 0 then
-        local count = bit32.lshift(2, bit32.band(screenPacked, 0x07))
+    if band(screenPacked, 0x80) ~= 0 then
+        local count = lshift(2, band(screenPacked, 0x07))
         globalPalette, position = readPaletteGif(src, length, position, count)
     end
 
@@ -319,12 +322,12 @@ local function decodeGif(data, options)
                 if readu8(src, position) == 4 then
                     local gcePacked = readu8(src, position + 1)
                     gceDelay = readu16(src, position + 2) * 0.01
-                    if bit32.band(gcePacked, 1) ~= 0 then
+                    if band(gcePacked, 1) ~= 0 then
                         gceTransparent = readu8(src, position + 4)
                     else
                         gceTransparent = nil
                     end
-                    gceDisposal = bit32.band(bit32.rshift(gcePacked, 2), 7)
+                    gceDisposal = band(rshift(gcePacked, 2), 7)
                 end
                 position = skipSubBlocks(src, length, position)
             elseif label == 0xFF then
@@ -354,8 +357,8 @@ local function decodeGif(data, options)
             if expected > MAX_FRAME_PIXELS then fail("image is too large") end
 
             local palette = globalPalette
-            if bit32.band(imagePacked, 0x80) ~= 0 then
-                local count = bit32.lshift(2, bit32.band(imagePacked, 0x07))
+            if band(imagePacked, 0x80) ~= 0 then
+                local count = lshift(2, band(imagePacked, 0x07))
                 palette, position = readPaletteGif(src, length, position, count)
             end
             if not palette then fail("image has no color table") end
@@ -382,7 +385,7 @@ local function decodeGif(data, options)
 
             compositeIndices(canvas, indices, left, top, width, height,
                 canvasWidth, canvasHeight, palette, gceTransparent,
-                bit32.band(imagePacked, 0x40) ~= 0)
+                band(imagePacked, 0x40) ~= 0)
 
             local dx0, dy0, dx1, dy1
             if frameCount == 0 or fullFrames then
@@ -457,12 +460,12 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
     local function bits(n)
         while bitCount < n do
             if bytePos >= srcEnd then fail("truncated DEFLATE stream") end
-            bitBuf = bitBuf | (readu8(src, bytePos) << bitCount)
+            bitBuf = bor(bitBuf, lshift(readu8(src, bytePos), bitCount))
             bytePos += 1
             bitCount += 8
         end
-        local v = bitBuf & ((1 << n) - 1)
-        bitBuf = bitBuf >> n
+        local v = band(bitBuf, lshift(1, n) - 1)
+        bitBuf = rshift(bitBuf, n)
         bitCount -= n
         return v
     end
@@ -478,7 +481,7 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
         local firstCode, firstSym = {}, {}
         local code, sym = 0, 0
         for len = 1, 15 do
-            code = (code + count[len - 1]) << 1
+            code = lshift(code + count[len - 1], 1)
             firstCode[len] = code
             firstSym[len] = sym
             sym = sym + count[len]
@@ -497,7 +500,7 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
     local function decodeSym(huff)
         local code = 0
         for len = 1, 15 do
-            code = (code << 1) | bits(1)
+            code = bor(lshift(code, 1), bits(1))
             local cnt = huff.count[len]
             if cnt > 0 and code - huff.firstCode[len] < cnt then
                 return huff.symbols[huff.firstSym[len] + code - huff.firstCode[len] + 1]
@@ -520,7 +523,7 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
         local btype = bits(2)
         if btype == 0 then
             bitBuf, bitCount = 0, 0
-            local len = readu8(src, bytePos) | (readu8(src, bytePos + 1) << 8)
+            local len = bor(readu8(src, bytePos), lshift(readu8(src, bytePos + 1), 8))
             bytePos += 4
             for i = 0, len - 1 do
                 if outPos >= expected then break end
@@ -614,8 +617,8 @@ end
 local function zlibInflate(src, startPos, srcEnd, expected)
     local cmf = readu8(src, startPos)
     local flg = readu8(src, startPos + 1)
-    if bit32.band(cmf, 0x0F) ~= 8 then fail("unsupported zlib compression method") end
-    if bit32.band(flg, 0x20) ~= 0 then fail("zlib preset dictionary not supported") end
+    if band(cmf, 0x0F) ~= 8 then fail("unsupported zlib compression method") end
+    if band(flg, 0x20) ~= 0 then fail("zlib preset dictionary not supported") end
     return inflateRaw(src, startPos + 2, srcEnd, expected)
 end
 
@@ -635,19 +638,15 @@ local function paeth(a, b, c)
     return c
 end
 
--- Reads `bitDepth`-bit pixel at index x from a packed scanline.
 local function pixelAt(cur, x, bitDepth)
     if bitDepth == 8 then
         return readu8(cur, x)
     end
     local byteIdx = (x * bitDepth) // 8
     local bitOff = 8 - bitDepth - ((x * bitDepth) % 8)
-    return (readu8(cur, byteIdx) >> bitOff) & ((1 << bitDepth) - 1)
+    return band(rshift(readu8(cur, byteIdx), bitOff), lshift(1, bitDepth) - 1)
 end
 
--- Unfilter and convert a scanline stream into RGBA u32s.
--- palette : u32 RGBA buffer (256 entries, alpha already reflects tRNS)
--- colorKey: {r,g,b} 8-bit key or nil
 local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
     palette, colorKey, out)
 
@@ -664,18 +663,18 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
 
         if filter == 1 then
             for i = bytesPerPixel, rowBytes - 1 do
-                local v = (readu8(cur, i) + readu8(cur, i - bytesPerPixel)) & 0xFF
+                local v = band(readu8(cur, i) + readu8(cur, i - bytesPerPixel), 0xFF)
                 writeu8(cur, i, v)
             end
         elseif filter == 2 then
             for i = 0, rowBytes - 1 do
-                local v = (readu8(cur, i) + readu8(prev, i)) & 0xFF
+                local v = band(readu8(cur, i) + readu8(prev, i), 0xFF)
                 writeu8(cur, i, v)
             end
         elseif filter == 3 then
             for i = 0, rowBytes - 1 do
                 local a = if i >= bytesPerPixel then readu8(cur, i - bytesPerPixel) else 0
-                local v = (readu8(cur, i) + ((a + readu8(prev, i)) >> 1)) & 0xFF
+                local v = band(readu8(cur, i) + rshift(a + readu8(prev, i), 1), 0xFF)
                 writeu8(cur, i, v)
             end
         elseif filter == 4 then
@@ -683,7 +682,7 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
                 local a = if i >= bytesPerPixel then readu8(cur, i - bytesPerPixel) else 0
                 local b = readu8(prev, i)
                 local c = if i >= bytesPerPixel then readu8(prev, i - bytesPerPixel) else 0
-                local v = (readu8(cur, i) + paeth(a, b, c)) & 0xFF
+                local v = band(readu8(cur, i) + paeth(a, b, c), 0xFF)
                 writeu8(cur, i, v)
             end
         end
@@ -691,19 +690,18 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
         local outBase = y * width * 4
 
         if colorType == 3 then
-            -- palette: alpha already baked into the palette buffer
             for x = 0, width - 1 do
                 local idx = pixelAt(cur, x, bitDepth)
                 writeu32(out, outBase + x * 4, readu32(palette, idx * 4))
             end
 
         elseif colorType == 0 then
-            local maxIdx = (1 << bitDepth) - 1
+            local maxIdx = lshift(1, bitDepth) - 1
             local scale = if maxIdx > 0 then 255 // maxIdx else 0
             for x = 0, width - 1 do
                 local v
                 if bitDepth == 16 then
-                    v = readu8(cur, x * 2) -- take high byte
+                    v = readu8(cur, x * 2)
                 elseif bitDepth == 8 then
                     v = readu8(cur, x)
                 else
@@ -771,7 +769,7 @@ local function channelsFor(ct)
     if ct == 2 then return 3 end
     if ct == 3 then return 1 end
     if ct == 4 then return 2 end
-    return 4 -- ct == 6
+    return 4
 end
 
 local function decodePng(data, options)
@@ -790,7 +788,6 @@ local function decodePng(data, options)
     local currentFrame = nil
     local frameNum = 0
 
-    -- chunk scan
     while pos + 8 <= length do
         local clen = readu32(src, pos)
         local ctype = bufferReadString(src, pos + 4, 4)
@@ -824,7 +821,6 @@ local function decodePng(data, options)
 
         elseif ctype == "tRNS" then
             if colorType == 3 then
-                -- per-entry alpha; update palette in place
                 local n = math.min(clen, 256)
                 for i = 0, n - 1 do
                     local a = readu8(src, cdataStart + i)
@@ -832,11 +828,11 @@ local function decodePng(data, options)
                 end
             elseif colorType == 0 and clen >= 2 then
                 local key = readu16(src, cdataStart)
-                local maxIdx = (1 << bitDepth) - 1
+                local maxIdx = lshift(1, bitDepth) - 1
                 local scaled = (key * 255) // maxIdx
                 colorKey = { r = scaled, g = scaled, b = scaled }
             elseif colorType == 2 and clen >= 6 then
-                local maxIdx = (1 << bitDepth) - 1
+                local maxIdx = lshift(1, bitDepth) - 1
                 local kr = readu16(src, cdataStart)
                 local kg = readu16(src, cdataStart + 2)
                 local kb = readu16(src, cdataStart + 4)
@@ -873,7 +869,6 @@ local function decodePng(data, options)
 
         elseif ctype == "IDAT" then
             if not currentFrame then
-                -- plain PNG: single full-canvas frame
                 currentFrame = {
                     w = width, h = height, x = 0, y = 0,
                     delayNum = 0, delayDen = 100, dispose = 0, blend = 0,
@@ -907,13 +902,12 @@ local function decodePng(data, options)
 
     local decodedFrames = {}
     local totalDuration = 0
-    local canvas = bufferCreate(width * height * 4) -- transparent initial state
+    local canvas = bufferCreate(width * height * 4)
 
     local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
     local hasPending = false
 
     for idx, f in ipairs(frames) do
-        -- Concatenate chunk data
         local totalBytes = 0
         for _, c in ipairs(f.chunks) do totalBytes += c.len end
         local comp = bufferCreate(math.max(totalBytes, 1))
@@ -931,20 +925,17 @@ local function decodePng(data, options)
         unfilterToRGBA(raw, f.w, f.h, channels, bitDepth, colorType,
             palette, colorKey, frameRGBA)
 
-        -- Frame rect on canvas (clipped)
         local x0, y0, x1, y1 = clampRect(f.x, f.y, f.w, f.h, width, height)
         local hasRect = x0 < x1 and y0 < y1
 
-        -- Save for dispose == 2 (PREVIOUS)
         local saved = nil
         if f.dispose == 2 and hasRect then
             saved = extractRect(canvas, width, x0, y0, x1, y1)
         end
 
-        -- Composite frame patch onto canvas
         if hasRect then
             local replace = (f.blend == 0)
-            local dx = x0 - f.x  -- offset inside frameRGBA
+            local dx = x0 - f.x
             local dy = y0 - f.y
             for yy = 0, (y1 - y0) - 1 do
                 local srcRow = ((yy + dy) * f.w + dx) * 4
@@ -954,15 +945,19 @@ local function decodePng(data, options)
                 else
                     for xx = 0, (x1 - x0) - 1 do
                         local c = readu32(frameRGBA, srcRow + xx * 4)
-                        local a = (c >> 24) & 0xFF
+                        local a = rshift(c, 24)
                         local dstOff = dstRow + xx * 4
                         if a == 255 then
                             writeu32(canvas, dstOff, c)
                         elseif a > 0 then
                             local dc = readu32(canvas, dstOff)
-                            local cr, cg, cb = c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF
-                            local dr, dg, db, da = dc & 0xFF, (dc >> 8) & 0xFF,
-                                                   (dc >> 16) & 0xFF, (dc >> 24) & 0xFF
+                            local cr = band(c, 0xFF)
+                            local cg = band(rshift(c, 8), 0xFF)
+                            local cb = band(rshift(c, 16), 0xFF)
+                            local dr = band(dc, 0xFF)
+                            local dg = band(rshift(dc, 8), 0xFF)
+                            local db = band(rshift(dc, 16), 0xFF)
+                            local da = rshift(dc, 24)
                             local inv = 255 - a
                             local orr = (cr * a + dr * inv) // 255
                             local ogg = (cg * a + dg * inv) // 255
@@ -976,7 +971,6 @@ local function decodePng(data, options)
             end
         end
 
-        -- Duration
         local dnum, dden = f.delayNum or 0, f.delayDen or 100
         if dden == 0 then dden = 100 end
         local duration = dnum / dden
@@ -984,7 +978,6 @@ local function decodePng(data, options)
         if isAnim and duration <= 0 then duration = 0.1 end
         totalDuration += duration
 
-        -- Delta rect for renderer
         local dx0, dy0, dx1, dy1
         if idx == 1 then
             dx0, dy0, dx1, dy1 = 0, 0, width, height
@@ -1012,7 +1005,6 @@ local function decodePng(data, options)
             Duration = duration,
         }
 
-        -- Apply dispose
         hasPending = false
         if f.dispose == 1 and hasRect then
             clearRect(canvas, width, x0, y0, x1, y1)
