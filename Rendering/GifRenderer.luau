@@ -6,7 +6,7 @@ local GifRenderer = {}
 GifRenderer.__index = GifRenderer
 
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-GifRenderer.RequiredDecoderVersion = 3   -- bumped: new decoder is multi-format
+GifRenderer.RequiredDecoderVersion = 5   -- bumped: multi-format decoder (GIF/PNG/APNG)
 GifRenderer.MaxDeltaTime = 0.25
 
 export type Frame = {
@@ -26,11 +26,10 @@ export type Options = {
 	Speed: number?,
 	OnFinished: ((any) -> ())?,
 
-	-- New perf knobs:
-	LowPower: boolean?,      -- halves update rate, good for weak devices
-	UpdateRate: number?,     -- cap Hz (default 60)
-	MaxFrameSkip: number?,   -- max patches in one tick before snapping (default 8)
-	SkipDuplicates: boolean?,-- avoid rewriting the frame already shown (default true)
+	LowPower: boolean?,
+	UpdateRate: number?,
+	MaxFrameSkip: number?,
+	SkipDuplicates: boolean?,
 }
 
 local DecoderCache
@@ -61,9 +60,14 @@ local function getDecoder()
 	if DecoderCache then return DecoderCache end
 	local env = getgenv and getgenv() or nil
 	local cached = env and env.GifDecoder
-	if type(cached) == "table" and cached.Version == GifRenderer.RequiredDecoderVersion then
-		DecoderCache = cached
-		return DecoderCache
+	-- Accept the cached decoder if it's *at least* the required version.
+	-- Also accept it if it just doesn't have a Version field (treat as current).
+	if type(cached) == "table" and type(cached.decode) == "function" then
+		local cv = cached.Version
+		if cv == nil or cv >= GifRenderer.RequiredDecoderVersion then
+			DecoderCache = cached
+			return DecoderCache
+		end
 	end
 	local source = download(GifRenderer.DecoderUrl)
 	local chunk, compileError = loadstring(source)
@@ -147,7 +151,7 @@ function GifRenderer.new(options: Options)
 		error("GifRenderer: couldn't create an EditableImage (" .. tostring(image) .. ")", 2)
 	end
 	self.Image = image
-	self._write = image.WritePixelsBuffer  -- cached method reference (hot path)
+	self._write = image.WritePixelsBuffer
 
 	local label = options.ImageLabel
 	if label then
@@ -164,7 +168,6 @@ function GifRenderer.new(options: Options)
 			if size.X <= 0 or size.Y <= 0 then return end
 		end
 
-		-- update-rate cap: accumulate dt and only advance in fixed slices
 		local minDt = self._minDt
 		if minDt > 0 then
 			self._accum += dt
@@ -200,15 +203,12 @@ function GifRenderer.fromGif(gif, options)
 	})
 end
 
--- Decodes any supported format (GIF / APNG / PNG) as a single-frame animation.
--- Extra options: ImageLabel, Looped, AutoPlay, Speed, OnFinished, Yield, RawDelays
 function GifRenderer.fromData(data: string, options)
 	options = options or {}
 	local gif = getDecoder().decode(data, {Yield = options.Yield, RawDelays = options.RawDelays})
 	return GifRenderer.fromGif(gif, options)
 end
 
--- Decoded frames cached per-URL. Pass Cache = false to skip.
 function GifRenderer.fromUrl(url: string, options)
 	options = options or {}
 	local gif = DecodedCache[url]
@@ -233,11 +233,8 @@ function GifRenderer:_showFrame(from: number, target: number)
 
 	local total = target - start + 1
 	if total > self._maxSkip then
-		-- Too many patches to catch up on this tick. Snap to the latest full-canvas frame
-		-- at or before `target` if one exists past `start`; otherwise write only the target.
 		local snapTo = fullAt[target]
 		if snapTo > start and snapTo <= target then
-			-- walk from snapTo up to target
 			for index = snapTo, target do self:_writeFrame(index) end
 			return
 		end
