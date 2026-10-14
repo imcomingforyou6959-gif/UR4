@@ -1,5 +1,7 @@
 --!nonstrict
--- GifDecoder v5
+-- GifDecoder v6
+-- GIF87a / GIF89a + PNG / APNG. Big-endian PNG chunk parsing, zlib inflate,
+-- APNG blend/dispose handled per spec, delta rects for GifRenderer.
 
 local bufferCreate = buffer.create
 local bufferLen    = buffer.len
@@ -19,6 +21,7 @@ local band   = bit32.band
 local lshift = bit32.lshift
 local rshift = bit32.rshift
 
+-- PNG multi-byte integers are big-endian; GIF/Luau reads are little-endian.
 local function readu16BE(src, pos)
     return readu8(src, pos) * 256 + readu8(src, pos + 1)
 end
@@ -30,7 +33,7 @@ local function readu32BE(src, pos)
 end
 
 local GifDecoder = {}
-GifDecoder.Version = 5
+GifDecoder.Version = 6
 
 local MAX_CANVAS = 1024
 local MAX_FRAME_PIXELS = 16777216
@@ -40,6 +43,10 @@ local function fail(msg) error("GifDecoder: " .. msg, 3) end
 local function need(len, pos, count)
     if pos < 0 or pos + count > len then fail("unexpected end of data") end
 end
+
+-- ============================================================================
+-- Shared helpers
+-- ============================================================================
 
 local function skipSubBlocks(src, length, position)
     while position < length do
@@ -106,6 +113,10 @@ local function clearRect(canvas, canvasWidth, x0, y0, x1, y1)
         bufferFill(canvas, (y * canvasWidth + x0) * 4, 0, rowBytes)
     end
 end
+
+-- ============================================================================
+-- GIF
+-- ============================================================================
 
 local pooledTables = nil
 local function getTables()
@@ -451,6 +462,10 @@ local function decodeGif(data, options)
     }
 end
 
+-- ============================================================================
+-- DEFLATE / zlib
+-- ============================================================================
+
 local function inflateRaw(src, bytePos, srcEnd, expected)
     local bitBuf, bitCount = 0, 0
 
@@ -618,6 +633,10 @@ local function zlibInflate(src, startPos, srcEnd, expected)
     if band(flg, 0x20) ~= 0 then fail("zlib preset dictionary not supported") end
     return inflateRaw(src, startPos + 2, srcEnd, expected)
 end
+
+-- ============================================================================
+-- PNG / APNG
+-- ============================================================================
 
 local PNG_SIG = "\137PNG\r\n\26\n"
 
@@ -1048,6 +1067,10 @@ local function decodePng(data, options)
         Duration = totalDuration,
     }
 end
+
+-- ============================================================================
+-- public API
+-- ============================================================================
 
 function GifDecoder.detect(data)
     if type(data) ~= "string" or #data < 8 then return "unknown" end
