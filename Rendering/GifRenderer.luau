@@ -6,7 +6,7 @@ local GifRenderer = {}
 GifRenderer.__index = GifRenderer
 
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-GifRenderer.RequiredDecoderVersion = 5   -- bumped: multi-format decoder (GIF/PNG/APNG)
+GifRenderer.RequiredDecoderVersion = 6   -- v6: GIF + PNG + APNG with correct BE parsing
 GifRenderer.MaxDeltaTime = 0.25
 
 export type Frame = {
@@ -60,11 +60,11 @@ local function getDecoder()
 	if DecoderCache then return DecoderCache end
 	local env = getgenv and getgenv() or nil
 	local cached = env and env.GifDecoder
-	-- Accept the cached decoder if it's *at least* the required version.
-	-- Also accept it if it just doesn't have a Version field (treat as current).
+	-- Accept cached decoder when it's at least the required version, or has no
+	-- version field at all. Rejects only if it's strictly older.
 	if type(cached) == "table" and type(cached.decode) == "function" then
 		local cv = cached.Version
-		if cv == nil or cv >= GifRenderer.RequiredDecoderVersion then
+		if cv == nil or (type(cv) == "number" and cv >= GifRenderer.RequiredDecoderVersion) then
 			DecoderCache = cached
 			return DecoderCache
 		end
@@ -151,7 +151,7 @@ function GifRenderer.new(options: Options)
 		error("GifRenderer: couldn't create an EditableImage (" .. tostring(image) .. ")", 2)
 	end
 	self.Image = image
-	self._write = image.WritePixelsBuffer
+	self._write = image.WritePixelsBuffer  -- cached method reference (hot path)
 
 	local label = options.ImageLabel
 	if label then
