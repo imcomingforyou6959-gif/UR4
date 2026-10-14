@@ -7511,6 +7511,45 @@ _96:AddButton('Server Hop', function()
     end
     TeleportService:Teleport(PlaceId, _56)
 end)
+_96:AddToggle('WatermarkVisible', {
+    Text = 'Watermark',
+    Default = true,
+})
+
+Library:SetWatermark("Rawr.xyz <3 | discord.gg/eMpUQzFrNG")
+Library:SetWatermarkVisibility(true)
+
+Toggles.WatermarkVisible:OnChanged(function(v)
+    Library:SetWatermarkVisibility(v)
+end)
+_96:AddToggle('AutoloadScript', {
+    Text    = 'Autoload on Rejoin',
+    Default = false,
+    Searchable = true,
+})
+
+AUTOLOAD_URL = "https://ur-4.vercel.app/Loadstring.lua"
+
+Toggles.AutoloadScript:OnChanged(function(v)
+    if v then
+        if typeof(queue_on_teleport) == "function" then
+            local payload = string.format(
+                [[loadstring(game:HttpGet(%q))()]],
+                AUTOLOAD_URL
+            )
+            local ok, err = pcall(queue_on_teleport, payload)
+            if not ok then
+                Library:Notify("Autoload failed: " .. tostring(err), 3)
+            else
+                Library:Notify("Autoload enabled", 2)
+            end
+        else
+            Library:Notify("Your executor does not support queue_on_teleport", 3)
+        end
+    else
+        Library:Notify("Autoload disabled", 2)
+    end
+end)
 _96:AddLabel('Menu Bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu Toggle' })
 
 _48.ToggleKeybind = Options.MenuKeybind
@@ -7532,7 +7571,6 @@ end)
 
 _50:LoadAutoloadConfig()
 
-loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Watermark.lua'))()
 task.wait(1)
 
 pcall(function()
