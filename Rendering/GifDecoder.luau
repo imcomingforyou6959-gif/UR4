@@ -43,7 +43,7 @@ local function skipSubBlocks(data: string, position: number): number
 		if size == 0 then
 			return position
 		end
-		if position + size > #data then
+		if position + size > #data + 1 then
 			fail("truncated sub-block")
 		end
 		position += size
@@ -59,7 +59,7 @@ local function readSubBlocks(data: string, position: number): (string, number)
 		if size == 0 then
 			return table.concat(chunks), position
 		end
-		if position + size > #data then
+		if position + size > #data + 1 then
 			fail("truncated sub-block")
 		end
 		count += 1
@@ -146,6 +146,8 @@ local function clearRect(canvas: buffer, left: number, top: number, width: numbe
 	end
 end
 
+-- lenient LZW: a missing end code, extra pixels or a short stream no longer throw,
+-- since lots of real-world GIFs do one of those. Missing pixels stay index 0.
 local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPixels: number): buffer
 	if minimumCodeSize < 2 or minimumCodeSize > 8 then
 		fail("invalid LZW minimum code size")
@@ -164,9 +166,8 @@ local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPi
 	local prefix = table.create(4096)
 	local suffix = table.create(4096)
 	local stack = table.create(4096)
-	local output = buffer.create(expectedPixels)
+	local output = buffer.create(expectedPixels) -- zero filled
 	local outputCount = 0
-	local sawEnd = false
 
 	local function readCode(): number?
 		while bitsInBuffer < codeSize do
@@ -185,35 +186,29 @@ local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPi
 	end
 
 	local function emit(value: number)
-		if outputCount >= expectedPixels then
-			fail("LZW output exceeds frame size")
+		if outputCount < expectedPixels then
+			bufferWriteu8(output, outputCount, value)
+			outputCount += 1
 		end
-		bufferWriteu8(output, outputCount, value)
-		outputCount += 1
 	end
 
-	while true do
+	while outputCount < expectedPixels do
 		local code = readCode()
-		if code == nil then
+		if code == nil or code == endCode then
 			break
 		elseif code == clearCode then
 			codeSize = minimumCodeSize + 1
 			available = clearCode + 2
 			oldCode = -1
-		elseif code == endCode then
-			sawEnd = true
-			break
 		else
-			if code >= available then
-				if code ~= available or oldCode < 0 then
-					fail("invalid LZW code")
-				end
+			if code >= available and (code ~= available or oldCode < 0) then
+				break -- corrupt stream, keep what we have
 			end
 			local inCode = code
 			local stackCount = 0
 			if oldCode < 0 then
 				if code >= clearCode then
-					fail("invalid first LZW code")
+					break
 				end
 				first = code
 				emit(code)
@@ -224,16 +219,18 @@ local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPi
 					stack[stackCount] = first
 					code = oldCode
 				end
+				local corrupt = false
 				while code >= clearCode do
-					if code >= 4096 or suffix[code] == nil then
-						fail("invalid LZW dictionary reference")
+					if code >= 4096 or suffix[code] == nil or stackCount >= 4096 then
+						corrupt = true
+						break
 					end
 					stackCount += 1
-					if stackCount > 4096 then
-						fail("LZW dictionary cycle")
-					end
 					stack[stackCount] = suffix[code]
 					code = prefix[code]
+				end
+				if corrupt then
+					break
 				end
 				first = code
 				stackCount += 1
@@ -254,11 +251,8 @@ local function lzwDecode(compressed: string, minimumCodeSize: number, expectedPi
 		end
 	end
 
-	if not sawEnd then
-		fail("missing LZW end code")
-	end
-	if outputCount ~= expectedPixels then
-		fail(string.format("LZW decoded %d pixels, expected %d", outputCount, expectedPixels))
+	if outputCount == 0 then
+		fail("LZW produced no pixels")
 	end
 	return output
 end
@@ -293,7 +287,10 @@ local function compositeIndices(
 			local index = bufferReadu8(indices, source)
 			source += 1
 			if index ~= transparentIndex then
-				bufferWriteu32(canvas, destination, palette[index])
+				local color = palette[index]
+				if color then -- index past the palette is ignored instead of crashing
+					bufferWriteu32(canvas, destination, color)
+				end
 			end
 			destination += 4
 		end
@@ -318,15 +315,18 @@ local function compositeIndices(
 	end
 end
 
-function GifDecoder.decode(data: string): DecodedGif
+-- options.Yield: call task.wait() every N frames so a big GIF doesn't freeze the game
+function GifDecoder.decode(data: string, options: {Yield: number?}?): DecodedGif
 	assert(typeof(data) == "string", "decode expects GIF bytes as a string")
 	if #data < 13 then
 		fail("file is too short")
 	end
 	local signature = string.sub(data, 1, 6)
 	if signature ~= "GIF87a" and signature ~= "GIF89a" then
-		fail("invalid GIF signature")
+		fail("invalid GIF signature (is this really a .gif link, and is the download binary safe?)")
 	end
+
+	local yieldEvery = options and options.Yield or 0
 
 	local position = 7
 	local canvasWidth = u16(data, position)
@@ -403,7 +403,7 @@ function GifDecoder.decode(data: string): DecodedGif
 			elseif label == 0x01 then
 				local blockSize = u8(data, position)
 				position += 1
-				if position + blockSize > #data then
+				if position + blockSize > #data + 1 then
 					fail("truncated plain text extension")
 				end
 				position += blockSize
@@ -443,7 +443,13 @@ function GifDecoder.decode(data: string): DecodedGif
 			end
 
 			compositeIndices(canvas, indices, left, top, width, height, canvasWidth, canvasHeight, palette, gceTransparent, bit32.band(imagePacked, 0x40) ~= 0)
-			frames[#frames + 1] = {Pixels = copyBuffer(canvas), Duration = gceDelay}
+
+			-- browsers treat a delay of 0 or 1 centisecond as 0.1s, so do the same
+			local duration = gceDelay
+			if duration <= 0.01 then
+				duration = 0.1
+			end
+			frames[#frames + 1] = {Pixels = copyBuffer(canvas), Duration = duration}
 
 			if gceDisposal == 2 then
 				clearRect(canvas, left, top, width, height, canvasWidth, canvasHeight, backgroundR, backgroundG, backgroundB)
@@ -454,6 +460,10 @@ function GifDecoder.decode(data: string): DecodedGif
 			gceDelay = 0
 			gceTransparent = nil
 			gceDisposal = 0
+
+			if yieldEvery > 0 and #frames % yieldEvery == 0 then
+				task.wait()
+			end
 		else
 			fail(string.format("unknown block introducer 0x%02X", introducer))
 		end
