@@ -6,7 +6,7 @@ local GifRenderer = {}
 GifRenderer.__index = GifRenderer
 
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-GifRenderer.RequiredDecoderVersion = 6
+GifRenderer.RequiredDecoderVersion = 7
 GifRenderer.MaxDeltaTime = 0.25
 
 export type Frame = {
@@ -41,7 +41,7 @@ local function download(url: string): string
 	for attempt = 1, 2 do
 		if req then
 			local ok, response = pcall(req, {Url = url, Method = "GET"})
-			if ok and type(response) == "table" and response.StatusCode == 200
+			if ok and type(response) == "table" and tonumber(response.StatusCode) == 200
 				and type(response.Body) == "string" and #response.Body > 0 then
 				return response.Body
 			end
@@ -60,8 +60,6 @@ local function getDecoder()
 	if DecoderCache then return DecoderCache end
 	local env = getgenv and getgenv() or nil
 	local cached = env and env.GifDecoder
-	-- Accept cached decoder when it's at least the required version, or has no
-	-- version field at all. Rejects only if it's strictly older.
 	if type(cached) == "table" and type(cached.decode) == "function" then
 		local cv = cached.Version
 		if cv == nil or (type(cv) == "number" and cv >= GifRenderer.RequiredDecoderVersion) then
@@ -151,7 +149,7 @@ function GifRenderer.new(options: Options)
 		error("GifRenderer: couldn't create an EditableImage (" .. tostring(image) .. ")", 2)
 	end
 	self.Image = image
-	self._write = image.WritePixelsBuffer  -- cached method reference (hot path)
+	self._write = image.WritePixelsBuffer
 
 	local label = options.ImageLabel
 	if label then
