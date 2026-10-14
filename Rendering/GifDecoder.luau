@@ -1,5 +1,5 @@
 --!nonstrict
--- GifDecoder v4
+-- GifDecoder v5
 -- Supports: GIF87a / GIF89a, PNG, APNG (animated PNG)
 
 local bufferCreate = buffer.create
@@ -15,13 +15,24 @@ local writeu8  = buffer.writeu8
 local writeu16 = buffer.writeu16
 local writeu32 = buffer.writeu32
 
-local bor  = bit32.bor
-local band = bit32.band
+local bor    = bit32.bor
+local band   = bit32.band
 local lshift = bit32.lshift
 local rshift = bit32.rshift
 
+-- PNG uses big-endian; GIF uses little-endian (handled via readu16/readu32)
+local function readu16BE(src, pos)
+    return readu8(src, pos) * 256 + readu8(src, pos + 1)
+end
+local function readu32BE(src, pos)
+    return readu8(src, pos) * 16777216
+         + readu8(src, pos + 1) * 65536
+         + readu8(src, pos + 2) * 256
+         + readu8(src, pos + 3)
+end
+
 local GifDecoder = {}
-GifDecoder.Version = 4
+GifDecoder.Version = 5
 
 local MAX_CANVAS = 1024
 local MAX_FRAME_PIXELS = 16777216
@@ -761,8 +772,7 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
         end
 
         prev, cur = cur, prev
-    end
-end
+    endend
 
 local function channelsFor(ct)
     if ct == 0 then return 1 end
@@ -789,15 +799,15 @@ local function decodePng(data, options)
     local frameNum = 0
 
     while pos + 8 <= length do
-        local clen = readu32(src, pos)
+        local clen = readu32BE(src, pos)
         local ctype = bufferReadString(src, pos + 4, 4)
         local cdataStart = pos + 8
         local cdataEnd = cdataStart + clen
         if cdataEnd + 4 > length then fail("truncated chunk") end
 
         if ctype == "IHDR" then
-            width     = readu32(src, cdataStart)
-            height    = readu32(src, cdataStart + 4)
+            width     = readu32BE(src, cdataStart)
+            height    = readu32BE(src, cdataStart + 4)
             bitDepth  = readu8(src, cdataStart + 8)
             colorType = readu8(src, cdataStart + 9)
             interlace = readu8(src, cdataStart + 12)
@@ -827,15 +837,15 @@ local function decodePng(data, options)
                     writeu8(palette, i * 4 + 3, a)
                 end
             elseif colorType == 0 and clen >= 2 then
-                local key = readu16(src, cdataStart)
+                local key = readu16BE(src, cdataStart)
                 local maxIdx = lshift(1, bitDepth) - 1
                 local scaled = (key * 255) // maxIdx
                 colorKey = { r = scaled, g = scaled, b = scaled }
             elseif colorType == 2 and clen >= 6 then
                 local maxIdx = lshift(1, bitDepth) - 1
-                local kr = readu16(src, cdataStart)
-                local kg = readu16(src, cdataStart + 2)
-                local kb = readu16(src, cdataStart + 4)
+                local kr = readu16BE(src, cdataStart)
+                local kg = readu16BE(src, cdataStart + 2)
+                local kb = readu16BE(src, cdataStart + 4)
                 colorKey = {
                     r = (kr * 255) // maxIdx,
                     g = (kg * 255) // maxIdx,
@@ -845,34 +855,48 @@ local function decodePng(data, options)
 
         elseif ctype == "acTL" then
             acTL = {
-                numFrames = readu32(src, cdataStart),
-                numPlays  = readu32(src, cdataStart + 4),
+                numFrames = readu32BE(src, cdataStart),
+                numPlays  = readu32BE(src, cdataStart + 4),
             }
 
         elseif ctype == "fcTL" then
-            local fw   = readu32(src, cdataStart + 4)
-            local fh   = readu32(src, cdataStart + 8)
-            local fx   = readu32(src, cdataStart + 12)
-            local fy   = readu32(src, cdataStart + 16)
-            local dnum = readu16(src, cdataStart + 20)
-            local dden = readu16(src, cdataStart + 22)
+            local fw   = readu32BE(src, cdataStart + 4)
+            local fh   = readu32BE(src, cdataStart + 8)
+            local fx   = readu32BE(src, cdataStart + 12)
+            local fy   = readu32BE(src, cdataStart + 16)
+            local dnum = readu16BE(src, cdataStart + 20)
+            local dden = readu16BE(src, cdataStart + 22)
             local dispose = readu8(src, cdataStart + 24)
             local blend   = readu8(src, cdataStart + 25)
-            currentFrame = {
-                w = fw, h = fh, x = fx, y = fy,
-                delayNum = dnum, delayDen = dden,
-                dispose = dispose, blend = blend,
-                chunks = {},
-            }
-            frameNum += 1
-            frames[frameNum] = currentFrame
+
+            if currentFrame and currentFrame.fromIDAT and currentFrame.w == nil then
+                currentFrame.w = fw
+                currentFrame.h = fh
+                currentFrame.x = fx
+                currentFrame.y = fy
+                currentFrame.delayNum = dnum
+                currentFrame.delayDen = dden
+                currentFrame.dispose = dispose
+                currentFrame.blend   = blend
+            else
+                currentFrame = {
+                    w = fw, h = fh, x = fx, y = fy,
+                    delayNum = dnum, delayDen = dden,
+                    dispose = dispose, blend = blend,
+                    chunks = {},
+                    fromIDAT = false,
+                }
+                frameNum += 1
+                frames[frameNum] = currentFrame
+            end
 
         elseif ctype == "IDAT" then
             if not currentFrame then
                 currentFrame = {
-                    w = width, h = height, x = 0, y = 0,
+                    w = nil, h = nil, x = 0, y = 0,
                     delayNum = 0, delayDen = 100, dispose = 0, blend = 0,
                     chunks = {},
+                    fromIDAT = true,
                 }
                 frameNum += 1
                 frames[frameNum] = currentFrame
@@ -896,6 +920,15 @@ local function decodePng(data, options)
     end
     if #frames == 0 then fail("PNG contains no image data") end
     if colorType == 3 and not palette then fail("palette image without PLTE") end
+
+    for _, f in ipairs(frames) do
+        if f.w == nil then
+            f.w = width
+            f.h = height
+            f.x = 0
+            f.y = 0
+        end
+    end
 
     local isAnim = acTL ~= nil
     local channels = channelsFor(colorType)
