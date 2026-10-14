@@ -391,6 +391,47 @@ local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
 local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
 local Spotify = loadstring(game:HttpGet(_47 .. 'addons/Spotify.lua'))()
 
+--# Waifu Loader
+do
+    local CACHE_BUST = tostring(os.time())
+
+    local function fetch(url, bust)
+        local full = bust and (url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. CACHE_BUST) or url
+        local req = request or http_request or (syn and syn.request)
+        if req then
+            local ok, r = pcall(req, { Url = full, Method = "GET" })
+            if ok and type(r) == "table" and tonumber(r.StatusCode) == 200
+                and type(r.Body) == "string" and #r.Body > 0 then
+                return r.Body
+            end
+        end
+        local ok, b = pcall(game.HttpGet, game, full)
+        if ok and type(b) == "string" and #b > 0 then return b end
+        return nil
+    end
+
+    local DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
+    local RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
+
+    local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
+    if not decoderSrc then error("decoder fetch failed", 0) end
+    local GifDecoder = assert(loadstring(decoderSrc))()
+    assert(type(GifDecoder) == "table" and type(GifDecoder.decode) == "function",
+        "decoder module invalid")
+
+    local env = getgenv and getgenv() or _G
+    env.GifDecoder = GifDecoder
+
+    local rendererSrc = fetch(RENDERER_URL, true) or fetch(RENDERER_URL, false)
+    if not rendererSrc then error("[Waifu] renderer fetch failed", 0) end
+    local GifRenderer = assert(loadstring(rendererSrc))()
+    assert(type(GifRenderer) == "table" and type(GifRenderer.new) == "function",
+        "renderer module invalid")
+
+    GifRenderer.RequiredDecoderVersion = GifDecoder.Version
+    env.GifRenderer = GifRenderer
+end
+
 Library:Notify('Thanks for using rawr <3')
 Library:Notify('I LOVE U')
 Library:Notify('Remember this is built for da hood rip offs...')
@@ -410,6 +451,48 @@ end
 
 local _57 = _56:GetMouse()
 local _58 = _53.CurrentCamera
+
+WaifuState = WaifuState or {
+    Link    = nil,
+    Label   = nil,
+    Gif     = nil,
+    BaseW   = 0,
+    BaseH   = 0,
+    Loading = false,
+    TmpFile = nil,
+}
+
+WaifuGifCache   = WaifuGifCache   or {}
+WaifuBytesCache = WaifuBytesCache or {}
+
+if not WaifuGui then
+    WaifuGui = Instance.new("ScreenGui")
+    WaifuGui.Name = "\0waifu"
+    WaifuGui.ResetOnSpawn = false
+    WaifuGui.IgnoreGuiInset = true
+    WaifuGui.DisplayOrder = 1
+    WaifuGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    WaifuGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+end
+
+do
+    local parented = false
+    if gethui then
+        local ok, res = pcall(gethui)
+        if ok and res then
+            WaifuGui.Parent = res
+            parented = true
+        end
+    end
+    if not parented and syn and syn.protect_gui then
+        pcall(function() syn.protect_gui(WaifuGui) end)
+        WaifuGui.Parent = game:GetService("CoreGui")
+        parented = true
+    end
+    if not parented then
+        WaifuGui.Parent = game:GetService("CoreGui")
+    end
+end
 
 local _59 = _48:CreateWindow({
     Title = 'Rawr.xyz | Spooky Season soon 🎃',
@@ -2854,6 +2937,66 @@ HitNotifyBox:SetupDependencies({
     { Toggles.HitNotifications, true },
 })
 
+HitSoundToggle = _67:AddToggle('HitSoundEnabled', {
+    Text = 'Hit Sound',
+    Default = false,
+    Searchable = true,
+})
+
+HitSoundDep = _67:AddDependencyBox()
+HitSoundDep:AddDropdown('HitSoundType', {
+    Text = 'Sound',
+    Default = 'None',
+    Values = {
+        'None',
+        '1nn', '67', 'BatHit', 'Beep', 'Bonk', 'Bow', 'Bubble', 'Bubble2',
+        'CSGO', 'Cod', 'Fairy1', 'Fairy2', 'Fatality', 'Fatality2',
+        'Hentai1', 'Hentai2', 'Hentai3', 'Lazer', 'MarioCoins', 'MinecraftXP',
+        'Neverlose', 'OSU', 'PubgPan', 'Rifk7', 'RustHeadshot', 'Skeet',
+        'SpanishMoan', 'StaryKrow', 'Steve', 'TF2Crit', 'Doggy', 'TF2Default', 'Windows',
+        'boolean', 'bumble', 'disable', 'enable', 'keypress', 'keyrelease',
+        'lobby', 'moan1', 'moan2', 'moan3', 'moan4', 'orthodox', 'pmsound', 'rifk',
+    },
+})
+HitSoundDep:AddSlider('HitSoundVolume', {
+    Text = 'Volume',
+    Default = 50,
+    Min = 1,
+    Max = 100,
+    Rounding = 0,
+})
+HitSoundDep:SetupDependencies({ { Toggles.HitSoundEnabled, true } })
+
+KillSoundToggle = _67:AddToggle('KillSoundEnabled', {
+    Text = 'Kill Sound',
+    Default = false,
+    Searchable = true,
+})
+
+KillSoundDep = _67:AddDependencyBox()
+KillSoundDep:AddDropdown('KillSoundType', {
+    Text = 'Sound',
+    Default = 'None',
+    Values = {
+        'None',
+        '1nn', '67', 'BatHit', 'Beep', 'Bonk', 'Bow', 'Bubble', 'Bubble2',
+        'CSGO', 'Cod', 'Fairy1', 'Fairy2', 'Fatality', 'Fatality2',
+        'Hentai1', 'Hentai2', 'Hentai3', 'Lazer', 'MarioCoins', 'MinecraftXP',
+        'Neverlose', 'OSU', 'PubgPan', 'Rifk7', 'Doggy', 'RustHeadshot', 'Skeet',
+        'SpanishMoan', 'StaryKrow', 'Steve', 'TF2Crit', 'TF2Default', 'Windows',
+        'boolean', 'bumble', 'disable', 'enable', 'keypress', 'keyrelease',
+        'lobby', 'moan1', 'moan2', 'moan3', 'moan4', 'orthodox', 'pmsound', 'rifk',
+    },
+})
+KillSoundDep:AddSlider('KillSoundVolume', {
+    Text = 'Volume',
+    Default = 50,
+    Min = 1,
+    Max = 100,
+    Rounding = 0,
+})
+KillSoundDep:SetupDependencies({ { Toggles.KillSoundEnabled, true } })
+
 HitEffects = {
     Enabled = false,
     Color = Color3.fromRGB(159, 133, 195),
@@ -2910,11 +3053,7 @@ HitEffects.DepBox:AddSlider("HitEffectAliveTime", {
     Suffix = "s",
 })
 
-HitEffects.DepBox:SetupDependencies({
-    { HitEffects.Toggle, true },
-})
-
-_67:AddDropdown("HitEffectStyleDropdown", {
+HitEffects.DepBox:AddDropdown("HitEffectStyleDropdown", {
     Text = "Style",
     Default = {"Particles"},
     Values = {
@@ -2923,6 +3062,10 @@ _67:AddDropdown("HitEffectStyleDropdown", {
         "Plasma", "Glitch", "Cosmic Shit",
     },
     Multi = true,
+})
+
+HitEffects.DepBox:SetupDependencies({
+    { HitEffects.Toggle, true },
 })
 
 Toggles.HitEffects:OnChanged(function(value)
@@ -3399,7 +3542,9 @@ normalone = _78:AddToggle('Spinbot', {
     Searchable = true,
 })
 
-_78:AddSlider('SpinbotSpeed', {
+SpinbotDep = _78:AddDependencyBox()
+
+SpinbotDep:AddSlider('SpinbotSpeed', {
     Text = 'Speed',
     Default = 50,
     Min = 1,
@@ -3408,8 +3553,13 @@ _78:AddSlider('SpinbotSpeed', {
     Suffix = '%',
 })
 
+SpinbotDep:SetupDependencies({
+    { Toggles.Spinbot, true },
+})
+
 SpinbotSpeed = 50
 SpinbotConnection = nil
+SpinbotActive = false
 
 function DoSpinbot()
     local char = LocalPlayer.Character
@@ -3421,35 +3571,34 @@ function DoSpinbot()
     hrp.CFrame = hrp.CFrame * CFrame.fromEulerAnglesXYZ(0, SpinbotSpeed * 0.016, 0)
 end
 
-Toggles.Spinbot:OnChanged(function(value)
+function StartSpinbot()
+    if SpinbotConnection then return end
+    SpinbotConnection = RunService.Heartbeat:Connect(function()
+        DoSpinbot()
+    end)
+end
+
+function StopSpinbot()
     if SpinbotConnection then
         SpinbotConnection:Disconnect()
         SpinbotConnection = nil
     end
-    
-    if value then
-        SpinbotConnection = RunService.Heartbeat:Connect(function()
-            DoSpinbot()
-        end)
-    else
-        pcall(function()
-            local char = LocalPlayer.Character
-            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid.AutoRotate = true
-            end
-        end)
-    end
-    
-    task.wait()
-    
     pcall(function()
         local char = LocalPlayer.Character
         local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         if humanoid then
-            humanoid.AutoRotate = value and false or true
+            humanoid.AutoRotate = true
         end
     end)
+end
+
+Toggles.Spinbot:OnChanged(function(value)
+    if value then
+        SpinbotActive = false
+    else
+        SpinbotActive = false
+        StopSpinbot()
+    end
 end)
 
 Options.SpinbotSpeed:OnChanged(function(value)
@@ -3465,8 +3614,17 @@ normalone:AddKeyPicker('SpinbotKeybind', {
 })
 
 Options.SpinbotKeybind:OnClick(function()
-    local newState = not Toggles.Spinbot.Value
-    Toggles.Spinbot:SetValue(newState)
+    if not Toggles.Spinbot.Value then
+        return
+    end
+
+    SpinbotActive = not SpinbotActive
+
+    if SpinbotActive then
+        StartSpinbot()
+    else
+        StopSpinbot()
+    end
 end)
 
 local _WSToggle = _78:AddToggle('WalkSpeedEnabled', {
@@ -3489,6 +3647,12 @@ _78:AddSlider('WalkSpeed', {
     Max = 1000,
     Rounding = 0,
     Suffix = '',
+})
+
+_78:AddDropdown('WalkSpeedMethod', {
+    Text = 'Method',
+    Default = 'Humanoid',
+    Values = { 'Humanoid', 'MoveDir', 'Directional', 'CFrame' },
 })
 
 local _JPToggle = _78:AddToggle('JumpPowerEnabled', {
@@ -6795,6 +6959,57 @@ task.spawn(function()
     end
 end)
 
+_78:AddLabel('Gif Player')
+
+WaifuToggle = _78:AddToggle("visuals/camera/waifu", {
+    Text = "Gif Player",
+    Default = false,
+    Searchable = true,
+})
+
+WaifuDep = _78:AddDependencyBox()
+
+WaifuDep:AddInput("visuals/camera/waifu/link", {
+    Text = "Image / GIF URL",
+    Default = "https://github.com/mental1illness/archive/blob/main/inveris1337/images/Aiko.png?raw=true",
+})
+
+WaifuDep:AddSlider("visuals/camera/waifu/x", {
+    Text = "X",
+    Default = 0.5,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+WaifuDep:AddSlider("visuals/camera/waifu/y", {
+    Text = "Y",
+    Default = 0.5,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+WaifuDep:AddSlider("visuals/camera/waifu/transparency", {
+    Text = "Transparency",
+    Default = 0,
+    Min = 0,
+    Max = 1,
+    Rounding = 2,
+})
+
+WaifuDep:AddSlider("visuals/camera/waifu/scale", {
+    Text = "Scale",
+    Default = 0.5,
+    Min = 0,
+    Max = 2,
+    Rounding = 2,
+})
+
+WaifuDep:SetupDependencies({
+    { Toggles["visuals/camera/waifu"], true },
+})
+
 local _81 = _60.Main:AddRightTabbox()
 local _82 = _81:AddTab('server finder')
 
@@ -8928,15 +9143,145 @@ if _128 or _129 then
     shared.hitman.visuals.snaplines.position = "center"
 end
 
-local _131 = Instance.new("Sound")
-_131.SoundId = "rbxassetid://6534948092"
-_131.Volume = 0.5
-_131.Parent = _127
+SoundRegistry = {
+    ["1nn"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/1nn.mp3",
+    ["67"]            = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/67.mp3",
+    ["BatHit"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/BatHit.mp3",
+    ["Beep"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Beep.mp3",
+    ["Bonk"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bonk.mp3",
+    ["Bow"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bow.mp3",
+    ["Bubble"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bubble.mp3",
+    ["Bubble2"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bubble2.mp3",
+    ["CSGO"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/CSGO.mp3",
+    ["Cod"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Cod.mp3",
+    ["Fairy1"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fairy1.mp3",
+    ["Fairy2"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fairy2.mp3",
+    ["Fatality"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fatality.mp3",
+    ["Fatality2"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fatality2.mp3",
+    ["Hentai1"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai1.mp3",
+    ["Hentai2"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai2.mp3",
+    ["Hentai3"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai3.mp3",
+    ["Lazer"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Lazer.mp3",
+    ["MarioCoins"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/MarioCoins.mp3",
+    ["MinecraftXP"]   = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/MinecraftXP.mp3",
+    ["Neverlose"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Neverlose.mp3",
+    ["OSU"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/OSU.mp3",
+    ["PubgPan"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/PubgPan.mp3",
+    ["Rifk7"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Rifk7.mp3",
+    ["RustHeadshot"]  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/RustHeadshot.mp3",
+    ["Skeet"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Skeet.mp3",
+    ["SpanishMoan"]   = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/SpanishMoan.mp3",
+    ["StaryKrow"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/StaryKrow.mp3",
+    ["Steve"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Steve.mp3",
+    ["TF2Crit"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/TF2Crit.mp3",
+    ["TF2Default"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/TF2Default.mp3",
+    ["Windows"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Windows.mp3",
+    ["boolean"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/boolean.ogg",
+    ["bumble"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/bumble.mp3",
+    ["disable"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/disable.ogg",
+    ["enable"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/enable.ogg",
+    ["keypress"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/keypress.ogg",
+    ["keyrelease"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/keyrelease.ogg",
+    ["lobby"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/lobby.mp3",
+    ["moan1"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan1.ogg",
+    ["moan2"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan2.ogg",
+    ["moan3"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan3.ogg",
+    ["moan4"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan4.ogg",
+    ["orthodox"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/orthodox.ogg",
+    ["pmsound"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/pmsound.ogg",
+    ["rifk"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/rifk.ogg",
+    ["Doggy"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Doggy.mp3",
+}
 
-local _132 = Instance.new("Sound")
-_132.SoundId = "rbxassetid://1255040462"
-_132.Volume = 1.0
-_132.Parent = _127
+_SoundService = game:GetService("SoundService")
+_SoundCache = {}
+
+function GetSoundAsset(url)
+    if _SoundCache[url] then return _SoundCache[url] end
+    local ok, bytes = pcall(game.HttpGet, game, url)
+    if not ok or type(bytes) ~= "string" then return nil end
+
+    local name = url:match("([^/]+)$")
+    if writefile and getcustomasset then
+        writefile(name, bytes)
+        local ok2, asset = pcall(getcustomasset, name)
+        if ok2 and asset then
+            _SoundCache[url] = asset
+            return asset
+        end
+    end
+    return nil
+end
+
+function PlaySoundByName(soundName, volume)
+    if not soundName or soundName == "None" then return end
+    local url = SoundRegistry[soundName]
+    if not url then return end
+
+    local asset = GetSoundAsset(url)
+    if not asset then return end
+
+    local s = Instance.new("Sound")
+    s.SoundId = asset
+    s.Volume = math.clamp((volume or 50) / 100 * 2.5, 0, 3)
+    s.PlayOnRemove = true
+    s.Parent = _SoundService
+    s:Destroy()
+end
+
+function PlayHitSound()
+    if not Toggles.HitSoundEnabled or not Toggles.HitSoundEnabled.Value then return end
+    PlaySoundByName(Options.HitSoundType.Value, Options.HitSoundVolume.Value)
+end
+
+function PlayKillSound()
+    if not Toggles.KillSoundEnabled or not Toggles.KillSoundEnabled.Value then return end
+    PlaySoundByName(Options.KillSoundType.Value, Options.KillSoundVolume.Value)
+end
+
+KillTracker = {
+    lastTarget = nil,
+    firedFor = {},  -- [userId] = true, don't fire again for this player
+}
+
+function UpdateKillSound(target)
+    if not target then
+        KillTracker.lastTarget = nil
+        return
+    end
+
+    local userId = target.UserId
+    if KillTracker.firedFor[userId] then
+        -- Already fired for this player, don't fire again
+        KillTracker.lastTarget = target
+        return
+    end
+
+    local char = target.Character
+    if not char then
+        -- Character gone → treat as kill (once per userId)
+        KillTracker.firedFor[userId] = true
+        PlayKillSound()
+        KillTracker.lastTarget = nil
+        return
+    end
+
+    local be = char:FindFirstChild("BodyEffects")
+    if not be then
+        KillTracker.lastTarget = target
+        return
+    end
+
+    local dead = be:FindFirstChild("Dead")
+    if dead and dead.Value == true then
+        KillTracker.firedFor[userId] = true
+        PlayKillSound()
+        KillTracker.lastTarget = nil
+        return
+    end
+
+    KillTracker.lastTarget = target
+end
 
 local _133 = Instance.new("ScreenGui")
 _133.Name = "targetbob"
@@ -9117,19 +9462,75 @@ end
 
 Toggles.Noclip:OnChanged(_NoclipToggleChanged)
 
-local function _WalkSpeedLoop()
-    if not Toggles.WalkSpeedEnabled.Value then 
-        return 
-    end
-    
+_lastCFrameTick = 0
+
+local _WalkSpeedLoop = function()
+    if not Toggles.WalkSpeedEnabled.Value then return end
+
     local char = _56.Character
-    if not char then 
-        return 
-    end
-    
+    if not char then return end
+
     local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.WalkSpeed = Options.WalkSpeed.Value
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not hum or not root then return end
+
+    local speed = Options.WalkSpeed.Value
+    local method = Options.WalkSpeedMethod.Value
+
+    if method == "Humanoid" then
+        if hum.WalkSpeed ~= speed then
+            hum.WalkSpeed = speed
+        end
+        return
+    end
+
+    local moveDir = Vector3.zero
+
+    if method == "MoveDir" then
+        moveDir = hum.MoveDirection
+
+    elseif method == "Directional" or method == "CFrame" then
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+
+        local look = cam.CFrame.LookVector
+        local right = cam.CFrame.RightVector
+        look = Vector3.new(look.X, 0, look.Z)
+        right = Vector3.new(right.X, 0, right.Z)
+
+        if _54:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + look end
+        if _54:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - look end
+        if _54:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + right end
+        if _54:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - right end
+    end
+
+    if moveDir.Magnitude <= 0 then return end
+    moveDir = moveDir.Unit
+
+    local currentY = root.AssemblyLinearVelocity.Y
+
+    if method == "CFrame" then
+        local grounded = (hum.FloorMaterial ~= Enum.Material.Air)
+            and hum:GetState() ~= Enum.HumanoidStateType.Jumping
+            and hum:GetState() ~= Enum.HumanoidStateType.Freefall
+            and hum:GetState() ~= Enum.HumanoidStateType.FallingDown
+
+        if not grounded then return end
+
+        local now = tick()
+        local dt = now - _lastCFrameTick
+        _lastCFrameTick = now
+        if dt <= 0 or dt > 0.2 then dt = 1 / 60 end
+
+        local pos = root.Position
+        local newPos = Vector3.new(
+            pos.X + moveDir.X * speed * dt,
+            pos.Y,
+            pos.Z + moveDir.Z * speed * dt
+        )
+        root.CFrame = CFrame.new(newPos, newPos + root.CFrame.LookVector)
+    else
+        root.AssemblyLinearVelocity = moveDir * speed + Vector3.new(0, currentY, 0)
     end
 end
 
@@ -9138,13 +9539,15 @@ local function _WalkSpeedChanged()
         _WSConnection:Disconnect()
         _WSConnection = nil
     end
-    
+
     if Toggles.WalkSpeedEnabled.Value then
+        _lastCFrameTick = tick()
         _WSConnection = _52.RenderStepped:Connect(_WalkSpeedLoop)
     end
 end
 
 Options.WalkSpeed:OnChanged(_WalkSpeedChanged)
+Options.WalkSpeedMethod:OnChanged(_WalkSpeedChanged)
 Toggles.WalkSpeedEnabled:OnChanged(_WalkSpeedChanged)
 task.spawn(_WalkSpeedChanged)
 
@@ -9721,7 +10124,13 @@ local function _194()
                 if not _180(_154) and _104.lasthealth[_154] then
                     local _196 = _104.lasthealth[_154]
                     if _148.Health < _196 then
-                        _131:Play()
+                        local _now = tick()
+                        _104._hitSoundCooldown = _104._hitSoundCooldown or {}
+                        local _lastPlay = _104._hitSoundCooldown[_154]
+                        if not _lastPlay or (_now - _lastPlay) > 0.08 then
+                            _104._hitSoundCooldown[_154] = _now
+                            PlayHitSound()
+                        end
                     end
                 end
                 _104.lasthealth[_154] = _148.Health
@@ -9735,6 +10144,22 @@ local function _194()
                     _armor = math.floor(_armorVal.Value)
                 elseif _armorVal and _armorVal:IsA("IntValue") then
                     _armor = _armorVal.Value
+                end
+
+                local _isDeadNow = false
+                if _bodyFx then
+                    local _deadVal = _bodyFx:FindFirstChild("Dead")
+                    if _deadVal and _deadVal.Value == true then
+                        _isDeadNow = true
+                    end
+                end
+
+                if _isDeadNow then
+                    _104._killFiredFor = _104._killFiredFor or {}
+                    if not _104._killFiredFor[_154.UserId] then
+                        _104._killFiredFor[_154.UserId] = true
+                        PlayKillSound()
+                    end
                 end
 
                 _135.Text = string.format("%s  %.0f/%.0f  |  %d ARMOR",
@@ -9752,6 +10177,13 @@ local function _194()
             _135.Text = _154.DisplayName .. " (no char)"
             _104.lasthealth[_154] = nil
             _104.wasknocked[_154] = nil
+            if _154 then
+                _104._killFiredFor = _104._killFiredFor or {}
+                if not _104._killFiredFor[_154.UserId] then
+                    _104._killFiredFor[_154.UserId] = true
+                    PlayKillSound()
+                end
+            end
         end
     else
         _135.Text = ""
@@ -13390,8 +13822,364 @@ if _130 then
     setreadonly(_233, true)
 end
 
+--# Waifu Renderer
+do
+    local RunService = game:GetService("RunService")
+
+    _G.WaifuState = _G.WaifuState or {
+        Link = nil, Label = nil, Gif = nil,
+        BaseW = 0, BaseH = 0, Loading = false, TmpFile = nil,
+    }
+    _G.WaifuGifCache   = _G.WaifuGifCache   or {}
+    _G.WaifuBytesCache = _G.WaifuBytesCache or {}
+
+    if not _G.WaifuGui then
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "\0waifu"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 1
+        gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+        _G.WaifuGui = gui
+    end
+
+    -- ========================================================================
+    -- Detection
+    -- ========================================================================
+    local function waifuDetect(bytes)
+        if type(bytes) ~= "string" or #bytes < 12 then return "unknown" end
+        local b1, b2, b3, b4 = bytes:byte(1, 4)
+
+        -- PNG / APNG
+        if bytes:sub(1, 8) == "\137PNG\r\n\26\n" then
+            local idatPos = bytes:find("IDAT", 1, true)
+            local actlPos = bytes:find("acTL", 1, true)
+            if actlPos and (not idatPos or actlPos < idatPos) then return "apng" end
+            return "png"
+        end
+
+        -- JPG
+        if b1 == 0xFF and b2 == 0xD8 and b3 == 0xFF then return "jpg" end
+
+        -- GIF
+        local sig6 = bytes:sub(1, 6)
+        if sig6 == "GIF87a" or sig6 == "GIF89a" then return "gif" end
+
+        -- WebP
+        if bytes:sub(1, 4) == "RIFF" and bytes:sub(9, 12) == "WEBP" then return "webp" end
+
+        -- BMP
+        if bytes:sub(1, 2) == "BM" then return "bmp" end
+
+        -- ICO / CUR
+        if b1 == 0x00 and b2 == 0x00 and (b3 == 0x01 or b3 == 0x02) and b4 == 0x00 then
+            return "ico"
+        end
+
+        -- TIFF (II*\0 or MM\0*)
+        if bytes:sub(1, 4) == "II\42\0" or bytes:sub(1, 4) == "MM\0\42" then return "tiff" end
+
+        -- HEIC / HEIF
+        if bytes:sub(5, 8) == "ftyp" then
+            local brand = bytes:sub(9, 12)
+            if brand == "heic" or brand == "heix" or brand == "hevc"
+                or brand == "hevx" or brand == "mif1" or brand == "msf1" then
+                return "heic"
+            end
+        end
+
+        -- SVG
+        local head = bytes:sub(1, math.min(#bytes, 512)):lower()
+        if head:match("^%s*<svg") or (head:match("^%s*<%?xml") and head:find("<svg", 1, true)) then
+            return "svg"
+        end
+
+        return "unknown"
+    end
+
+    -- ========================================================================
+    -- Sizing helpers
+    -- ========================================================================
+    local function waifuPngSize(bytes)
+        if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then return 400, 400 end
+        local function u32be(off)
+            return bytes:byte(off) * 16777216
+                 + bytes:byte(off + 1) * 65536
+                 + bytes:byte(off + 2) * 256
+                 + bytes:byte(off + 3)
+        end
+        local w = u32be(17)
+        local h = u32be(21)
+        if w <= 0 or w > 4096 then w = 400 end
+        if h <= 0 or h > 4096 then h = 400 end
+        return w, h
+    end
+
+    local function waifuBmpSize(bytes)
+        -- BITMAPINFOHEADER width/height at LE offsets 18, 22 (0-based) => 19, 23 (1-based)
+        local function u32le(off)
+            return bytes:byte(off)
+                 + bytes:byte(off + 1) * 256
+                 + bytes:byte(off + 2) * 65536
+                 + bytes:byte(off + 3) * 16777216
+        end
+        local w = u32le(19)
+        local h = u32le(23)
+        if h and h < 0 then h = -h end
+        if w and w > 0 and w <= 4096 and h and h > 0 and h <= 4096 then return w, h end
+        return 256, 256
+    end
+
+    local function waifuIcoSize(bytes)
+        -- ICONDIR: first entry w/h at bytes 7,8 (0 = 256)
+        local w = bytes:byte(7) or 256
+        local h = bytes:byte(8) or 256
+        if w == 0 then w = 256 end
+        if h == 0 then h = 256 end
+        return w, h
+    end
+
+    local function waifuSizeFor(bytes, kind)
+        if kind == "bmp"  then return waifuBmpSize(bytes) end
+        if kind == "ico"  then return waifuIcoSize(bytes) end
+        if kind == "webp" then return waifuPngSize(bytes) end -- placeholder, overridden by loader's own size
+        return waifuPngSize(bytes)
+    end
+
+    -- ========================================================================
+    -- Files / labels
+    -- ========================================================================
+    local function waifuCleanupFiles()
+        if not (listfiles and isfile and delfile) then return end
+        local ok, files = pcall(listfiles, "")
+        if not ok or type(files) ~= "table" then return end
+        for _, name in ipairs(files) do
+            if type(name) == "string" and name:match("^waifu_asset_") then
+                pcall(delfile, name)
+            end
+        end
+    end
+
+    local function waifuDestroy()
+        if _G.WaifuState.Gif then
+            pcall(function() _G.WaifuState.Gif:Destroy() end)
+            _G.WaifuState.Gif = nil
+        end
+        if _G.WaifuState.Label then
+            pcall(function() _G.WaifuState.Label:Destroy() end)
+            _G.WaifuState.Label = nil
+        end
+        _G.WaifuState.BaseW = 0
+        _G.WaifuState.BaseH = 0
+        waifuCleanupFiles()
+    end
+
+    local function waifuApply()
+        if not _G.WaifuState.Label then return end
+        _G.WaifuState.Label.Position = UDim2.fromScale(
+            Options["visuals/camera/waifu/x"].Value,
+            Options["visuals/camera/waifu/y"].Value
+        )
+        _G.WaifuState.Label.ImageTransparency = Options["visuals/camera/waifu/transparency"].Value
+        local scale = Options["visuals/camera/waifu/scale"].Value
+        _G.WaifuState.Label.Size = UDim2.fromOffset(
+            _G.WaifuState.BaseW * scale, _G.WaifuState.BaseH * scale)
+    end
+
+    local function waifuMakeLabel(w, h)
+        local label = Instance.new("ImageLabel")
+        label.BackgroundTransparency = 1
+        label.BorderSizePixel = 0
+        label.AnchorPoint = Vector2.new(0.5, 0.5)
+        label.Position = UDim2.fromScale(0.5, 0.5)
+        label.Size = UDim2.fromOffset(w, h)
+        label.ScaleType = Enum.ScaleType.Fit
+        label.Parent = _G.WaifuGui
+        return label
+    end
+
+    -- ========================================================================
+    -- Loaders
+    -- ========================================================================
+    local UNSUPPORTED_STATIC = {
+        tiff = true,
+        heic = true,
+        svg  = true,
+    }
+
+    local function waifuLoadStatic(bytes, kind)
+        if not (writefile and getcustomasset) then
+            warn("writefile/getcustomasset missing")
+            return false
+        end
+
+        -- Roblox's image loader can't decode these. Fail cleanly instead of
+        -- producing a broken texture reference.
+        if UNSUPPORTED_STATIC[kind] then
+            warn("[Rawr] " .. kind .. " is not supported by Roblox's image loader")
+            return false
+        end
+
+        local ext = (kind == "jpg") and "jpg" or (kind == "webp" and "webp") or "png"
+        local tmp = "waifu_asset_" .. tostring(os.time()) .. "_"
+                 .. tostring(math.random(1, 1e9)) .. "." .. ext
+        writefile(tmp, bytes)
+        local asset = getcustomasset(tmp)
+
+        local w, h = waifuSizeFor(bytes, kind)
+        _G.WaifuState.Label = waifuMakeLabel(w, h)
+        _G.WaifuState.Label.Image = asset
+        _G.WaifuState.BaseW = w
+        _G.WaifuState.BaseH = h
+        _G.WaifuState.TmpFile = tmp
+        return true
+    end
+
+    local decoding = {}
+
+    local function waifuLoadAnimated(bytes, link, kind)
+        local decoded = _G.WaifuGifCache[link]
+        if not decoded then
+            if decoding[link] then return false end
+            decoding[link] = true
+            local ok, res = pcall(function()
+                return GifDecoder.decode(bytes, { Yield = 4 })
+            end)
+            decoding[link] = nil
+            if not ok or not res then
+                warn("[Rawr] " .. kind .. " decode failed: " .. tostring(res))
+                return false
+            end
+            decoded = res
+            _G.WaifuGifCache[link] = decoded
+        end
+
+        local label = waifuMakeLabel(decoded.Width, decoded.Height)
+        local looped = (decoded.LoopCount == nil or decoded.LoopCount == 0)
+
+        _G.WaifuState.Label = label
+        _G.WaifuState.Gif = GifRenderer.new({
+            ImageLabel     = label,
+            Size           = Vector2.new(decoded.Width, decoded.Height),
+            Frames         = decoded.Frames,
+            Looped         = looped,
+            AutoPlay       = true,
+            LowPower       = true,
+            UpdateRate     = 60,
+            MaxFrameSkip   = 6,
+            SkipDuplicates = true,
+        })
+        _G.WaifuState.BaseW = decoded.Width
+        _G.WaifuState.BaseH = decoded.Height
+        return true
+    end
+
+    local function waifuLoad(bytes, link)
+        local kind = waifuDetect(bytes)
+
+        if kind == "gif" or kind == "apng" then
+            return waifuLoadAnimated(bytes, link, kind)
+        end
+
+        if kind == "png" or kind == "jpg" or kind == "bmp"
+            or kind == "webp" or kind == "ico"
+            or kind == "tiff" or kind == "heic" or kind == "svg" then
+            return waifuLoadStatic(bytes, kind)
+        end
+
+        warn("[Rawr] unsupported file type: " .. kind)
+        return false
+    end
+
+    -- ========================================================================
+    -- Fetch (cache-busted, no-cache headers)
+    -- ========================================================================
+    local function waifuFetch(link)
+        local sep = link:find("?", 1, true) and "&" or "?"
+        local url = link .. sep .. "t=" .. tostring(os.time())
+        local req = request or http_request or (syn and syn.request)
+        if req then
+            local ok, resp = pcall(req, {
+                Url = url, Method = "GET",
+                Headers = {
+                    ["Cache-Control"] = "no-cache, no-store, must-revalidate",
+                    ["Pragma"] = "no-cache",
+                },
+            })
+            if ok and type(resp) == "table"
+                and tonumber(resp.StatusCode) == 200
+                and type(resp.Body) == "string" and #resp.Body > 0 then
+                return resp.Body
+            end
+        end
+        local ok, body = pcall(game.HttpGet, game, url)
+        if ok and type(body) == "string" and #body > 0 then return body end
+        return nil
+    end
+
+    -- ========================================================================
+    -- Main loop
+    -- ========================================================================
+    local function waifuTick()
+        local toggle = Toggles["visuals/camera/waifu"]
+        if not toggle then return end
+
+        if not toggle.Value then
+            if _G.WaifuState.Label or _G.WaifuState.Gif then waifuDestroy() end
+            _G.WaifuState.Link = nil
+            return
+        end
+
+        local link = Options["visuals/camera/waifu/link"].Value
+        if type(link) ~= "string" or link == "" then return end
+        if not link:match("^https?://") then return end
+
+        if _G.WaifuState.Link == link and (_G.WaifuState.Label or _G.WaifuState.Gif) then
+            waifuApply()
+            return
+        end
+
+        if _G.WaifuState.Loading then return end
+        _G.WaifuState.Loading = true
+        _G.WaifuState.Link = link
+        waifuDestroy()
+
+        task.spawn(function()
+            local bytes = waifuFetch(link)
+            if not bytes or #bytes < 16 then
+                warn("HTTP fetch failed/invaild url")
+                _G.WaifuState.Link = nil
+                _G.WaifuState.Loading = false
+                return
+            end
+            if waifuLoad(bytes, link) then
+                waifuApply()
+            else
+                _G.WaifuState.Link = nil
+            end
+            _G.WaifuState.Loading = false
+        end)
+    end
+
+    RunService.RenderStepped:Connect(function()
+        pcall(waifuTick)
+    end)
+
+    getgenv().WaifuReload = function()
+        if _G.WaifuState.Link then
+            _G.WaifuGifCache[_G.WaifuState.Link] = nil
+            _G.WaifuState.Link = nil
+        end
+        _G.WaifuState.Loading = false
+        waifuDestroy()
+    end
+
+    waifuCleanupFiles()
+end
+
 local _237 = _52.RenderStepped:Connect(function()
-    _G.HitmanCurrentTarget = _104.targetplayer   -- NEW
+    _G.HitmanCurrentTarget = _104.targetplayer -- new
     if _104.active then
         _205()
         _194()
@@ -13551,6 +14339,20 @@ Options.BlacklistPlayers:OnChanged(function()
     if Toggles.Highlight.Value and _104.active then
         _165()
     end
+end)
+
+_51.PlayerRemoving:Connect(function(plr)
+    if _104._hitSoundCooldown then
+        _104._hitSoundCooldown[plr] = nil
+    end
+    if _104._killFiredFor then
+        _104._killFiredFor[plr.UserId] = nil
+    end
+end)
+
+_56.CharacterAdded:Connect(function()
+    _104._killFiredFor = {}
+    _104._hitSoundCooldown = {}
 end)
 
 function _cleanupPlayerFromDropdowns(plr)
@@ -16331,6 +17133,41 @@ _48:OnUnload(function()
     for _, line in ipairs(_137) do pcall(function() line:Remove() end) end
     _136 = {}
     _137 = {}
+
+    if getgenv then
+        getgenv().WaifuReload = nil
+    end
+    if WaifuState then
+        if WaifuState.Gif then
+            pcall(function() WaifuState.Gif:Destroy() end)
+            WaifuState.Gif = nil
+        end
+        if WaifuState.Label then
+            pcall(function() WaifuState.Label:Destroy() end)
+            WaifuState.Label = nil
+        end
+        WaifuState.Link = nil
+        WaifuState.Loading = false
+        WaifuState.BaseW = 0
+        WaifuState.BaseH = 0
+        WaifuState.TmpFile = nil
+    end
+    if WaifuGui then
+        pcall(function() WaifuGui:Destroy() end)
+        WaifuGui = nil
+    end
+    if WaifuGifCache then table.clear(WaifuGifCache) end
+    if WaifuBytesCache then table.clear(WaifuBytesCache) end
+    if listfiles and isfile and delfile then
+        local ok, files = pcall(listfiles, "")
+        if ok and type(files) == "table" then
+            for _, name in ipairs(files) do
+                if type(name) == "string" and name:match("^waifu_asset_") then
+                    pcall(delfile, name)
+                end
+            end
+        end
+    end
 
     if collectgarbage then collectgarbage() end
 end)
