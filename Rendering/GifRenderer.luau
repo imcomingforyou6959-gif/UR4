@@ -1,4 +1,5 @@
 --!nonstrict
+-- GifRenderer v2: one shared scheduler, near-zero idle cost, bounded cache.
 local AssetService = game:GetService("AssetService")
 local RunService   = game:GetService("RunService")
 
@@ -8,6 +9,12 @@ GifRenderer.__index = GifRenderer
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
 GifRenderer.RequiredDecoderVersion = 7
 GifRenderer.MaxDeltaTime = 0.25
+
+-- Tunables (global)
+GifRenderer.FrameBudget = 0.002            -- max seconds of texture writes per Heartbeat before deferring the rest
+GifRenderer.CacheBudgetBytes = 48 * 1024 * 1024
+GifRenderer.Adaptive = true                -- auto-lower update rate when the game's FPS drops
+GifRenderer.DefaultYield = 8               -- decoder yields every N frames so loading never freezes the game
 
 export type Frame = {
 	Pixels: buffer,
@@ -26,14 +33,13 @@ export type Options = {
 	Speed: number?,
 	OnFinished: ((any) -> ())?,
 
-	LowPower: boolean?,
-	UpdateRate: number?,
-	MaxFrameSkip: number?,
-	SkipDuplicates: boolean?,
+	LowPower: boolean?,   -- caps updates at 30/s unless UpdateRate is set
+	UpdateRate: number?,  -- max texture updates per second (0 = uncapped)
+	MaxFrameSkip: number?, -- ignored, kept for compatibility
+	SkipDuplicates: boolean?, -- ignored, kept for compatibility
 }
 
 local DecoderCache
-local DecodedCache = {}
 
 local function download(url: string): string
 	local req = request or http_request or (syn and syn.request)
@@ -77,6 +83,141 @@ local function getDecoder()
 	return DecoderCache
 end
 
+-- ============================================================================
+-- Decoded-GIF cache (LRU, bounded by bytes so low-end devices don't run out of memory)
+-- ============================================================================
+
+local cache = {}
+local cacheBytes = 0
+local cacheClock = 0
+
+local function cacheGet(url)
+	local entry = cache[url]
+	if not entry then return nil end
+	cacheClock += 1
+	entry.used = cacheClock
+	return entry.gif
+end
+
+local function cachePut(url, gif)
+	local bytes = 0
+	for _, frame in gif.Frames do bytes += buffer.len(frame.Pixels) end
+	local budget = GifRenderer.CacheBudgetBytes
+	if bytes > budget then return end
+
+	local old = cache[url]
+	if old then cacheBytes -= old.bytes end
+	cacheClock += 1
+	cache[url] = {gif = gif, bytes = bytes, used = cacheClock}
+	cacheBytes += bytes
+
+	while cacheBytes > budget do
+		local oldestKey, oldest
+		for key, entry in cache do
+			if key ~= url and (not oldest or entry.used < oldest.used) then
+				oldestKey, oldest = key, entry
+			end
+		end
+		if not oldestKey then break end
+		cacheBytes -= oldest.bytes
+		cache[oldestKey] = nil
+	end
+end
+
+local function decodeOptions(options)
+	local yield = options.Yield
+	if yield == nil then yield = GifRenderer.DefaultYield end
+	return {Yield = yield, RawDelays = options.RawDelays}
+end
+
+-- ============================================================================
+-- Shared scheduler: ONE Heartbeat connection drives every playing renderer.
+-- Renderers only exist in the list while playing, so idle cost is zero.
+-- ============================================================================
+
+local playing = {}
+local connection = nil
+local rotate = 0
+local throttle = 1      -- adaptive multiplier on each renderer's minimum update interval
+local dtAverage = 1 / 60
+
+local function onHeartbeat(dt)
+	if GifRenderer.Adaptive then
+		dtAverage += (dt - dtAverage) * 0.05
+		if dtAverage > 0.04 then throttle = 3
+		elseif dtAverage > 0.025 then throttle = 2
+		elseif dtAverage < 0.019 then throttle = 1 end
+	else
+		throttle = 1
+	end
+
+	local count = #playing
+	if count == 0 then return end
+
+	local now = os.clock()
+	local deadline = now + GifRenderer.FrameBudget
+	local first = rotate % count
+	local removeDead = false
+	local cut = false
+
+	for k = 0, count - 1 do
+		local renderer = playing[(first + k) % count + 1]
+		local ok, err = pcall(renderer._tick, renderer, now)
+		if not ok then
+			warn("GifRenderer: stopped a renderer after an error: " .. tostring(err))
+			renderer.Playing = false
+		end
+		if not renderer.Playing then removeDead = true end
+		-- Out of write budget: resume from the next renderer next frame so nobody starves.
+		if k < count - 1 and os.clock() > deadline then
+			rotate = first + k + 1
+			cut = true
+			break
+		end
+	end
+	if not cut then rotate = first end
+
+	if removeDead then
+		local write = 0
+		for read = 1, count do
+			local renderer = playing[read]
+			if renderer.Playing then
+				write += 1
+				playing[write] = renderer
+			else
+				renderer._registered = false
+			end
+		end
+		for i = count, write + 1, -1 do playing[i] = nil end
+		rotate = 0
+	end
+
+	if #playing == 0 and connection then
+		connection:Disconnect()
+		connection = nil
+	end
+end
+
+local function register(renderer)
+	if renderer._registered then return end
+	renderer._registered = true
+	table.insert(playing, renderer)
+	if not connection then
+		connection = RunService.Heartbeat:Connect(onHeartbeat)
+	end
+end
+
+local function unregister(renderer)
+	if not renderer._registered then return end
+	renderer._registered = false
+	local index = table.find(playing, renderer)
+	if index then table.remove(playing, index) end
+	if #playing == 0 and connection then
+		connection:Disconnect()
+		connection = nil
+	end
+end
+
 function GifRenderer.new(options: Options)
 	assert(options and options.Frames and #options.Frames > 0, "Frames cannot be empty")
 	local width  = math.floor(options.Size.X)
@@ -89,8 +230,10 @@ function GifRenderer.new(options: Options)
 	local positions = table.create(frameCount)
 	local sizes     = table.create(frameCount)
 	local durations = table.create(frameCount)
+	local starts    = table.create(frameCount)
 	local fullAt    = table.create(frameCount)
 	local lastFull  = 0
+	local total     = 0
 
 	for index, frame in options.Frames do
 		assert(typeof(frame.Pixels) == "buffer", "Frame.Pixels must be a buffer")
@@ -106,7 +249,10 @@ function GifRenderer.new(options: Options)
 		positions[index] = Vector2.new(x, y)
 		sizes[index] = Vector2.new(w, h)
 		local duration = frame.Duration or defaultDuration
-		durations[index] = if duration <= 0 then 1 / 60 else duration
+		if duration <= 0 then duration = 1 / 60 end
+		durations[index] = duration
+		starts[index] = total
+		total += duration
 
 		if w == width and h == height then lastFull = index end
 		fullAt[index] = lastFull
@@ -116,8 +262,6 @@ function GifRenderer.new(options: Options)
 	local lowPower   = options.LowPower == true
 	local updateRate = options.UpdateRate or (if lowPower then 30 else 60)
 	local minDt      = if updateRate > 0 then 1 / updateRate else 0
-	local maxSkip    = options.MaxFrameSkip or 8
-	local skipDup    = options.SkipDuplicates ~= false
 
 	local self = setmetatable({
 		Frames = options.Frames,
@@ -131,16 +275,18 @@ function GifRenderer.new(options: Options)
 		Playing = false,
 		Destroyed = false,
 		ImageLabel = options.ImageLabel,
-		Connection = nil,
 		LabelConnection = nil,
+		TotalDuration = total,
 		_positions = positions,
 		_sizes = sizes,
 		_durations = durations,
+		_starts = starts,
 		_fullAt = fullAt,
 		_minDt = minDt,
-		_accum = 0,
-		_maxSkip = maxSkip,
-		_skipDup = skipDup,
+		_last = 0,
+		_visible = true,
+		_visibleCheckAt = 0,
+		_registered = false,
 	}, GifRenderer)
 
 	local created, image = pcall(AssetService.CreateEditableImage, AssetService,
@@ -157,27 +303,6 @@ function GifRenderer.new(options: Options)
 		self.LabelConnection = label.Destroying:Connect(function() self:Destroy() end)
 	end
 	self:_writeFrame(1)
-
-	self.Connection = RunService.RenderStepped:Connect(function(dt)
-		if not self.Playing then return end
-		if label then
-			if not label.Visible then return end
-			local size = label.AbsoluteSize
-			if size.X <= 0 or size.Y <= 0 then return end
-		end
-
-		local minDt = self._minDt
-		if minDt > 0 then
-			self._accum += dt
-			while self._accum >= minDt do
-				self._accum -= minDt
-				self:_advance(math.min(minDt * self.Speed, GifRenderer.MaxDeltaTime))
-				if not self.Playing then break end
-			end
-		else
-			self:_advance(math.min(dt * self.Speed, GifRenderer.MaxDeltaTime))
-		end
-	end)
 
 	if options.AutoPlay then self:Play() end
 	return self
@@ -196,28 +321,80 @@ function GifRenderer.fromGif(gif, options)
 		OnFinished = options.OnFinished,
 		LowPower = options.LowPower,
 		UpdateRate = options.UpdateRate,
-		MaxFrameSkip = options.MaxFrameSkip,
-		SkipDuplicates = options.SkipDuplicates,
 	})
 end
 
 function GifRenderer.fromData(data: string, options)
 	options = options or {}
-	local gif = getDecoder().decode(data, {Yield = options.Yield, RawDelays = options.RawDelays})
+	local gif = getDecoder().decode(data, decodeOptions(options))
 	return GifRenderer.fromGif(gif, options)
+end
+
+local function loadGif(url, options)
+	local gif = cacheGet(url)
+	if gif then return gif end
+	gif = getDecoder().decode(download(url), decodeOptions(options))
+	if options.Cache ~= false then cachePut(url, gif) end
+	return gif
 end
 
 function GifRenderer.fromUrl(url: string, options)
 	options = options or {}
-	local gif = DecodedCache[url]
-	if not gif then
-		gif = getDecoder().decode(download(url), {Yield = options.Yield, RawDelays = options.RawDelays})
-		if options.Cache ~= false then DecodedCache[url] = gif end
-	end
-	return GifRenderer.fromGif(gif, options)
+	return GifRenderer.fromGif(loadGif(url, options), options)
 end
 
-function GifRenderer.ClearCache() table.clear(DecodedCache) end
+-- Non-blocking: callback(renderer, nil) or callback(nil, errorMessage).
+-- Concurrent requests for the same URL share one download + decode.
+local pendingLoads = {}
+
+function GifRenderer.fromUrlAsync(url: string, options, callback)
+	options = options or {}
+	local gif = cacheGet(url)
+	if gif then
+		task.defer(function()
+			local ok, result = pcall(GifRenderer.fromGif, gif, options)
+			if ok then callback(result, nil) else callback(nil, tostring(result)) end
+		end)
+		return
+	end
+
+	local waiting = pendingLoads[url]
+	if waiting then
+		table.insert(waiting, {options = options, callback = callback})
+		return
+	end
+	waiting = {{options = options, callback = callback}}
+	pendingLoads[url] = waiting
+
+	task.spawn(function()
+		local ok, result = pcall(loadGif, url, options)
+		pendingLoads[url] = nil
+		for _, entry in waiting do
+			if ok then
+				local built, renderer = pcall(GifRenderer.fromGif, result, entry.options)
+				if built then entry.callback(renderer, nil) else entry.callback(nil, tostring(renderer)) end
+			else
+				entry.callback(nil, tostring(result))
+			end
+		end
+	end)
+end
+
+-- Decode ahead of time so the first show is instant. callback(ok, err) is optional.
+function GifRenderer.preload(url: string, options, callback)
+	options = options or {}
+	task.spawn(function()
+		local ok, err = pcall(loadGif, url, options)
+		if callback then callback(ok, if ok then nil else tostring(err)) end
+	end)
+end
+
+function GifRenderer.ClearCache()
+	table.clear(cache)
+	cacheBytes = 0
+end
+
+function GifRenderer.GetCacheBytes(): number return cacheBytes end
 
 function GifRenderer:_writeFrame(index)
 	self._write(self.Image, self._positions[index], self._sizes[index], self.Frames[index].Pixels)
@@ -226,23 +403,49 @@ end
 function GifRenderer:_showFrame(from: number, target: number)
 	if target == from then return end
 	local start = if target > from then from + 1 else 1
-	local fullAt = self._fullAt
-	start = math.max(start, fullAt[target])
-
-	local total = target - start + 1
-	if total > self._maxSkip then
-		local snapTo = fullAt[target]
-		if snapTo > start and snapTo <= target then
-			for index = snapTo, target do self:_writeFrame(index) end
-			return
-		end
-		self:_writeFrame(target)
-		return
-	end
-
+	local fullStart = self._fullAt[target]
+	if fullStart > start then start = fullStart end
 	for index = start, target do
 		self:_writeFrame(index)
 	end
+end
+
+function GifRenderer:_checkVisible(): boolean
+	local label = self.ImageLabel
+	if not label then return true end
+	if not label:IsDescendantOf(game) then return false end
+	if label.ImageTransparency >= 1 then return false end
+	local size = label.AbsoluteSize
+	if size.X <= 0 or size.Y <= 0 then return false end
+	local object = label
+	while object and object ~= game do
+		if object:IsA("GuiObject") then
+			if not object.Visible then return false end
+		elseif object:IsA("LayerCollector") then
+			if not object.Enabled then return false end
+		end
+		object = object.Parent
+	end
+	return true
+end
+
+-- Called by the shared scheduler. Cheap unless a frame boundary was actually crossed.
+function GifRenderer:_tick(now: number)
+	if now >= self._visibleCheckAt then
+		self._visibleCheckAt = now + 0.25
+		self._visible = self:_checkVisible()
+	end
+	if not self._visible then
+		self._last = now -- hidden time doesn't count; no catch-up burst when shown again
+		return
+	end
+
+	local dt = (now - self._last) * self.Speed
+	if dt < self._minDt * throttle then return end
+	if dt < self._durations[self.FrameIndex] - self.Elapsed then return end -- next frame not due yet
+
+	self._last = now
+	self:_advance(math.min(dt, GifRenderer.MaxDeltaTime))
 end
 
 function GifRenderer:_advance(dt: number)
@@ -273,14 +476,10 @@ function GifRenderer:_advance(dt: number)
 
 	if index ~= from then
 		self.FrameIndex = index
-		if self._skipDup then
-			self:_showFrame(from, index)
-		else
-			self:_showFrame(0, index)
-		end
+		self:_showFrame(from, index)
 	end
 	if finished and self.OnFinished then
-		task.spawn(self.OnFinished, self)
+		task.defer(self.OnFinished, self)
 	end
 end
 
@@ -290,11 +489,30 @@ function GifRenderer:SetFrame(index: number)
 	local from = self.FrameIndex
 	self.FrameIndex = index
 	self.Elapsed = 0
-	self:_showFrame(from, index)
+	self:_showFrame(if index > from then from else 0, index)
+end
+
+-- Jump to a time in seconds (clamped to the animation length).
+function GifRenderer:Seek(seconds: number)
+	assert(not self.Destroyed, "Renderer has been destroyed")
+	seconds = math.clamp(seconds, 0, math.max(self.TotalDuration - 1e-4, 0))
+	local starts = self._starts
+	local low, high = 1, self.FrameCount
+	while low < high do
+		local mid = (low + high + 1) // 2
+		if starts[mid] <= seconds then low = mid else high = mid - 1 end
+	end
+	local from = self.FrameIndex
+	self.FrameIndex = low
+	self.Elapsed = seconds - starts[low]
+	self:_showFrame(if low > from then from else 0, low)
 end
 
 function GifRenderer:SetSpeed(speed: number) self.Speed = math.max(speed, 0) end
+function GifRenderer:SetLooped(looped: boolean) self.Looped = looped end
 function GifRenderer:GetFrameCount(): number return self.FrameCount end
+function GifRenderer:GetDuration(): number return self.TotalDuration end
+function GifRenderer:IsPlaying(): boolean return self.Playing end
 
 function GifRenderer:Play()
 	assert(not self.Destroyed, "Renderer has been destroyed")
@@ -302,12 +520,22 @@ function GifRenderer:Play()
 		self:SetFrame(1)
 	end
 	self.Playing = true
+	self._last = os.clock()
+	self._visibleCheckAt = 0
+	register(self)
 end
 
-function GifRenderer:Pause() self.Playing = false end
+function GifRenderer:Pause()
+	self.Playing = false
+	unregister(self)
+end
+
+function GifRenderer:Toggle()
+	if self.Playing then self:Pause() else self:Play() end
+end
 
 function GifRenderer:Stop()
-	self.Playing = false
+	self:Pause()
 	self:SetFrame(1)
 end
 
@@ -315,7 +543,7 @@ function GifRenderer:Destroy()
 	if self.Destroyed then return end
 	self.Destroyed = true
 	self.Playing = false
-	if self.Connection then self.Connection:Disconnect(); self.Connection = nil end
+	unregister(self)
 	if self.LabelConnection then self.LabelConnection:Disconnect(); self.LabelConnection = nil end
 	local label = self.ImageLabel
 	if label and label.Parent then
