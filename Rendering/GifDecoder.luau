@@ -1,5 +1,6 @@
---!nonstrict
--- Decoder v7
+--!native
+--!optimize 2
+-- Decoder v8: GIF, PNG and APNG to RGBA delta frames.
 
 local bufferCreate = buffer.create
 local bufferLen    = buffer.len
@@ -30,20 +31,18 @@ local function readu32BE(src, pos)
 end
 
 local GifDecoder = {}
-GifDecoder.Version = 7
+GifDecoder.Version = 8
 
 local MAX_CANVAS = 1024
 local MAX_FRAME_PIXELS = 16777216
 local MAX_TOTAL_FRAMES = 5000
+local DEFAULT_MAX_BYTES = 128 * 1024 * 1024 -- total RGBA kept across all frames
+local YIELD_BYTES = 262144                  -- inflate yields every this many output bytes
 
 local function fail(msg) error("GifDecoder: " .. msg, 3) end
 local function need(len, pos, count)
     if pos < 0 or pos + count > len then fail("unexpected end of data") end
 end
-
--- ============================================================================
--- Shared helpers
--- ============================================================================
 
 local function skipSubBlocks(src, length, position)
     while position < length do
@@ -110,10 +109,6 @@ local function clearRect(canvas, canvasWidth, x0, y0, x1, y1)
         bufferFill(canvas, (y * canvasWidth + x0) * 4, 0, rowBytes)
     end
 end
-
--- ============================================================================
--- GIF
--- ============================================================================
 
 local pooledTables = nil
 local function getTables()
@@ -284,6 +279,7 @@ local function decodeGif(data, options)
     local yieldEvery  = options and options.Yield
     local fullFrames  = options ~= nil and options.FullFrames == true
     local rawDelays   = options ~= nil and options.RawDelays == true
+    local maxBytes    = options and options.MaxBytes or DEFAULT_MAX_BYTES
 
     local length = #data
     if length < 13 then fail("file is too short") end
@@ -315,6 +311,7 @@ local function decodeGif(data, options)
     local frames = {}
     local frameCount = 0
     local totalDuration = 0
+    local usedBytes = 0
     local loopCount = nil
     local gceDelay, gceTransparent, gceDisposal = 0, nil, 0
     local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
@@ -422,6 +419,10 @@ local function decodeGif(data, options)
 
             frameCount += 1
             if frameCount > MAX_TOTAL_FRAMES then fail("too many frames") end
+            usedBytes += (dx1 - dx0) * (dy1 - dy0) * 4
+            if usedBytes > maxBytes then
+                fail("GIF needs more than " .. (maxBytes // 1048576) .. " MB of frame memory")
+            end
             frames[frameCount] = {
                 Pixels = extractRect(canvas, canvasWidth, dx0, dy0, dx1, dy1),
                 X = dx0, Y = dy0,
@@ -459,90 +460,122 @@ local function decodeGif(data, options)
     }
 end
 
--- ============================================================================
--- DEFLATE / zlib
--- ============================================================================
+local LEN_BASE  = {3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258}
+local LEN_EXTRA = {0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0}
+local DIST_BASE = {1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577}
+local DIST_EXTRA = {0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13}
+local CL_ORDER = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 }
 
-local function inflateRaw(src, bytePos, srcEnd, expected)
-    local bitBuf, bitCount = 0, 0
+local function reverseBits(code, len)
+    local r = 0
+    for _ = 1, len do
+        r = bor(lshift(r, 1), band(code, 1))
+        code = rshift(code, 1)
+    end
+    return r
+end
+
+-- lengths is a 1-based array of code lengths for symbols 0..n-1.
+-- Returns a buffer of u32 entries (codeLength * 65536 + symbol) indexed by the next
+-- maxLen stream bits (LSB first), plus the mask for that index.
+local function buildTable(lengths, n)
+    local count = {}
+    for i = 0, 15 do count[i] = 0 end
+    local maxLen = 1
+    for i = 1, n do
+        local l = lengths[i]
+        count[l] += 1
+        if l > maxLen then maxLen = l end
+    end
+    count[0] = 0
+
+    local nextCode = {}
+    local code = 0
+    for len = 1, 15 do
+        code = lshift(code + count[len - 1], 1)
+        nextCode[len] = code
+    end
+
+    local size = lshift(1, maxLen)
+    local tbl = bufferCreate(size * 4) -- zero filled, entry 0 = invalid
+    for sym = 0, n - 1 do
+        local len = lengths[sym + 1]
+        if len > 0 then
+            local c = nextCode[len]
+            nextCode[len] = c + 1
+            local rev = reverseBits(c, len)
+            local entry = len * 65536 + sym
+            local step = lshift(1, len)
+            for idx = rev, size - 1, step do
+                writeu32(tbl, idx * 4, entry)
+            end
+        end
+    end
+    return tbl, size - 1
+end
+
+local fixedLit, fixedLitMask, fixedDist, fixedDistMask
+
+local function inflateRaw(src, startPos, srcEnd, expected, canYield)
+    local bitBuf, bitCount, bytePos = 0, 0, startPos
+    local out = bufferCreate(expected)
+    local outPos = 0
+    local nextYield = YIELD_BYTES
 
     local function bits(n)
-        while bitCount < n do
-            if bytePos >= srcEnd then fail("truncated DEFLATE stream") end
+        if n == 0 then return 0 end
+        while bitCount <= 24 and bytePos < srcEnd do
             bitBuf = bor(bitBuf, lshift(readu8(src, bytePos), bitCount))
             bytePos += 1
             bitCount += 8
         end
+        if bitCount < n then fail("truncated DEFLATE stream") end
         local v = band(bitBuf, lshift(1, n) - 1)
         bitBuf = rshift(bitBuf, n)
         bitCount -= n
         return v
     end
 
-    local out = bufferCreate(expected)
-    local outPos = 0
-
-    local function buildHuff(lengths, n)
-        local count = {}
-        for i = 0, 15 do count[i] = 0 end
-        for i = 1, n do count[lengths[i]] = count[lengths[i]] + 1 end
-        count[0] = 0
-        local firstCode, firstSym = {}, {}
-        local code, sym = 0, 0
-        for len = 1, 15 do
-            code = lshift(code + count[len - 1], 1)
-            firstCode[len] = code
-            firstSym[len] = sym
-            sym = sym + count[len]
+    local function decode(tbl, mask)
+        while bitCount <= 24 and bytePos < srcEnd do
+            bitBuf = bor(bitBuf, lshift(readu8(src, bytePos), bitCount))
+            bytePos += 1
+            bitCount += 8
         end
-        local symbols, idx = {}, 1
-        for len = 1, 15 do
-            for s = 0, n - 1 do
-                if lengths[s + 1] == len then
-                    symbols[idx] = s; idx += 1
-                end
-            end
-        end
-        return { count = count, firstCode = firstCode, firstSym = firstSym, symbols = symbols }
+        local entry = readu32(tbl, band(bitBuf, mask) * 4)
+        if entry == 0 then fail("invalid Huffman code") end
+        local len = rshift(entry, 16)
+        if len > bitCount then fail("truncated DEFLATE stream") end
+        bitBuf = rshift(bitBuf, len)
+        bitCount -= len
+        return band(entry, 0xFFFF)
     end
-
-    local function decodeSym(huff)
-        local code = 0
-        for len = 1, 15 do
-            code = bor(lshift(code, 1), bits(1))
-            local cnt = huff.count[len]
-            if cnt > 0 and code - huff.firstCode[len] < cnt then
-                return huff.symbols[huff.firstSym[len] + code - huff.firstCode[len] + 1]
-            end
-        end
-        return -1
-    end
-
-    local CL_ORDER = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 }
-    local LEN_BASE  = {3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258}
-    local LEN_EXTRA = {0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0}
-    local DIST_BASE = {1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577}
-    local DIST_EXTRA = {0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13}
-
-    local litHuff, distHuff
-    local fixedLit, fixedDist
 
     while outPos < expected do
         local bfinal = bits(1)
         local btype = bits(2)
+
         if btype == 0 then
+            -- stored block: drop partial byte, give back bytes we read ahead
+            local drop = bitCount % 8
+            bitBuf = rshift(bitBuf, drop)
+            bitCount -= drop
+            bytePos -= bitCount // 8
             bitBuf, bitCount = 0, 0
-            local len = bor(readu8(src, bytePos), lshift(readu8(src, bytePos + 1), 8))
+            if bytePos + 4 > srcEnd then fail("truncated DEFLATE stream") end
+            local len = readu8(src, bytePos) + readu8(src, bytePos + 1) * 256
             bytePos += 4
-            for i = 0, len - 1 do
-                if outPos >= expected then break end
-                writeu8(out, outPos, readu8(src, bytePos + i))
-                outPos += 1
+            if bytePos + len > srcEnd then fail("truncated DEFLATE stream") end
+            local n = math.min(len, expected - outPos)
+            if n > 0 then
+                bufferCopy(out, outPos, src, bytePos, n)
+                outPos += n
             end
             bytePos += len
         elseif btype == 3 then
             fail("invalid DEFLATE block type")
         else
+            local litTbl, litMask, distTbl, distMask
             if btype == 1 then
                 if not fixedLit then
                     local litL = {}
@@ -550,12 +583,12 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
                     for i = 145, 256 do litL[i] = 9 end
                     for i = 257, 280 do litL[i] = 7 end
                     for i = 281, 288 do litL[i] = 8 end
-                    fixedLit = buildHuff(litL, 288)
+                    fixedLit, fixedLitMask = buildTable(litL, 288)
                     local distL = {}
                     for i = 1, 30 do distL[i] = 5 end
-                    fixedDist = buildHuff(distL, 30)
+                    fixedDist, fixedDistMask = buildTable(distL, 30)
                 end
-                litHuff, distHuff = fixedLit, fixedDist
+                litTbl, litMask, distTbl, distMask = fixedLit, fixedLitMask, fixedDist, fixedDistMask
             else
                 local hlit  = bits(5) + 257
                 local hdist = bits(5) + 1
@@ -565,87 +598,96 @@ local function inflateRaw(src, bytePos, srcEnd, expected)
                 for i = 1, hclen do
                     clLengths[CL_ORDER[i] + 1] = bits(3)
                 end
-                local clHuff = buildHuff(clLengths, 19)
+                local clTbl, clMask = buildTable(clLengths, 19)
+
                 local lengths = {}
                 local total = hlit + hdist
                 local i = 1
                 while i <= total do
-                    local sym = decodeSym(clHuff)
-                    if sym < 0 then fail("bad code length symbol") end
+                    local sym = decode(clTbl, clMask)
                     if sym < 16 then
                         lengths[i] = sym; i += 1
                     elseif sym == 16 then
-                        local prev = lengths[i - 1] or 0
-                        local rep = 3 + bits(2)
-                        for _ = 1, rep do lengths[i] = prev; i += 1 end
+                        if i == 1 then fail("bad code length repeat") end
+                        local prev = lengths[i - 1]
+                        for _ = 1, 3 + bits(2) do
+                            if i > total then break end
+                            lengths[i] = prev; i += 1
+                        end
                     elseif sym == 17 then
-                        local rep = 3 + bits(3)
-                        for _ = 1, rep do lengths[i] = 0; i += 1 end
+                        for _ = 1, 3 + bits(3) do
+                            if i > total then break end
+                            lengths[i] = 0; i += 1
+                        end
                     else
-                        local rep = 11 + bits(7)
-                        for _ = 1, rep do lengths[i] = 0; i += 1 end
+                        for _ = 1, 11 + bits(7) do
+                            if i > total then break end
+                            lengths[i] = 0; i += 1
+                        end
                     end
                 end
                 local litL = {}
-                for j = 1, hlit do litL[j] = lengths[j] or 0 end
+                for j = 1, hlit do litL[j] = lengths[j] end
                 local distL = {}
-                for j = 1, hdist do distL[j] = lengths[hlit + j] or 0 end
-                litHuff = buildHuff(litL, hlit)
-                distHuff = buildHuff(distL, hdist)
+                for j = 1, hdist do distL[j] = lengths[hlit + j] end
+                litTbl, litMask = buildTable(litL, hlit)
+                distTbl, distMask = buildTable(distL, hdist)
             end
 
             while true do
-                local sym = decodeSym(litHuff)
-                if sym < 0 then fail("bad literal symbol") end
+                local sym = decode(litTbl, litMask)
                 if sym < 256 then
                     if outPos >= expected then break end
-                    writeu8(out, outPos, sym); outPos += 1
+                    writeu8(out, outPos, sym)
+                    outPos += 1
                 elseif sym == 256 then
                     break
                 else
-                    local lenIdx = sym - 256
-                    local length = LEN_BASE[lenIdx] + bits(LEN_EXTRA[lenIdx])
-                    local dsym = decodeSym(distHuff)
-                    if dsym < 0 then fail("bad distance symbol") end
-                    local dist = DIST_BASE[dsym + 1] + bits(DIST_EXTRA[dsym + 1])
-                    local srcPos = outPos - dist
-                    for k = 0, length - 1 do
-                        if outPos >= expected then break end
-                        writeu8(out, outPos, readu8(out, srcPos + k))
-                        outPos += 1
+                    local li = sym - 256
+                    if li > 29 then fail("bad length symbol") end
+                    local length = LEN_BASE[li] + bits(LEN_EXTRA[li])
+                    local ds = decode(distTbl, distMask)
+                    if ds > 29 then fail("bad distance symbol") end
+                    local dist = DIST_BASE[ds + 1] + bits(DIST_EXTRA[ds + 1])
+                    if dist > outPos then fail("invalid DEFLATE distance") end
+                    if outPos + length > expected then length = expected - outPos end
+                    if length > 0 then
+                        if dist == 1 then
+                            bufferFill(out, outPos, readu8(out, outPos - 1), length)
+                        elseif dist >= length then
+                            bufferCopy(out, outPos, out, outPos - dist, length)
+                        else
+                            local from = outPos - dist
+                            for k = 0, length - 1 do
+                                writeu8(out, outPos + k, readu8(out, from + k))
+                            end
+                        end
+                        outPos += length
                     end
+                end
+                if canYield and outPos >= nextYield then
+                    nextYield = outPos + YIELD_BYTES
+                    task.wait()
                 end
             end
         end
+
         if bfinal == 1 then break end
     end
 
     return out
 end
 
-local function zlibInflate(src, startPos, srcEnd, expected)
+local function zlibInflate(src, startPos, srcEnd, expected, canYield)
+    if srcEnd - startPos < 2 then fail("truncated zlib stream") end
     local cmf = readu8(src, startPos)
     local flg = readu8(src, startPos + 1)
     if band(cmf, 0x0F) ~= 8 then fail("unsupported zlib compression method") end
     if band(flg, 0x20) ~= 0 then fail("zlib preset dictionary not supported") end
-    return inflateRaw(src, startPos + 2, srcEnd, expected)
+    return inflateRaw(src, startPos + 2, srcEnd, expected, canYield)
 end
-
--- ============================================================================
--- PNG / APNG
--- ============================================================================
 
 local PNG_SIG = "\137PNG\r\n\26\n"
-
-local function paeth(a, b, c)
-    local p = a + b - c
-    local pa = math.abs(p - a)
-    local pb = math.abs(p - b)
-    local pc = math.abs(p - c)
-    if pa <= pb and pa <= pc then return a end
-    if pb <= pc then return b end
-    return c
-end
 
 local function pixelAt(cur, x, bitDepth)
     if bitDepth == 8 then
@@ -657,9 +699,9 @@ local function pixelAt(cur, x, bitDepth)
 end
 
 local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
-    palette, colorKey, out)
+    palette, colorKey, out, canYield)
 
-    local bytesPerPixel = math.max(1, (channels * bitDepth) // 8)
+    local bpp = math.max(1, (channels * bitDepth) // 8)
     local rowBytes = (width * channels * bitDepth + 7) // 8
     local prev = bufferCreate(rowBytes)
     local cur  = bufferCreate(rowBytes)
@@ -671,34 +713,45 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
         pos += rowBytes
 
         if filter == 1 then
-            for i = bytesPerPixel, rowBytes - 1 do
-                local v = band(readu8(cur, i) + readu8(cur, i - bytesPerPixel), 0xFF)
-                writeu8(cur, i, v)
+            for i = bpp, rowBytes - 1 do
+                writeu8(cur, i, band(readu8(cur, i) + readu8(cur, i - bpp), 0xFF))
             end
         elseif filter == 2 then
             for i = 0, rowBytes - 1 do
-                local v = band(readu8(cur, i) + readu8(prev, i), 0xFF)
-                writeu8(cur, i, v)
+                writeu8(cur, i, band(readu8(cur, i) + readu8(prev, i), 0xFF))
             end
         elseif filter == 3 then
             for i = 0, rowBytes - 1 do
-                local a = if i >= bytesPerPixel then readu8(cur, i - bytesPerPixel) else 0
-                local v = band(readu8(cur, i) + rshift(a + readu8(prev, i), 1), 0xFF)
-                writeu8(cur, i, v)
+                local a = if i >= bpp then readu8(cur, i - bpp) else 0
+                writeu8(cur, i, band(readu8(cur, i) + rshift(a + readu8(prev, i), 1), 0xFF))
             end
         elseif filter == 4 then
             for i = 0, rowBytes - 1 do
-                local a = if i >= bytesPerPixel then readu8(cur, i - bytesPerPixel) else 0
+                local a, c = 0, 0
+                if i >= bpp then
+                    a = readu8(cur, i - bpp)
+                    c = readu8(prev, i - bpp)
+                end
                 local b = readu8(prev, i)
-                local c = if i >= bytesPerPixel then readu8(prev, i - bytesPerPixel) else 0
-                local v = band(readu8(cur, i) + paeth(a, b, c), 0xFF)
-                writeu8(cur, i, v)
+                local pa = math.abs(b - c)
+                local pb = math.abs(a - c)
+                local pc = math.abs(a + b - 2 * c)
+                local predictor
+                if pa <= pb and pa <= pc then predictor = a
+                elseif pb <= pc then predictor = b
+                else predictor = c end
+                writeu8(cur, i, band(readu8(cur, i) + predictor, 0xFF))
             end
+        elseif filter ~= 0 then
+            fail("invalid PNG filter type")
         end
 
         local outBase = y * width * 4
 
-        if colorType == 3 then
+        if colorType == 6 and bitDepth == 8 then
+            bufferCopy(out, outBase, cur, 0, rowBytes) -- already RGBA
+
+        elseif colorType == 3 then
             for x = 0, width - 1 do
                 local idx = pixelAt(cur, x, bitDepth)
                 writeu32(out, outBase + x * 4, readu32(palette, idx * 4))
@@ -751,25 +804,19 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
                 writeu32(out, outBase + x * 4, v + v * 256 + v * 65536 + a * 16777216)
             end
 
-        else -- colorType == 6
+        else -- colorType 6, 16 bit
             for x = 0, width - 1 do
-                local r, g, b, a
-                if bitDepth == 16 then
-                    r = readu8(cur, x * 8)
-                    g = readu8(cur, x * 8 + 2)
-                    b = readu8(cur, x * 8 + 4)
-                    a = readu8(cur, x * 8 + 6)
-                else
-                    r = readu8(cur, x * 4)
-                    g = readu8(cur, x * 4 + 1)
-                    b = readu8(cur, x * 4 + 2)
-                    a = readu8(cur, x * 4 + 3)
-                end
-                writeu32(out, outBase + x * 4, r + g * 256 + b * 65536 + a * 16777216)
+                writeu32(out, outBase + x * 4,
+                    readu8(cur, x * 8)
+                    + readu8(cur, x * 8 + 2) * 256
+                    + readu8(cur, x * 8 + 4) * 65536
+                    + readu8(cur, x * 8 + 6) * 16777216)
             end
         end
 
         prev, cur = cur, prev
+
+        if canYield and y % 64 == 63 then task.wait() end
     end
 end
 
@@ -781,8 +828,22 @@ local function channelsFor(ct)
     return 4
 end
 
+local function validPngFormat(colorType, bitDepth)
+    if colorType == 0 then
+        return bitDepth == 1 or bitDepth == 2 or bitDepth == 4 or bitDepth == 8 or bitDepth == 16
+    elseif colorType == 3 then
+        return bitDepth == 1 or bitDepth == 2 or bitDepth == 4 or bitDepth == 8
+    elseif colorType == 2 or colorType == 4 or colorType == 6 then
+        return bitDepth == 8 or bitDepth == 16
+    end
+    return false
+end
+
 local function decodePng(data, options)
     local yieldEvery = options and options.Yield
+    local canYield = yieldEvery ~= nil and yieldEvery > 0
+    local maxBytes = options and options.MaxBytes or DEFAULT_MAX_BYTES
+
     local length = #data
     if length < 8 + 25 then fail("file is too short") end
     local src = bufferFromString(data)
@@ -811,14 +872,12 @@ local function decodePng(data, options)
             colorType = readu8(src, cdataStart + 9)
             interlace = readu8(src, cdataStart + 12)
             if interlace ~= 0 then fail("interlaced PNG not supported") end
-            local valid =
-                (bitDepth == 8 or bitDepth == 16) or
-                (colorType == 3 and (bitDepth == 1 or bitDepth == 2 or bitDepth == 4)) or
-                (colorType == 0 and (bitDepth == 1 or bitDepth == 2 or bitDepth == 4))
-            if not valid then fail("unsupported PNG bit depth / color type") end
+            if not validPngFormat(colorType, bitDepth) then
+                fail("unsupported PNG bit depth / color type")
+            end
 
         elseif ctype == "PLTE" then
-            local count = clen // 3
+            local count = math.min(clen // 3, 256)
             local p = bufferCreate(256 * 4)
             for i = 0, count - 1 do
                 local r = readu8(src, cdataStart + i * 3)
@@ -829,11 +888,10 @@ local function decodePng(data, options)
             palette = p
 
         elseif ctype == "tRNS" then
-            if colorType == 3 then
+            if colorType == 3 and palette then
                 local n = math.min(clen, 256)
                 for i = 0, n - 1 do
-                    local a = readu8(src, cdataStart + i)
-                    writeu8(palette, i * 4 + 3, a)
+                    writeu8(palette, i * 4 + 3, readu8(src, cdataStart + i))
                 end
             elseif colorType == 0 and clen >= 2 then
                 local key = readu16BE(src, cdataStart)
@@ -842,13 +900,10 @@ local function decodePng(data, options)
                 colorKey = { r = scaled, g = scaled, b = scaled }
             elseif colorType == 2 and clen >= 6 then
                 local maxIdx = lshift(1, bitDepth) - 1
-                local kr = readu16BE(src, cdataStart)
-                local kg = readu16BE(src, cdataStart + 2)
-                local kb = readu16BE(src, cdataStart + 4)
                 colorKey = {
-                    r = (kr * 255) // maxIdx,
-                    g = (kg * 255) // maxIdx,
-                    b = (kb * 255) // maxIdx,
+                    r = (readu16BE(src, cdataStart) * 255) // maxIdx,
+                    g = (readu16BE(src, cdataStart + 2) * 255) // maxIdx,
+                    b = (readu16BE(src, cdataStart + 4) * 255) // maxIdx,
                 }
             end
 
@@ -859,35 +914,25 @@ local function decodePng(data, options)
             }
 
         elseif ctype == "fcTL" then
-            local fw   = readu32BE(src, cdataStart + 4)
-            local fh   = readu32BE(src, cdataStart + 8)
-            local fx   = readu32BE(src, cdataStart + 12)
-            local fy   = readu32BE(src, cdataStart + 16)
-            local dnum = readu16BE(src, cdataStart + 20)
-            local dden = readu16BE(src, cdataStart + 22)
-            local dispose = readu8(src, cdataStart + 24)
-            local blend   = readu8(src, cdataStart + 25)
-
+            -- an IDAT image seen before any fcTL is the hidden default image, not an animation frame
             if currentFrame and currentFrame.fromIDAT and currentFrame.w == nil then
-                currentFrame.w = fw
-                currentFrame.h = fh
-                currentFrame.x = fx
-                currentFrame.y = fy
-                currentFrame.delayNum = dnum
-                currentFrame.delayDen = dden
-                currentFrame.dispose = dispose
-                currentFrame.blend   = blend
-            else
-                currentFrame = {
-                    w = fw, h = fh, x = fx, y = fy,
-                    delayNum = dnum, delayDen = dden,
-                    dispose = dispose, blend = blend,
-                    chunks = {},
-                    fromIDAT = false,
-                }
-                frameNum += 1
-                frames[frameNum] = currentFrame
+                frames[frameNum] = nil
+                frameNum -= 1
             end
+            currentFrame = {
+                w = readu32BE(src, cdataStart + 4),
+                h = readu32BE(src, cdataStart + 8),
+                x = readu32BE(src, cdataStart + 12),
+                y = readu32BE(src, cdataStart + 16),
+                delayNum = readu16BE(src, cdataStart + 20),
+                delayDen = readu16BE(src, cdataStart + 22),
+                dispose = readu8(src, cdataStart + 24),
+                blend   = readu8(src, cdataStart + 25),
+                chunks = {},
+                fromIDAT = false,
+            }
+            frameNum += 1
+            frames[frameNum] = currentFrame
 
         elseif ctype == "IDAT" then
             if not currentFrame then
@@ -919,6 +964,7 @@ local function decodePng(data, options)
     end
     if #frames == 0 then fail("PNG contains no image data") end
     if colorType == 3 and not palette then fail("palette image without PLTE") end
+    if #frames > MAX_TOTAL_FRAMES then fail("too many frames") end
 
     for _, f in ipairs(frames) do
         if f.w == nil then
@@ -927,6 +973,9 @@ local function decodePng(data, options)
             f.x = 0
             f.y = 0
         end
+        if f.w == 0 or f.h == 0 or f.w * f.h > MAX_FRAME_PIXELS then
+            fail("invalid frame size")
+        end
     end
 
     local isAnim = acTL ~= nil
@@ -934,6 +983,7 @@ local function decodePng(data, options)
 
     local decodedFrames = {}
     local totalDuration = 0
+    local usedBytes = 0
     local canvas = bufferCreate(width * height * 4)
 
     local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
@@ -951,11 +1001,11 @@ local function decodePng(data, options)
 
         local rowBytes = (f.w * channels * bitDepth + 7) // 8
         local expected = (rowBytes + 1) * f.h
-        local raw = zlibInflate(comp, 0, totalBytes, expected)
+        local raw = zlibInflate(comp, 0, totalBytes, expected, canYield)
 
         local frameRGBA = bufferCreate(f.w * f.h * 4)
         unfilterToRGBA(raw, f.w, f.h, channels, bitDepth, colorType,
-            palette, colorKey, frameRGBA)
+            palette, colorKey, frameRGBA, canYield)
 
         local x0, y0, x1, y1 = clampRect(f.x, f.y, f.w, f.h, width, height)
         local hasRect = x0 < x1 and y0 < y1
@@ -1030,6 +1080,11 @@ local function decodePng(data, options)
             if not has then dx0, dy0, dx1, dy1 = 0, 0, 1, 1 end
         end
 
+        usedBytes += (dx1 - dx0) * (dy1 - dy0) * 4
+        if usedBytes > maxBytes then
+            fail("image needs more than " .. (maxBytes // 1048576) .. " MB of frame memory")
+        end
+
         decodedFrames[idx] = {
             Pixels = extractRect(canvas, width, dx0, dy0, dx1, dy1),
             X = dx0, Y = dy0,
@@ -1065,20 +1120,28 @@ local function decodePng(data, options)
     }
 end
 
--- ============================================================================
--- Detection
--- ============================================================================
+-- walks the chunk list up to the first IDAT; acTL must appear before it
+local function pngHasAnimation(data)
+    local pos = 9
+    local length = #data
+    while pos + 7 <= length do
+        local a, b, c, d = string.byte(data, pos, pos + 3)
+        local clen = a * 16777216 + b * 65536 + c * 256 + d
+        local ctype = string.sub(data, pos + 4, pos + 7)
+        if ctype == "acTL" then return true end
+        if ctype == "IDAT" or ctype == "IEND" then return false end
+        pos += 12 + clen
+    end
+    return false
+end
 
 local function detectWebP(data, length)
     if length < 12 then return false end
-    if data:sub(1, 4) ~= "RIFF" then return false end
-    if data:sub(9, 12) ~= "WEBP" then return false end
-    return true
+    return data:sub(1, 4) == "RIFF" and data:sub(9, 12) == "WEBP"
 end
 
 local function detectBmp(data, length)
-    if length < 2 then return false end
-    return data:sub(1, 2) == "BM"
+    return length >= 2 and data:sub(1, 2) == "BM"
 end
 
 local function detectIco(data, length)
@@ -1109,29 +1172,22 @@ local function detectSvg(data, length)
     return false
 end
 
--- ============================================================================
--- public API
--- ============================================================================
-
 function GifDecoder.detect(data)
     if type(data) ~= "string" or #data < 4 then return "unknown" end
     local length = #data
 
-    -- PNG / APNG
     if length >= 8 and data:sub(1, 8) == PNG_SIG then
-        if data:find("acTL", 1, true) then return "apng" end
+        if pngHasAnimation(data) then return "apng" end
         return "png"
     end
 
-    -- GIF
     local sig6 = data:sub(1, 6)
     if sig6 == "GIF87a" or sig6 == "GIF89a" then return "gif" end
 
-    -- JPEG
     local b1, b2, b3 = data:byte(1, 3)
     if b1 == 0xFF and b2 == 0xD8 and b3 == 0xFF then return "jpg" end
 
-    -- Other static formats (routed through getcustomasset by the renderer)
+    -- static formats the renderer can't decode itself (use getcustomasset for these)
     if detectWebP(data, length) then return "webp" end
     if detectBmp(data, length) then return "bmp" end
     if detectIco(data, length) then return "ico" end
@@ -1142,13 +1198,6 @@ function GifDecoder.detect(data)
     return "unknown"
 end
 
--- Formats this module can actually produce RGBA frames for.
-local DECODABLE = {
-    gif = true,
-    apng = true,
-    png = true,
-}
-
 function GifDecoder.decode(data, options)
     assert(typeof(data) == "string", "decode expects bytes as a string")
     local kind = GifDecoder.detect(data)
@@ -1157,11 +1206,11 @@ function GifDecoder.decode(data, options)
         return decodeGif(data, options)
     elseif kind == "apng" or kind == "png" then
         return decodePng(data, options)
-    elseif DECODABLE[kind] == nil and kind ~= "unknown" then
+    elseif kind == "unknown" then
+        fail("unsupported file format")
+    else
         fail("decoder only handles GIF/APNG/PNG; " .. kind ..
              " must be loaded via getcustomasset (static path)")
-    else
-        fail("unsupported file format")
     end
 end
 
