@@ -395,7 +395,7 @@ local Spotify = loadstring(game:HttpGet(_47 .. 'addons/Spotify.lua'))()
 do
     local CACHE_BUST = tostring(os.time())
 
-    local function fetch(url, bust)
+    function fetch(url, bust)
         local full = bust and (url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. CACHE_BUST) or url
         local req = request or http_request or (syn and syn.request)
         if req then
@@ -410,8 +410,8 @@ do
         return nil
     end
 
-    local DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-    local RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
+    DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
+    RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
 
     local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
     if not decoderSrc then error("decoder fetch failed", 0) end
@@ -7762,7 +7762,16 @@ Toggles.AutoloadScript:OnChanged(function(v)
             Library:Notify("Your executor does not support queue_on_teleport", 3)
         end
     else
-        Library:Notify("Autoload disabled", 2)
+        if typeof(clear_teleport_queue) == "function" then
+            local ok, err = pcall(clear_teleport_queue)
+            if not ok then
+                Library:Notify("Failed to clear teleport queue: " .. tostring(err), 3)
+            else
+                Library:Notify("Autoload disabled", 2)
+            end
+        else
+            Library:Notify("Autoload disabled (ER113)", 3)
+        end
     end
 end)
 _96:AddLabel('Menu Bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu Toggle' })
@@ -13844,9 +13853,6 @@ do
         _G.WaifuGui = gui
     end
 
-    -- ========================================================================
-    -- Detection
-    -- ========================================================================
     local function waifuDetect(bytes)
         if type(bytes) ~= "string" or #bytes < 12 then return "unknown" end
         local b1, b2, b3, b4 = bytes:byte(1, 4)
@@ -13898,9 +13904,6 @@ do
         return "unknown"
     end
 
-    -- ========================================================================
-    -- Sizing helpers
-    -- ========================================================================
     local function waifuPngSize(bytes)
         if bytes:sub(1, 8) ~= "\137PNG\r\n\26\n" then return 400, 400 end
         local function u32be(off)
@@ -13917,7 +13920,6 @@ do
     end
 
     local function waifuBmpSize(bytes)
-        -- BITMAPINFOHEADER width/height at LE offsets 18, 22 (0-based) => 19, 23 (1-based)
         local function u32le(off)
             return bytes:byte(off)
                  + bytes:byte(off + 1) * 256
@@ -13932,7 +13934,6 @@ do
     end
 
     local function waifuIcoSize(bytes)
-        -- ICONDIR: first entry w/h at bytes 7,8 (0 = 256)
         local w = bytes:byte(7) or 256
         local h = bytes:byte(8) or 256
         if w == 0 then w = 256 end
@@ -13947,9 +13948,6 @@ do
         return waifuPngSize(bytes)
     end
 
-    -- ========================================================================
-    -- Files / labels
-    -- ========================================================================
     local function waifuCleanupFiles()
         if not (listfiles and isfile and delfile) then return end
         local ok, files = pcall(listfiles, "")
@@ -13999,9 +13997,6 @@ do
         return label
     end
 
-    -- ========================================================================
-    -- Loaders
-    -- ========================================================================
     local UNSUPPORTED_STATIC = {
         tiff = true,
         heic = true,
@@ -14014,8 +14009,6 @@ do
             return false
         end
 
-        -- Roblox's image loader can't decode these. Fail cleanly instead of
-        -- producing a broken texture reference.
         if UNSUPPORTED_STATIC[kind] then
             warn("[Rawr] " .. kind .. " is not supported by Roblox's image loader")
             return false
@@ -14066,7 +14059,7 @@ do
             Looped         = looped,
             AutoPlay       = true,
             LowPower       = true,
-            UpdateRate     = 60,
+            UpdateRate     = 30,
             MaxFrameSkip   = 6,
             SkipDuplicates = true,
         })
@@ -14092,9 +14085,6 @@ do
         return false
     end
 
-    -- ========================================================================
-    -- Fetch (cache-busted, no-cache headers)
-    -- ========================================================================
     local function waifuFetch(link)
         local sep = link:find("?", 1, true) and "&" or "?"
         local url = link .. sep .. "t=" .. tostring(os.time())
@@ -14118,9 +14108,6 @@ do
         return nil
     end
 
-    -- ========================================================================
-    -- Main loop
-    -- ========================================================================
     local function waifuTick()
         local toggle = Toggles["visuals/camera/waifu"]
         if not toggle then return end
