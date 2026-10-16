@@ -510,131 +510,13 @@ local _60 = {
 
 Lighting = game:GetService('Lighting')
 WorldTab = _59:AddTab('World')
-SkySection = WorldTab:AddLeftGroupbox('Sky Changer')
-
-function Sky(bk, dn, ft, lf, rt, up)
-    local function f(id) return 'rbxassetid://' .. id end
-    return {
-        SkyboxBk = f(bk), SkyboxDn = f(dn), SkyboxFt = f(ft),
-        SkyboxLf = f(lf), SkyboxRt = f(rt), SkyboxUp = f(up),
-    }
-end
-
-Skyboxes = {
-    -- original ones
-    ['Galaxy']           = Sky(159454299, 159454296, 159454293, 159454286, 159454300, 159454288),
-    ['Purple']           = Sky(570557514, 570557775, 570557559, 570557620, 570557672, 570557727),
-    ['Purple Night']     = Sky(296908715, 296908724, 296908740, 296908755, 296908764, 296908769),
-    ['Night Sky']        = Sky(12064107, 12064152, 12064121, 12063984, 12064115, 12064131),
-    ['Pink Daylight']    = Sky(271042516, 271077243, 271042556, 271042310, 271042467, 271077958),
-    ['Morning Glow']     = Sky(1417494030, 1417494146, 1417494253, 1417494402, 1417494499, 1417494643),
-    ['Setting Sun']      = Sky(626460377, 626460216, 626460513, 626473032, 626458639, 626460625),
-    ['Fade Blue']        = Sky(153695414, 153695352, 153695452, 153695320, 153695383, 153695471),
-    ['Elegant Morning']  = Sky(153767241, 153767216, 153767266, 153767200, 153767231, 153767288),
-    ['Neptune']          = Sky(218955819, 218953419, 218954524, 218958493, 218957134, 218950090),
-    ['Minecraft']        = Sky(1876545003, 1876544331, 1876542941, 1876543392, 1876543764, 1876544642), -- Dn fixed
-    ['Redshift']         = Sky(401664839, 401664862, 401664960, 401664881, 401664901, 401664936),       -- Dn fixed
-    ['Realistic Desert'] = Sky(161319957, 161319965, 161319970, 161319983, 161319989, 161319996),
-    ['Aesthetic Night']  = Sky(1045964490, 1045964368, 1045964655, 1045964655, 1045964655, 1045962969),
-
-    -- new ones
-    ['Trollge']          = Sky(6155393905, 6155393905, 6155393905, 6155393905, 6155393905, 6155393905),
-    ['Night']            = Sky(48020371, 48020144, 48020234, 48020211, 48020254, 48020383),
-    ['Space']            = Sky(149397692, 149397686, 149397697, 149397684, 149397688, 149397702),
-    ['Default']          = Sky(6444884337, 6444884785, 6444884337, 6444884337, 6444884337, 6412503613),
-    ['Vibe Night']       = Sky(5084575798, 5084575916, 5103949679, 5103948542, 5103948784, 5084576400),
-    ['Purple Splash']    = Sky(8539982183, 8539981943, 8539981721, 8539981424, 8539980766, 8539981085),
-    ['Green Space']      = Sky(159248188, 159248183, 159248187, 159248173, 159248192, 159248176),
-    ['Snowy']            = Sky(155657655, 155674246, 155657609, 155657671, 155657619, 155674931),
-    ['Spongebob']        = Sky(10287764626, 10287766382, 10287764626, 10287763421, 10287764626, 10287767597),
-    ['Alien Red']        = Sky(1012890, 1012891, 1012887, 1012889, 1012888, 1014449),
-    ['Walls Of Autumn']  = Sky(7123244709, 7123246497, 7123255895, 7123257992, 7123279103, 7123281828),
-    ['Cold Winterness']  = Sky(7123754562, 7123756028, 7123757422, 7123758897, 7123760563, 7123762364),
-    ['Oblivion']         = Sky(7123654189, 7123657455, 7123662047, 7123664533, 7123666598, 7123668994),
-    ['Classic Sky']      = Sky(672345740, 672345828, 672345879, 672345927, 672346006, 672346072),
-    ['Purple Day Clear'] = Sky(6847607535, 6847607977, 6847608302, 6847608608, 6847608986, 6847609323),
-    ['Yellow Day']       = Sky(2651432901, 2651434974, 2651435990, 2651436494, 2651436979, 2651437350),
-    ['Minecraft Sky']    = Sky(8735166756, 8735166707, 8735231668, 8735166755, 8735166751, 8735166729),
-    ['Sunset']           = Sky(150939022, 150939038, 150939047, 150939056, 150939063, 150939082),
-    ['Cartoon Sky']      = Sky(6778646360, 6778658683, 6778648039, 6778649136, 6778650519, 6778658364),
-    ['Anime']            = Sky(7643700666, 7643743687, 7644304186, 7644288724, 7643700819, 7643757404),
-    ['Hell Sky']         = Sky(437430787, 437430804, 437430543, 437430732, 437430747, 437430771),
-    ['Starry Night']     = Sky(8291078911, 8291077403, 8291081613, 8291074004, 8291080353, 8291075054),
-    ['Omori']            = Sky(8767416629, 8767416629, 8767416629, 8767416629, 8767416629, 8767416629),
-    ['c00lkidd']         = Sky(433381097, 433381097, 433381097, 433381097, 433381097, 433381097),
-    ['Clear Day']        = Sky(591058823, 591059876, 591058104, 591057861, 591057625, 591059642),
-    ['Mountains']        = Sky(324014980, 324015477, 324014995, 324014679, 324015013, 324015409),
-    ['Forest']           = Sky(70945545, 70945449, 70945487, 70945523, 70945508, 70945531),
-    ['Large Forest']     = Sky(17428978603, 17428977445, 17428977114, 17428978399, 17428976828, 17428976669),
-    ['Crimson']          = Sky(15832429892, 15832430998, 15832430210, 15832430671, 15832431198, 15832429401),
-    ['Pumpkin Hill']     = Sky(11202510597, 11202510255, 11202509993, 11202510806, 11202511066, 11202509704),
-    ['Anime Island']     = Sky(14753804949, 14753795573, 14753807625, 14753797417, 14753799966, 14753810287),
-    ['Snowy Mountains']  = Sky(368385273, 48015300, 368388290, 368390615, 368385190, 48015387),
-    ['Cloudy']           = Sky(225469345, 225469349, 225469359, 225469364, 225469372, 225469380),
-    ['Island']           = Sky(319343577, 319343653, 319343666, 319343686, 319343631, 319343614),
-    ['Orange Fog']       = Sky(458016711, 458016826, 458016532, 458016655, 458016782, 458016792),
-    ['Fade Night']       = Sky(16888843486, 16888845693, 16888848245, 16888850949, 16888854243, 16888857144),
-    ['Office']           = Sky(658623433, 316342560, 658625205, 658627155, 658628504, 658632701),
-    ['Spongebob 2']      = Sky(12049872454, 12049872284, 12049872181, 12049872074, 12049871884, 12049871774),
-    ['Purple Fog']       = Sky(17279854976, 17279856318, 17279858447, 17279860360, 17279862234, 17279864507),
-    ['Earth Space']      = Sky(15753305495, 15753362674, 15753305823, 15753310707, 15753304774, 15753304473),
-    ['Green Cloudy']     = Sky(921882045, 921881907, 921882121, 921881811, 921881989, 921882259),
-    ['Summer Day']       = Sky(135483466, 135483484, 135483461, 135483495, 135483499, 135483475),
-    ['Underwater']       = Sky(227635868, 227635921, 227635954, 227635974, 227635990, 227636031),
-    ['Blue Abyss']       = Sky(16269815885, 16269839652, 16269798011, 16269813852, 16269814948, 16269829700),
-    ['Poison']           = Sky(1370716695, 1370716766, 1370716833, 1370716898, 1370716955, 1370717024),
-    ['Blue Space']       = Sky(1127563035, 1127563006, 1127563026, 1127563216, 1127563115, 1127562999),
-    ['Anime Mountains']  = Sky(12849370744, 12849378890, 12849390276, 12849405549, 12849398428, 12849426002),
-    ['Pink Gradient']    = Sky(5371541816, 5371541154, 5371541816, 5371541816, 5371541816, 5371540604),
-    ['Yellow Gradient']  = Sky(159005370, 858422412, 159005370, 159005370, 159005370, 159006363),
-    ['Blue Gradient']    = Sky(4628466090, 4628471901, 4628466090, 4628466090, 4628466090, 4628472152),
-    ['Green Nebula']     = Sky(47974894, 47974690, 47974821, 47974776, 47974859, 47974909),
-    ['Orange Gradient']  = Sky(6902754982, 6902795826, 6902754982, 6902754982, 6902754982, 6902796078),
-    ['Green Aurora']     = Sky(16563478983, 16563481302, 16563484084, 16563485362, 16563487078, 16563489821),
-}
-
-local SkyboxNames = {}
-for name in pairs(Skyboxes) do table.insert(SkyboxNames, name) end
-table.sort(SkyboxNames)
-table.insert(SkyboxNames, 1, 'None')
-
-SkyboxDropdown = SkySection:AddDropdown('Skybox', {
-    Values = SkyboxNames,
-    Default = 'None',
-    Text = 'Skybox',
-})
-
-function applySkybox(skyName)
-    if skyName == 'None' then
-        if Lighting:FindFirstChild('Skyboxzz') then
-            Lighting.Skyboxzz:Destroy()
-        end
-        return
-    end
-    if not Skyboxes[skyName] then return end
-    if Lighting:FindFirstChild('Skyboxzz') then
-        Lighting.Skyboxzz:Destroy()
-    end
-    sky = Instance.new('Sky')
-    sky.Name = 'Skyboxzz'
-    sky.SkyboxBk = Skyboxes[skyName].SkyboxBk
-    sky.SkyboxDn = Skyboxes[skyName].SkyboxDn
-    sky.SkyboxFt = Skyboxes[skyName].SkyboxFt
-    sky.SkyboxLf = Skyboxes[skyName].SkyboxLf
-    sky.SkyboxRt = Skyboxes[skyName].SkyboxRt
-    sky.SkyboxUp = Skyboxes[skyName].SkyboxUp
-    sky.Parent = Lighting
-end
-
-Options.Skybox:OnChanged(function()
-    applySkybox(Options.Skybox.Value)
-end)
 
 AuraSection = WorldTab:AddLeftGroupbox('Auras')
 Players = game:GetService('Players')
 LocalPlayer = Players.LocalPlayer
 
 _G.aurp = _G.aurp or {}
+
 _G.aurasst = {
     ["starlight"] = game:GetObjects("rbxassetid://134645216613107")[1],
     ["heavenly"] = game:GetObjects("rbxassetid://139300897520961")[1],
@@ -646,7 +528,141 @@ _G.aurasst = {
     ["star"] = game:GetObjects("rbxassetid://73754563740680")[1],
     ["explo"] = game:GetObjects("rbxassetid://75789713107155")[1],
     ["waves"] = game:GetObjects("rbxassetid://94581063446738")[1],
+    ["pixel"] = game:GetObjects("rbxassetid://90816193741219")[1],
+    ["soundwaves"] = game:GetObjects("rbxassetid://114870034653215")[1],
+    ["king"] = game:GetObjects("rbxassetid://93563147247398")[1],
+    ["balloflight"] = game:GetObjects("rbxassetid://111538260393666")[1],
+    ["robes"] = game:GetObjects("rbxassetid://89189106998138")[1],
 }
+
+_G.aur_r6_to_r15 = {
+    Head        = "Head",
+    Torso       = "UpperTorso",
+    ["Left Arm"]  = "LeftUpperArm",
+    ["Right Arm"] = "RightUpperArm",
+    ["Left Leg"]  = "LeftUpperLeg",
+    ["Right Leg"] = "RightUpperLeg",
+}
+
+_G.aur_is_body_part = function(name)
+    if not name then return false end
+    local l = name:lower()
+    return l == "head"
+        or l == "torso"
+        or l == "uppertorso"
+        or l == "lowertorso"
+        or l == "body"
+        or l == "humanoidrootpart"
+        or l == "root"
+        or l == "hrp"
+        or l == "aura"
+        or l == "effect"
+        or l == "effects"
+        or l == "main"
+        or l == "core"
+        or l == "bodyeffect"
+        or l == "bodyeffects"
+        or l == "part"
+        or l == "meshpart"
+        or l == "unionoperation"
+        or l == "model"
+        or l == "sphere"
+        or l == "ball"
+        or l == "orb"
+        or l == "vfx"
+        or l == "left arm" or l == "right arm"
+        or l == "leftarm" or l == "rightarm"
+        or l == "left leg" or l == "right leg"
+        or l == "leftleg" or l == "rightleg"
+        or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand"
+        or l == "rightupperarm" or l == "rightlowerarm" or l == "righthand"
+        or l == "leftupperleg" or l == "leftlowerleg" or l == "leftfoot"
+        or l == "rightupperleg" or l == "rightlowerleg" or l == "rightfoot"
+end
+
+_G.aur_find_target = function(char, name)
+    if not char or not name then return nil end
+
+    local l = name:lower()
+
+    if l == "aura" or l == "effect" or l == "effects"
+        or l == "main" or l == "core" or l == "bodyeffect" or l == "bodyeffects"
+        or l == "part" or l == "meshpart" or l == "unionoperation"
+        or l == "model" or l == "sphere" or l == "ball" or l == "orb"
+        or l == "vfx" then
+        return char:FindFirstChild("HumanoidRootPart")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("Torso")
+    end
+
+    if l == "head" then
+        return char:FindFirstChild("Head")
+    end
+
+    if l == "torso" or l == "uppertorso" or l == "lowertorso" or l == "body" then
+        return char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("LowerTorso")
+            or char:FindFirstChild("Torso")
+    end
+
+    if l == "humanoidrootpart" or l == "root" or l == "hrp" then
+        return char:FindFirstChild("HumanoidRootPart")
+    end
+
+    if l == "left arm" or l == "leftarm" or l == "leftupperarm"
+        or l == "leftlowerarm" or l == "lefthand" then
+        return char:FindFirstChild("LeftUpperArm")
+            or char:FindFirstChild("LeftLowerArm")
+            or char:FindFirstChild("LeftHand")
+            or char:FindFirstChild("Left Arm")
+    end
+
+    if l == "right arm" or l == "rightarm" or l == "rightupperarm"
+        or l == "rightlowerarm" or l == "righthand" then
+        return char:FindFirstChild("RightUpperArm")
+            or char:FindFirstChild("RightLowerArm")
+            or char:FindFirstChild("RightHand")
+            or char:FindFirstChild("Right Arm")
+    end
+
+    if l == "left leg" or l == "leftleg" or l == "leftupperleg"
+        or l == "leftlowerleg" or l == "leftfoot" then
+        return char:FindFirstChild("LeftUpperLeg")
+            or char:FindFirstChild("LeftLowerLeg")
+            or char:FindFirstChild("LeftFoot")
+            or char:FindFirstChild("Left Leg")
+    end
+
+    if l == "right leg" or l == "rightleg" or l == "rightupperleg"
+        or l == "rightlowerleg" or l == "rightfoot" then
+        return char:FindFirstChild("RightUpperLeg")
+            or char:FindFirstChild("RightLowerLeg")
+            or char:FindFirstChild("RightFoot")
+            or char:FindFirstChild("Right Leg")
+    end
+
+    local direct = char:FindFirstChild(name)
+    if direct then return direct end
+
+    local mapped = _G.aur_r6_to_r15[name]
+    if mapped then
+        return char:FindFirstChild(mapped)
+    end
+
+    return nil
+end
+
+_G.aur_is_effect = function(inst)
+    return inst:IsA("ParticleEmitter")
+        or inst:IsA("Trail")
+        or inst:IsA("Beam")
+        or inst:IsA("PointLight")
+        or inst:IsA("SpotLight")
+        or inst:IsA("Sparkles")
+        or inst:IsA("Fire")
+        or inst:IsA("Smoke")
+        or inst:IsA("Attachment")
+end
 
 _G.updaurcol = function()
     col = _G.aurcolwtff or Color3.fromRGB(255, 255, 255)
@@ -656,15 +672,15 @@ _G.updaurcol = function()
         if p then
             if p:IsA("ParticleEmitter") or p:IsA("Trail") or p:IsA("Beam") then
                 p.Color = seq
-            elseif p:IsA("PointLight") then
+            elseif p:IsA("PointLight") or p:IsA("SpotLight") then
                 p.Color = col
             end
-            des = p:GetDescendants()
+            local des = p:GetDescendants()
             for j = 1, #des do
-                d = des[j]
+                local d = des[j]
                 if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") then
                     d.Color = seq
-                elseif d:IsA("PointLight") then
+                elseif d:IsA("PointLight") or d:IsA("SpotLight") then
                     d.Color = col
                 end
             end
@@ -680,30 +696,104 @@ _G.clraur = function()
     table.clear(_G.aurp)
 end
 
+_G.aur_apply_children = function(src, char)
+    if not src or not src.Parent then return end
+
+    local target = _G.aur_find_target(char, src.Name)
+
+    if not target then
+        local node = src.Parent
+        local depth = 0
+        while node and depth < 4 do
+            if _G.aur_is_body_part(node.Name) then
+                target = _G.aur_find_target(char, node.Name)
+                if target then break end
+            end
+            node = node.Parent
+            depth = depth + 1
+        end
+    end
+
+    if not target then return end
+
+    local kids = src:GetChildren()
+    for i = 1, #kids do
+        local c = kids[i]
+        if c:IsA("Motor6D") or c:IsA("Weld") or c:IsA("WeldConstraint")
+            or c:IsA("Humanoid") or c:IsA("SpecialMesh") or c:IsA("Mesh")
+            or c:IsA("Camera") or c:IsA("Script") or c:IsA("ModuleScript")
+            or c:IsA("LocalScript") then
+            c:Destroy()
+        else
+            c.Name = "\0"
+            c.Parent = target
+            table.insert(_G.aurp, c)
+        end
+    end
+end
+
 _G.applaur = function()
     _G.clraur()
     if not _G.aurenabwtff then return end
+
     char = LocalPlayer.Character
+    if not char then return end
+
     asset = _G.aurasst[_G.selaurwtff or "angel"]
-    if char and asset then
-        clo = asset:Clone()
-        kids = clo:GetChildren()
-        for i = 1, #kids do
-            m_p = kids[i]
-            targ = char:FindFirstChild(m_p.Name)
-            if targ then
-                effs = m_p:GetChildren()
-                for j = 1, #effs do
-                    eff = effs[j]
-                    eff.Name = "\0"
-                    eff.Parent = targ
-                    table.insert(_G.aurp, eff)
+    if not asset then return end
+
+    clo = asset:Clone()
+
+    local tops = clo:GetChildren()
+    for i = 1, #tops do
+        local node = tops[i]
+
+        if node and node.Parent then
+            if _G.aur_is_body_part(node.Name) then
+                _G.aur_apply_children(node, char)
+                node:Destroy()
+            else
+                local targ = _G.aur_find_target(char, node.Name)
+                if targ then
+                    local effs = node:GetChildren()
+                    for j = 1, #effs do
+                        local eff = effs[j]
+                        eff.Name = "\0"
+                        eff.Parent = targ
+                        table.insert(_G.aurp, eff)
+                    end
+                    node:Destroy()
                 end
             end
         end
-        clo:Destroy()
-        _G.updaurcol()
     end
+
+    local leftover = clo:GetDescendants()
+    for i = 1, #leftover do
+        local eff = leftover[i]
+        if eff and eff.Parent and _G.aur_is_effect(eff) then
+            local target = nil
+            local walk = eff.Parent
+            local depth = 0
+            while walk and depth < 4 do
+                if _G.aur_is_body_part(walk.Name) then
+                    target = _G.aur_find_target(char, walk.Name)
+                    if target then break end
+                end
+                walk = walk.Parent
+                depth = depth + 1
+            end
+
+            if target then
+                eff.Name = "\0"
+                eff.Parent = target
+                table.insert(_G.aurp, eff)
+            end
+        end
+    end
+
+    clo:Destroy()
+    _G.updaurcol()
 end
 
 getgenv().createFF = function()
@@ -754,7 +844,7 @@ Options.AuraColor:OnChanged(function()
 end)
 
 AuraSection:AddDropdown('AuraType', {
-    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves"},
+    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves", "pixel", "soundwaves", "king", "balloflight", "robes"},
     Default = 'angel',
     Text = 'Aura Type',
 })
@@ -3972,7 +4062,7 @@ end
 
 function RapidOldOnCharacterAdded(character)
 task.wait(0.5)
-local function checkTools()
+function checkTools()
 if not character or not character.Parent then return end
 local tool=character:FindFirstChildOfClass("Tool")
 if tool and tool~=RapidOldTool then
@@ -7960,11 +8050,11 @@ end
 
 local T = HitEffects.Textures
 
-local function getCamera()
+function getCamera()
     return workspace.CurrentCamera
 end
 
-local function track(inst, lifetime, onDone)
+function track(inst, lifetime, onDone)
     HitEffects.Tracked[inst] = true
     task.delay(lifetime, function()
         HitEffects.Tracked[inst] = nil
@@ -8905,7 +8995,7 @@ local _WL_Cache = {}
 _WL_MapCache = {}
 _WL_MapDirty = true
 
-local function _WL_Enabled()
+function _WL_Enabled()
     return Toggles.WhitelistEnabled and Toggles.WhitelistEnabled.Value
 end
 
@@ -8913,7 +9003,7 @@ function _WL_MarkDirty()
     _WL_MapDirty = true
 end
 
-local function _WL_RebuildMap()
+function _WL_RebuildMap()
     local map = {}
     local v = Options.WhitelistPlayers and Options.WhitelistPlayers.Value
     if type(v) == "table" then
@@ -8933,12 +9023,12 @@ local function _WL_RebuildMap()
     _WL_MapDirty = false
 end
 
-local function _WL_GetSelectedMap()
+function _WL_GetSelectedMap()
     if _WL_MapDirty then _WL_RebuildMap() end
     return _WL_MapCache
 end
 
-local function _WL_RebuildCache()
+function _WL_RebuildCache()
     table.clear(_WL_Cache)
     for name in pairs(_WL_GetSelectedMap()) do
         _WL_Cache[name:lower()] = true
@@ -8947,7 +9037,7 @@ local function _WL_RebuildCache()
     end
 end
 
-local function _WL_IsListed(plr)
+function _WL_IsListed(plr)
     if not plr then return false end
     local map = _WL_GetSelectedMap()
     local formatted = plr.DisplayName .. " (" .. plr.Name .. ")"
@@ -10514,7 +10604,7 @@ do
         local localHum = localChar:FindFirstChildOfClass("Humanoid")
         local finished = false
 
-        local function finishStomp()
+        function finishStomp()
             if finished then return end
             finished = true
             stomping = false
@@ -12421,7 +12511,7 @@ do -- Tact Restock
 
     loadoutRemote2 = findLoadoutRemote()
 
-    local function getTactBackpack()
+    function getTactBackpack()
         if backpack2 and backpack2.Parent then return backpack2 end
         return player2:FindFirstChildOfClass("Backpack") or player2:FindFirstChild("Backpack")
     end
@@ -16727,7 +16817,7 @@ do
         if IdleSpamEnabled and IdleSpamState == "strafing" then return "Strafing" end
         if IdleSpamEnabled and IdleSpamState == "idling"   then return "Idle Spam" end
         if stomping then return "Stomping" end
-        if EngagementActive then return "Orbiting" end
+        if EngagementActive then return "Strafing" end
         return "On"
     end
 
