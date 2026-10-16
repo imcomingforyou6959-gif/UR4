@@ -572,10 +572,6 @@ function Library:Unload()
         Library.OnUnload()
     end
 
-    if Library.OverlayGui then
-        Library.OverlayGui:Destroy()
-    end
-
     ScreenGui:Destroy()
 end
 
@@ -6344,6 +6340,7 @@ function Library:CreateSpotifyPlayer()
         end
     end)
 
+    -- cover spin: eases up to speed when playing, glides to a stop when paused
     task.spawn(function()
         while not Destroyed and Library and Items["SpotifyPlayer"] and Items["SpotifyPlayer"].Parent do
             local target = (CurrentTrack and LastKnownPlaying) and 0.8 or 0
