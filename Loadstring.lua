@@ -505,11 +505,589 @@ local _59 = _48:CreateWindow({
 local _60 = {
     Main = _59:AddTab('Main'),
 }
-
 -- WORLD
 
 Lighting = game:GetService('Lighting')
 WorldTab = _59:AddTab('World')
+
+OriginalLighting = {
+    Technology = Lighting.Technology,
+    ClockTime = Lighting.ClockTime,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    Brightness = Lighting.Brightness,
+    EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+    EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+    ExposureCompensation = Lighting.ExposureCompensation,
+    FogColor = Lighting.FogColor,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    ShadowSoftness = Lighting.ShadowSoftness,
+    GeographicLatitude = Lighting.GeographicLatitude,
+    ColorShift_Bottom = Lighting.ColorShift_Bottom,
+    ColorShift_Top = Lighting.ColorShift_Top,
+    TimeOfDay = Lighting.TimeOfDay,
+}
+
+SkySection = WorldTab:AddLeftGroupbox('Skybox Changer')
+
+Skyboxes = {
+    ['Afternoon'] = {
+        SkyboxBk = 'rbxassetid://162001887', SkyboxDn = 'rbxassetid://161998893',
+        SkyboxFt = 'rbxassetid://162001897', SkyboxLf = 'rbxassetid://162001904',
+        SkyboxRt = 'rbxassetid://162001919', SkyboxUp = 'rbxassetid://162001926',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Blue Space'] = {
+        SkyboxBk = 'rbxassetid://366731024', SkyboxDn = 'rbxassetid://367147970',
+        SkyboxFt = 'rbxassetid://366731193', SkyboxLf = 'rbxassetid://366731613',
+        SkyboxRt = 'rbxassetid://366731514', SkyboxUp = 'rbxassetid://367149078',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Classic Roblox'] = {
+        SkyboxBk = 'rbxassetid://11138450201', SkyboxDn = 'rbxassetid://11138453351',
+        SkyboxFt = 'rbxassetid://11138458027', SkyboxLf = 'rbxassetid://11138460736',
+        SkyboxRt = 'rbxassetid://11138463127', SkyboxUp = 'rbxassetid://11138465883',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://11138537872',
+    },
+    ['Cloudy'] = {
+        SkyboxBk = 'rbxassetid://246480323', SkyboxDn = 'rbxassetid://246480523',
+        SkyboxFt = 'rbxassetid://246480105', SkyboxLf = 'rbxassetid://246480549',
+        SkyboxRt = 'rbxassetid://246480565', SkyboxUp = 'rbxassetid://246480504',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Dusk'] = {
+        SkyboxBk = 'rbxassetid://9778108979', SkyboxDn = 'rbxassetid://9778110864',
+        SkyboxFt = 'rbxassetid://9778101192', SkyboxLf = 'rbxassetid://9778103329',
+        SkyboxRt = 'rbxassetid://9778104889', SkyboxUp = 'rbxassetid://9778106496',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 11,
+    },
+    ['Dawn'] = {
+        SkyboxBk = 'rbxassetid://323479840', SkyboxDn = 'rbxassetid://323481190',
+        SkyboxFt = 'rbxassetid://323480314', SkyboxLf = 'rbxassetid://323480786',
+        SkyboxRt = 'rbxassetid://323480131', SkyboxUp = 'rbxassetid://323478865',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Dark Skies'] = {
+        SkyboxBk = 'rbxassetid://149397692', SkyboxDn = 'rbxassetid://149397686',
+        SkyboxFt = 'rbxassetid://149397697', SkyboxLf = 'rbxassetid://149397684',
+        SkyboxRt = 'rbxassetid://149397688', SkyboxUp = 'rbxassetid://149397702',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Earth'] = {
+        SkyboxBk = 'rbxassetid://15753305495', SkyboxDn = 'rbxassetid://15753362674',
+        SkyboxFt = 'rbxassetid://15753305823', SkyboxLf = 'rbxassetid://15753310707',
+        SkyboxRt = 'rbxassetid://15753304774', SkyboxUp = 'rbxassetid://15753304473',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+    },
+    ['Ethereal'] = {
+        SkyboxBk = 'rbxassetid://16823386986', SkyboxDn = 'rbxassetid://16823388586',
+        SkyboxFt = 'rbxassetid://16823390254', SkyboxLf = 'rbxassetid://16823392344',
+        SkyboxRt = 'rbxassetid://16823394120', SkyboxUp = 'rbxassetid://16823395515',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Galaxy'] = {
+        SkyboxBk = 'rbxassetid://2049520382', SkyboxDn = 'rbxassetid://2049519279',
+        SkyboxFt = 'rbxassetid://2049519882', SkyboxLf = 'rbxassetid://2049522478',
+        SkyboxRt = 'rbxassetid://2049521207', SkyboxUp = 'rbxassetid://2049518578',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Heaven'] = {
+        SkyboxBk = 'rbxassetid://7951826533', SkyboxDn = 'rbxassetid://7951706908',
+        SkyboxFt = 'rbxassetid://7951694757', SkyboxLf = 'rbxassetid://7951697216',
+        SkyboxRt = 'rbxassetid://7951700251', SkyboxUp = 'rbxassetid://7951703855',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Horizontal Milky Way'] = {
+        SkyboxBk = 'rbxassetid://714276643', SkyboxDn = 'rbxassetid://714276541',
+        SkyboxFt = 'rbxassetid://714276657', SkyboxLf = 'rbxassetid://714276648',
+        SkyboxRt = 'rbxassetid://714276638', SkyboxUp = 'rbxassetid://714276621',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Jungle'] = {
+        SkyboxBk = 'rbxassetid://525546178', SkyboxDn = 'rbxassetid://525544628',
+        SkyboxFt = 'rbxassetid://525548536', SkyboxLf = 'rbxassetid://525550171',
+        SkyboxRt = 'rbxassetid://525545319', SkyboxUp = 'rbxassetid://525546479',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Mountains'] = {
+        SkyboxBk = 'rbxassetid://368385273', SkyboxDn = 'rbxassetid://48015300',
+        SkyboxFt = 'rbxassetid://368388290', SkyboxLf = 'rbxassetid://368390615',
+        SkyboxRt = 'rbxassetid://368385190', SkyboxUp = 'rbxassetid://48015387',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Nebula'] = {
+        SkyboxBk = 'rbxassetid://171448875', SkyboxDn = 'rbxassetid://171448902',
+        SkyboxFt = 'rbxassetid://171448848', SkyboxLf = 'rbxassetid://171448933',
+        SkyboxRt = 'rbxassetid://171448925', SkyboxUp = 'rbxassetid://171448889',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Night'] = {
+        SkyboxBk = 'rbxassetid://12064107', SkyboxDn = 'rbxassetid://12064152',
+        SkyboxFt = 'rbxassetid://12064121', SkyboxLf = 'rbxassetid://12063984',
+        SkyboxRt = 'rbxassetid://12064115', SkyboxUp = 'rbxassetid://12064131',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Night Light'] = {
+        SkyboxBk = 'rbxassetid://171447054', SkyboxDn = 'rbxassetid://171447094',
+        SkyboxFt = 'rbxassetid://171447041', SkyboxLf = 'rbxassetid://171447128',
+        SkyboxRt = 'rbxassetid://171447111', SkyboxUp = 'rbxassetid://171447068',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Ocean Sky'] = {
+        SkyboxBk = 'rbxassetid://11854686548', SkyboxDn = 'rbxassetid://11854687121',
+        SkyboxFt = 'rbxassetid://11854693863', SkyboxLf = 'rbxassetid://11854696162',
+        SkyboxRt = 'rbxassetid://11854698541', SkyboxUp = 'rbxassetid://11854708161',
+        StarCount = 3000, SunAngularSize = 1, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://4774583925', MoonTextureId = 'rbxassetid://4774580371',
+    },
+    ['Pink Clouds'] = {
+        SkyboxBk = 'rbxassetid://271042516', SkyboxDn = 'rbxassetid://271077243',
+        SkyboxFt = 'rbxassetid://271042556', SkyboxLf = 'rbxassetid://271042310',
+        SkyboxRt = 'rbxassetid://271042467', SkyboxUp = 'rbxassetid://271077958',
+        StarCount = 1334, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Red Dusk'] = {
+        SkyboxBk = 'rbxassetid://85146619291315', SkyboxDn = 'rbxassetid://123407860042117',
+        SkyboxFt = 'rbxassetid://132624761762466', SkyboxLf = 'rbxassetid://102069641249982',
+        SkyboxRt = 'rbxassetid://136526747107728', SkyboxUp = 'rbxassetid://136208328681929',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Redshift'] = {
+        SkyboxBk = 'rbxassetid://401664839', SkyboxDn = 'rbxassetid://401664862',
+        SkyboxFt = 'rbxassetid://401664960', SkyboxLf = 'rbxassetid://401664881',
+        SkyboxRt = 'rbxassetid://401664901', SkyboxUp = 'rbxassetid://401664936',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Saturn'] = {
+        SkyboxBk = 'rbxassetid://1898724755', SkyboxDn = 'rbxassetid://1898727189',
+        SkyboxFt = 'rbxassetid://1898722814', SkyboxLf = 'rbxassetid://1898729298',
+        SkyboxRt = 'rbxassetid://1898741025', SkyboxUp = 'rbxassetid://1898736761',
+        StarCount = 3000, SunAngularSize = 10, MoonAngularSize = 0,
+        MoonTextureId = 'rbxassetid://0',
+    },
+    ['SFOTH'] = {
+        SkyboxBk = 'rbxassetid://1012890', SkyboxDn = 'rbxassetid://1012891',
+        SkyboxFt = 'rbxassetid://1012887', SkyboxLf = 'rbxassetid://1012889',
+        SkyboxRt = 'rbxassetid://1012888', SkyboxUp = 'rbxassetid://1014449',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Smoke'] = {
+        SkyboxBk = 'rbxassetid://171410736', SkyboxDn = 'rbxassetid://171410748',
+        SkyboxFt = 'rbxassetid://171410730', SkyboxLf = 'rbxassetid://171410766',
+        SkyboxRt = 'rbxassetid://171410755', SkyboxUp = 'rbxassetid://171410742',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Solid Black'] = {
+        SkyboxBk = 'rbxassetid://2013298', SkyboxDn = 'rbxassetid://2013298',
+        SkyboxFt = 'rbxassetid://2013298', SkyboxLf = 'rbxassetid://2013298',
+        SkyboxRt = 'rbxassetid://2013298', SkyboxUp = 'rbxassetid://2013298',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Space'] = {
+        SkyboxBk = 'rbxassetid://155441905', SkyboxDn = 'rbxassetid://155441905',
+        SkyboxFt = 'rbxassetid://155441905', SkyboxLf = 'rbxassetid://155441905',
+        SkyboxRt = 'rbxassetid://155441905', SkyboxUp = 'rbxassetid://155441905',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Storm'] = {
+        SkyboxBk = 'rbxassetid://171410784', SkyboxDn = 'rbxassetid://171410792',
+        SkyboxFt = 'rbxassetid://171410775', SkyboxLf = 'rbxassetid://171410807',
+        SkyboxRt = 'rbxassetid://171410798', SkyboxUp = 'rbxassetid://171410789',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Sunset'] = {
+        SkyboxBk = 'rbxassetid://264908339', SkyboxDn = 'rbxassetid://264907909',
+        SkyboxFt = 'rbxassetid://264909420', SkyboxLf = 'rbxassetid://264909758',
+        SkyboxRt = 'rbxassetid://264908886', SkyboxUp = 'rbxassetid://264907379',
+        StarCount = 5000, SunAngularSize = 18, MoonAngularSize = 11,
+    },
+    ['Underworld'] = {
+        SkyboxBk = 'rbxassetid://171560994', SkyboxDn = 'rbxassetid://171561019',
+        SkyboxFt = 'rbxassetid://171560968', SkyboxLf = 'rbxassetid://171561065',
+        SkyboxRt = 'rbxassetid://171561026', SkyboxUp = 'rbxassetid://171561009',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['Vertical Milky Way'] = {
+        SkyboxBk = 'rbxassetid://5559289158', SkyboxDn = 'rbxassetid://5559290893',
+        SkyboxFt = 'rbxassetid://5559300879', SkyboxLf = 'rbxassetid://5559292825',
+        SkyboxRt = 'rbxassetid://5559302989', SkyboxUp = 'rbxassetid://5559302033',
+        StarCount = 3000, SunAngularSize = 1.44, MoonAngularSize = 0.57,
+    },
+    ['White'] = {
+        SkyboxBk = 'rbxassetid://321136141', SkyboxDn = 'rbxassetid://321136141',
+        SkyboxFt = 'rbxassetid://321136141', SkyboxLf = 'rbxassetid://321136141',
+        SkyboxRt = 'rbxassetid://321136141', SkyboxUp = 'rbxassetid://321136141',
+        StarCount = 0, SunAngularSize = 21, MoonAngularSize = 11,
+    },
+    ['GreenHaze'] = {
+        SkyboxBk = 'rbxassetid://160193404', SkyboxDn = 'rbxassetid://160193466',
+        SkyboxFt = 'rbxassetid://160193461', SkyboxLf = 'rbxassetid://160193469',
+        SkyboxRt = 'rbxassetid://160193463', SkyboxUp = 'rbxassetid://160193458',
+        SunAngularSize = 0,
+    },
+    ['Space2'] = {
+        SkyboxBk = 'rbxassetid://11844076072', SkyboxDn = 'rbxassetid://11844069700',
+        SkyboxFt = 'rbxassetid://11844067209', SkyboxLf = 'rbxassetid://11844063543',
+        SkyboxRt = 'rbxassetid://11844058446', SkyboxUp = 'rbxassetid://11844053742',
+        StarCount = 3000, SunAngularSize = 11, MoonAngularSize = 20,
+        MoonTextureId = 'rbxassetid://11844121592',
+    },
+    ['PinkMountains'] = {
+        SkyboxBk = 'rbxassetid://160188495', SkyboxDn = 'rbxassetid://160188614',
+        SkyboxFt = 'rbxassetid://160188609', SkyboxLf = 'rbxassetid://160188589',
+        SkyboxRt = 'rbxassetid://160188597', SkyboxUp = 'rbxassetid://160188588',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+    },
+    ['Valentines'] = {
+        SkyboxBk = 'rbxassetid://11427769401', SkyboxDn = 'rbxassetid://11427770685',
+        SkyboxFt = 'rbxassetid://11427769401', SkyboxLf = 'rbxassetid://11427769401',
+        SkyboxRt = 'rbxassetid://11427769401', SkyboxUp = 'rbxassetid://11427771954',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+    },
+    ['PinkArt'] = {
+        SkyboxBk = 'rbxassetid://71607054149497', SkyboxDn = 'rbxassetid://78865378050055',
+        SkyboxFt = 'rbxassetid://104560113223878', SkyboxLf = 'rbxassetid://80395333901607',
+        SkyboxRt = 'rbxassetid://87570388049514', SkyboxUp = 'rbxassetid://79190209626172',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+    },
+    ['PurplePlanet'] = {
+        SkyboxBk = 'rbxassetid://16262356578', SkyboxDn = 'rbxassetid://16262358026',
+        SkyboxFt = 'rbxassetid://16262360469', SkyboxLf = 'rbxassetid://16262362003',
+        SkyboxRt = 'rbxassetid://16262363873', SkyboxUp = 'rbxassetid://16262366016',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Blizzard'] = {
+        SkyboxBk = 'rbxassetid://16653221738', SkyboxDn = 'rbxassetid://16653222701',
+        SkyboxFt = 'rbxassetid://16653224051', SkyboxLf = 'rbxassetid://16653225849',
+        SkyboxRt = 'rbxassetid://16653227200', SkyboxUp = 'rbxassetid://16653228333',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Winter'] = {
+        SkyboxBk = 'rbxassetid://155657655', SkyboxDn = 'rbxassetid://155674246',
+        SkyboxFt = 'rbxassetid://155657609', SkyboxLf = 'rbxassetid://155657671',
+        SkyboxRt = 'rbxassetid://155657619', SkyboxUp = 'rbxassetid://155674931',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['FlamingSunset'] = {
+        SkyboxBk = 'rbxassetid://415688378', SkyboxDn = 'rbxassetid://415688193',
+        SkyboxFt = 'rbxassetid://415688242', SkyboxLf = 'rbxassetid://415688310',
+        SkyboxRt = 'rbxassetid://415688274', SkyboxUp = 'rbxassetid://415688354',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Mountains B'] = {
+        SkyboxBk = 'rbxassetid://15359410490', SkyboxDn = 'rbxassetid://15359411132',
+        SkyboxFt = 'rbxassetid://15359412131', SkyboxLf = 'rbxassetid://15359411633',
+        SkyboxRt = 'rbxassetid://15359417656', SkyboxUp = 'rbxassetid://15359412677',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['FPSBoost'] = {
+        SkyboxBk = 'rbxassetid://11457548274', SkyboxDn = 'rbxassetid://11457548274',
+        SkyboxFt = 'rbxassetid://11457548274', SkyboxLf = 'rbxassetid://11457548274',
+        SkyboxRt = 'rbxassetid://11457548274', SkyboxUp = 'rbxassetid://11457548274',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['AestheticMountains'] = {
+        SkyboxBk = 'rbxassetid://15470198023', SkyboxDn = 'rbxassetid://15470151245',
+        SkyboxFt = 'rbxassetid://15470200128', SkyboxLf = 'rbxassetid://15470202648',
+        SkyboxRt = 'rbxassetid://15470204862', SkyboxUp = 'rbxassetid://15470207755',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['BetterNight3'] = {
+        SkyboxBk = 'rbxassetid://2670643994', SkyboxDn = 'rbxassetid://2670643365',
+        SkyboxFt = 'rbxassetid://2670643214', SkyboxLf = 'rbxassetid://2670643070',
+        SkyboxRt = 'rbxassetid://2670644173', SkyboxUp = 'rbxassetid://2670644331',
+        StarCount = 500, SunAngularSize = 21, MoonAngularSize = 1.5,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://1075087760',
+    },
+    ['Galaxy2'] = {
+        SkyboxBk = 'rbxassetid://14164368678', SkyboxDn = 'rbxassetid://14164386126',
+        SkyboxFt = 'rbxassetid://14164389230', SkyboxLf = 'rbxassetid://14164398493',
+        SkyboxRt = 'rbxassetid://14164402782', SkyboxUp = 'rbxassetid://14164405298',
+        StarCount = 500, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Aesthetic3'] = {
+        SkyboxBk = 'rbxassetid://151165214', SkyboxDn = 'rbxassetid://151165197',
+        SkyboxFt = 'rbxassetid://151165224', SkyboxLf = 'rbxassetid://151165191',
+        SkyboxRt = 'rbxassetid://151165206', SkyboxUp = 'rbxassetid://151165227',
+        StarCount = 500, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['PurpleSpace'] = {
+        SkyboxBk = 'rbxassetid://15983968922', SkyboxDn = 'rbxassetid://15983966825',
+        SkyboxFt = 'rbxassetid://5260817288', SkyboxLf = 'rbxassetid://15983967420',
+        SkyboxRt = 'rbxassetid://15983966246', SkyboxUp = 'rbxassetid://15983964246',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Pink'] = {
+        SkyboxBk = 'rbxassetid://271042516', SkyboxDn = 'rbxassetid://271077243',
+        SkyboxFt = 'rbxassetid://271042556', SkyboxLf = 'rbxassetid://271042310',
+        SkyboxRt = 'rbxassetid://271042467', SkyboxUp = 'rbxassetid://271077958',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['PurpleNight'] = {
+        SkyboxBk = 'rbxassetid://5260808177', SkyboxDn = 'rbxassetid://5260653793',
+        SkyboxFt = 'rbxassetid://5260817288', SkyboxLf = 'rbxassetid://5260800833',
+        SkyboxRt = 'rbxassetid://5260800833', SkyboxUp = 'rbxassetid://5084576400',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Flame'] = {
+        SkyboxBk = 'rbxassetid://6286780109', SkyboxDn = 'rbxassetid://6286782353',
+        SkyboxFt = 'rbxassetid://6286784186', SkyboxLf = 'rbxassetid://6286785801',
+        SkyboxRt = 'rbxassetid://6286788245', SkyboxUp = 'rbxassetid://6286790025',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Galaxy3'] = {
+        SkyboxBk = 'rbxassetid://14543264135', SkyboxDn = 'rbxassetid://14543358958',
+        SkyboxFt = 'rbxassetid://14543257810', SkyboxLf = 'rbxassetid://14543275895',
+        SkyboxRt = 'rbxassetid://14543280890', SkyboxUp = 'rbxassetid://14543371676',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Storm B'] = {
+        SkyboxBk = 'rbxassetid://1618912481', SkyboxDn = 'rbxassetid://1618913943',
+        SkyboxFt = 'rbxassetid://1618913244', SkyboxLf = 'rbxassetid://1618912849',
+        SkyboxRt = 'rbxassetid://1618911568', SkyboxUp = 'rbxassetid://1618913654',
+        SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://1084351190', MoonTextureId = 'rbxassetid://1075087760',
+    },
+    ['Milkyway'] = {
+        SkyboxBk = 'rbxassetid://129876530632297', SkyboxDn = 'rbxassetid://108406529909981',
+        SkyboxFt = 'rbxassetid://104400530594543', SkyboxLf = 'rbxassetid://73372229972523',
+        SkyboxRt = 'rbxassetid://87408857415924', SkyboxUp = 'rbxassetid://137817405681365',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['PurpleClouds'] = {
+        SkyboxBk = 'rbxassetid://570557514', SkyboxDn = 'rbxassetid://570557775',
+        SkyboxFt = 'rbxassetid://570557559', SkyboxLf = 'rbxassetid://570557620',
+        SkyboxRt = 'rbxassetid://570557672', SkyboxUp = 'rbxassetid://570557727',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['BlueClouds'] = {
+        SkyboxBk = 'rbxassetid://591058823', SkyboxDn = 'rbxassetid://591059876',
+        SkyboxFt = 'rbxassetid://591058104', SkyboxLf = 'rbxassetid://591057861',
+        SkyboxRt = 'rbxassetid://591057625', SkyboxUp = 'rbxassetid://591059642',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['BetterNight'] = {
+        SkyboxBk = 'rbxassetid://15470289121', SkyboxDn = 'rbxassetid://15470291746',
+        SkyboxFt = 'rbxassetid://15470294431', SkyboxLf = 'rbxassetid://15470297162',
+        SkyboxRt = 'rbxassetid://15470299887', SkyboxUp = 'rbxassetid://15470303050',
+        StarCount = 3000,
+    },
+    ['Cloudy B'] = {
+        SkyboxBk = 'rbxassetid://4495864450', SkyboxDn = 'rbxassetid://4495864887',
+        SkyboxFt = 'rbxassetid://4495865458', SkyboxLf = 'rbxassetid://4495866035',
+        SkyboxRt = 'rbxassetid://4495866584', SkyboxUp = 'rbxassetid://4495867486',
+        StarCount = 3000,
+    },
+    ['NetherWorld'] = {
+        SkyboxBk = 'rbxassetid://14365019002', SkyboxDn = 'rbxassetid://14365023350',
+        SkyboxFt = 'rbxassetid://14365018399', SkyboxLf = 'rbxassetid://14365018705',
+        SkyboxRt = 'rbxassetid://14365018143', SkyboxUp = 'rbxassetid://14365019327',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['NewYork'] = {
+        SkyboxBk = 'rbxassetid://11333973069', SkyboxDn = 'rbxassetid://11333969768',
+        SkyboxFt = 'rbxassetid://11333964303', SkyboxLf = 'rbxassetid://11333971332',
+        SkyboxRt = 'rbxassetid://11333982864', SkyboxUp = 'rbxassetid://11333967970',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Purple2'] = {
+        SkyboxBk = 'rbxassetid://8107841671', SkyboxDn = 'rbxassetid://6444884785',
+        SkyboxFt = 'rbxassetid://8107841671', SkyboxLf = 'rbxassetid://8107841671',
+        SkyboxRt = 'rbxassetid://8107841671', SkyboxUp = 'rbxassetid://8107849791',
+        StarCount = 3000, SunAngularSize = 11, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://6196665106', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['FunnyStorm'] = {
+        SkyboxBk = 'rbxassetid://6280934001', SkyboxDn = 'rbxassetid://6280935347',
+        SkyboxFt = 'rbxassetid://6280936575', SkyboxLf = 'rbxassetid://6280938749',
+        SkyboxRt = 'rbxassetid://6280940989', SkyboxUp = 'rbxassetid://6280942402',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Galaxy B'] = {
+        SkyboxBk = 'rbxassetid://159454299', SkyboxDn = 'rbxassetid://159454296',
+        SkyboxFt = 'rbxassetid://159454293', SkyboxLf = 'rbxassetid://159454293',
+        SkyboxRt = 'rbxassetid://159454293', SkyboxUp = 'rbxassetid://159454288',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['BlueSpace'] = {
+        SkyboxBk = 'rbxassetid://16876541778', SkyboxDn = 'rbxassetid://16876543880',
+        SkyboxFt = 'rbxassetid://16876546384', SkyboxLf = 'rbxassetid://16876548320',
+        SkyboxRt = 'rbxassetid://16876550345', SkyboxUp = 'rbxassetid://16876552681',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Purple3'] = {
+        SkyboxBk = 'rbxassetid://433274085', SkyboxDn = 'rbxassetid://433274194',
+        SkyboxFt = 'rbxassetid://433274131', SkyboxLf = 'rbxassetid://433274370',
+        SkyboxRt = 'rbxassetid://433274429', SkyboxUp = 'rbxassetid://433274285',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Nebula2'] = {
+        SkyboxBk = 'rbxassetid://16932794531', SkyboxDn = 'rbxassetid://16932797813',
+        SkyboxFt = 'rbxassetid://16932800523', SkyboxLf = 'rbxassetid://16932803722',
+        SkyboxRt = 'rbxassetid://16932806825', SkyboxUp = 'rbxassetid://16932810138',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Nebula B'] = {
+        SkyboxBk = 'rbxassetid://5260808177', SkyboxDn = 'rbxassetid://5260653793',
+        SkyboxFt = 'rbxassetid://5260817288', SkyboxLf = 'rbxassetid://5260800833',
+        SkyboxRt = 'rbxassetid://5260811073', SkyboxUp = 'rbxassetid://5260824661',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['LunarNight'] = {
+        SkyboxBk = 'rbxassetid://187713366', SkyboxDn = 'rbxassetid://187712428',
+        SkyboxFt = 'rbxassetid://187712836', SkyboxLf = 'rbxassetid://187713755',
+        SkyboxRt = 'rbxassetid://187714525', SkyboxUp = 'rbxassetid://187712111',
+        StarCount = 0, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Purple'] = {
+        SkyboxBk = 'rbxassetid://8539982183', SkyboxDn = 'rbxassetid://8539981943',
+        SkyboxFt = 'rbxassetid://8539981721', SkyboxLf = 'rbxassetid://8539981424',
+        SkyboxRt = 'rbxassetid://8539980766', SkyboxUp = 'rbxassetid://8539981085',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Hell'] = {
+        SkyboxBk = 'rbxassetid://11730840088', SkyboxDn = 'rbxassetid://11730842997',
+        SkyboxFt = 'rbxassetid://11730849615', SkyboxLf = 'rbxassetid://11730852920',
+        SkyboxRt = 'rbxassetid://11730855491', SkyboxUp = 'rbxassetid://11730857150',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Nebula6'] = {
+        SkyboxBk = 'rbxassetid://16694187412', SkyboxDn = 'rbxassetid://16694190947',
+        SkyboxFt = 'rbxassetid://16694194795', SkyboxLf = 'rbxassetid://16694197080',
+        SkyboxRt = 'rbxassetid://16694200892', SkyboxUp = 'rbxassetid://16694204069',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['DarkishPink'] = {
+        SkyboxBk = 'rbxassetid://570555736', SkyboxDn = 'rbxassetid://570555964',
+        SkyboxFt = 'rbxassetid://570555800', SkyboxLf = 'rbxassetid://570555840',
+        SkyboxRt = 'rbxassetid://570555882', SkyboxUp = 'rbxassetid://570555929',
+        StarCount = 3000, SunAngularSize = 21, MoonAngularSize = 11,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['RedNight'] = {
+        SkyboxBk = 'rbxassetid://401664839', SkyboxDn = 'rbxassetid://401664862',
+        SkyboxFt = 'rbxassetid://401664960', SkyboxLf = 'rbxassetid://401664881',
+        SkyboxRt = 'rbxassetid://401664901', SkyboxUp = 'rbxassetid://401664936',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+    ['Space B'] = {
+        SkyboxBk = 'rbxassetid://166509999', SkyboxDn = 'rbxassetid://166510057',
+        SkyboxFt = 'rbxassetid://166510116', SkyboxLf = 'rbxassetid://166510092',
+        SkyboxRt = 'rbxassetid://166510131', SkyboxUp = 'rbxassetid://166510114',
+        StarCount = 3000, SunAngularSize = 0, MoonAngularSize = 0,
+        SunTextureId = 'rbxassetid://8281961896', MoonTextureId = 'rbxassetid://6444320592',
+    },
+}
+
+SkyboxNames = {}
+for name in pairs(Skyboxes) do table.insert(SkyboxNames, name) end
+table.sort(SkyboxNames)
+table.insert(SkyboxNames, 1, 'None')
+
+SkySection:AddDropdown('Skybox', {
+    Values = SkyboxNames,
+    Default = 'None',
+    Text = 'Skybox',
+})
+
+OriginalSky = nil
+_activeCustomSky = nil
+
+function applySkybox(skyName)
+    if OriginalSky == nil then
+        for _, obj in ipairs(Lighting:GetChildren()) do
+            if obj:IsA("Sky") then OriginalSky = obj break end
+        end
+        if OriginalSky == nil then OriginalSky = false end
+    end
+
+    if _activeCustomSky and _activeCustomSky.Parent then _activeCustomSky:Destroy() end
+    _activeCustomSky = nil
+
+    if skyName == 'None' or not Skyboxes[skyName] then
+        if OriginalSky and OriginalSky.Parent == nil then OriginalSky.Parent = Lighting end
+        return
+    end
+
+    if OriginalSky and OriginalSky.Parent then OriginalSky.Parent = nil end
+
+    local data = Skyboxes[skyName]
+    local sky = Instance.new("Sky")
+    sky.Name = "CustomSkyboxzz"
+    sky.SkyboxBk = data.SkyboxBk
+    sky.SkyboxDn = data.SkyboxDn
+    sky.SkyboxFt = data.SkyboxFt
+    sky.SkyboxLf = data.SkyboxLf
+    sky.SkyboxRt = data.SkyboxRt
+    sky.SkyboxUp = data.SkyboxUp
+    if data.StarCount ~= nil then sky.StarCount = data.StarCount end
+    if data.SunAngularSize ~= nil then sky.SunAngularSize = data.SunAngularSize end
+    if data.MoonAngularSize ~= nil then sky.MoonAngularSize = data.MoonAngularSize end
+    if data.SunTextureId ~= nil then sky.SunTextureId = data.SunTextureId end
+    if data.MoonTextureId ~= nil then sky.MoonTextureId = data.MoonTextureId end
+    sky.Parent = Lighting
+    _activeCustomSky = sky
+end
+
+Options.Skybox:OnChanged(function()
+    applySkybox(Options.Skybox.Value)
+end)
+
+task.spawn(function()
+    task.wait(1)
+    if Options.Skybox.Value ~= "None" then
+        applySkybox(Options.Skybox.Value)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(1) do
+        if _activeCustomSky and not _activeCustomSky.Parent then
+            _activeCustomSky.Parent = Lighting
+        end
+    end
+end)
+
+Lighting.ChildAdded:Connect(function(child)
+    if child:IsA("Sky") and child ~= _activeCustomSky and _activeCustomSky then
+        task.defer(function()
+            if child.Parent then child.Parent = nil end
+        end)
+    end
+end)
 
 AuraSection = WorldTab:AddLeftGroupbox('Auras')
 Players = game:GetService('Players')
@@ -536,44 +1114,22 @@ _G.aurasst = {
 }
 
 _G.aur_r6_to_r15 = {
-    Head        = "Head",
-    Torso       = "UpperTorso",
-    ["Left Arm"]  = "LeftUpperArm",
-    ["Right Arm"] = "RightUpperArm",
-    ["Left Leg"]  = "LeftUpperLeg",
-    ["Right Leg"] = "RightUpperLeg",
+    Head = "Head", Torso = "UpperTorso",
+    ["Left Arm"] = "LeftUpperArm", ["Right Arm"] = "RightUpperArm",
+    ["Left Leg"] = "LeftUpperLeg", ["Right Leg"] = "RightUpperLeg",
 }
 
 _G.aur_is_body_part = function(name)
     if not name then return false end
     local l = name:lower()
-    return l == "head"
-        or l == "torso"
-        or l == "uppertorso"
-        or l == "lowertorso"
-        or l == "body"
-        or l == "humanoidrootpart"
-        or l == "root"
-        or l == "hrp"
-        or l == "aura"
-        or l == "effect"
-        or l == "effects"
-        or l == "main"
-        or l == "core"
-        or l == "bodyeffect"
-        or l == "bodyeffects"
-        or l == "part"
-        or l == "meshpart"
-        or l == "unionoperation"
-        or l == "model"
-        or l == "sphere"
-        or l == "ball"
-        or l == "orb"
-        or l == "vfx"
-        or l == "left arm" or l == "right arm"
-        or l == "leftarm" or l == "rightarm"
-        or l == "left leg" or l == "right leg"
-        or l == "leftleg" or l == "rightleg"
+    return l == "head" or l == "torso" or l == "uppertorso" or l == "lowertorso"
+        or l == "body" or l == "humanoidrootpart" or l == "root" or l == "hrp"
+        or l == "aura" or l == "effect" or l == "effects" or l == "main" or l == "core"
+        or l == "bodyeffect" or l == "bodyeffects"
+        or l == "part" or l == "meshpart" or l == "unionoperation"
+        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx"
+        or l == "left arm" or l == "right arm" or l == "leftarm" or l == "rightarm"
+        or l == "left leg" or l == "right leg" or l == "leftleg" or l == "rightleg"
         or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand"
         or l == "rightupperarm" or l == "rightlowerarm" or l == "righthand"
         or l == "leftupperleg" or l == "leftlowerleg" or l == "leftfoot"
@@ -582,107 +1138,57 @@ end
 
 _G.aur_find_target = function(char, name)
     if not char or not name then return nil end
-
     local l = name:lower()
 
     if l == "aura" or l == "effect" or l == "effects"
         or l == "main" or l == "core" or l == "bodyeffect" or l == "bodyeffects"
         or l == "part" or l == "meshpart" or l == "unionoperation"
-        or l == "model" or l == "sphere" or l == "ball" or l == "orb"
-        or l == "vfx" then
-        return char:FindFirstChild("HumanoidRootPart")
-            or char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("Torso")
+        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx" then
+        return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
     end
-
-    if l == "head" then
-        return char:FindFirstChild("Head")
-    end
-
+    if l == "head" then return char:FindFirstChild("Head") end
     if l == "torso" or l == "uppertorso" or l == "lowertorso" or l == "body" then
-        return char:FindFirstChild("UpperTorso")
-            or char:FindFirstChild("LowerTorso")
-            or char:FindFirstChild("Torso")
+        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso")
     end
-
-    if l == "humanoidrootpart" or l == "root" or l == "hrp" then
-        return char:FindFirstChild("HumanoidRootPart")
+    if l == "humanoidrootpart" or l == "root" or l == "hrp" then return char:FindFirstChild("HumanoidRootPart") end
+    if l == "left arm" or l == "leftarm" or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand" then
+        return char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("LeftLowerArm") or char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm")
     end
-
-    if l == "left arm" or l == "leftarm" or l == "leftupperarm"
-        or l == "leftlowerarm" or l == "lefthand" then
-        return char:FindFirstChild("LeftUpperArm")
-            or char:FindFirstChild("LeftLowerArm")
-            or char:FindFirstChild("LeftHand")
-            or char:FindFirstChild("Left Arm")
+    if l == "right arm" or l == "rightarm" or l == "rightupperarm" or l == "rightlowerarm" or l == "righthand" then
+        return char:FindFirstChild("RightUpperArm") or char:FindFirstChild("RightLowerArm") or char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
     end
-
-    if l == "right arm" or l == "rightarm" or l == "rightupperarm"
-        or l == "rightlowerarm" or l == "righthand" then
-        return char:FindFirstChild("RightUpperArm")
-            or char:FindFirstChild("RightLowerArm")
-            or char:FindFirstChild("RightHand")
-            or char:FindFirstChild("Right Arm")
+    if l == "left leg" or l == "leftleg" or l == "leftupperleg" or l == "leftlowerleg" or l == "leftfoot" then
+        return char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("LeftLowerLeg") or char:FindFirstChild("LeftFoot") or char:FindFirstChild("Left Leg")
     end
-
-    if l == "left leg" or l == "leftleg" or l == "leftupperleg"
-        or l == "leftlowerleg" or l == "leftfoot" then
-        return char:FindFirstChild("LeftUpperLeg")
-            or char:FindFirstChild("LeftLowerLeg")
-            or char:FindFirstChild("LeftFoot")
-            or char:FindFirstChild("Left Leg")
+    if l == "right leg" or l == "rightleg" or l == "rightupperleg" or l == "rightlowerleg" or l == "rightfoot" then
+        return char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("RightLowerLeg") or char:FindFirstChild("RightFoot") or char:FindFirstChild("Right Leg")
     end
-
-    if l == "right leg" or l == "rightleg" or l == "rightupperleg"
-        or l == "rightlowerleg" or l == "rightfoot" then
-        return char:FindFirstChild("RightUpperLeg")
-            or char:FindFirstChild("RightLowerLeg")
-            or char:FindFirstChild("RightFoot")
-            or char:FindFirstChild("Right Leg")
-    end
-
     local direct = char:FindFirstChild(name)
     if direct then return direct end
-
     local mapped = _G.aur_r6_to_r15[name]
-    if mapped then
-        return char:FindFirstChild(mapped)
-    end
-
+    if mapped then return char:FindFirstChild(mapped) end
     return nil
 end
 
 _G.aur_is_effect = function(inst)
-    return inst:IsA("ParticleEmitter")
-        or inst:IsA("Trail")
-        or inst:IsA("Beam")
-        or inst:IsA("PointLight")
-        or inst:IsA("SpotLight")
-        or inst:IsA("Sparkles")
-        or inst:IsA("Fire")
-        or inst:IsA("Smoke")
-        or inst:IsA("Attachment")
+    return inst:IsA("ParticleEmitter") or inst:IsA("Trail") or inst:IsA("Beam")
+        or inst:IsA("PointLight") or inst:IsA("SpotLight") or inst:IsA("Sparkles")
+        or inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Attachment")
 end
 
 _G.updaurcol = function()
-    col = _G.aurcolwtff or Color3.fromRGB(255, 255, 255)
-    seq = ColorSequence.new(col)
+    local col = _G.aurcolwtff or Color3.fromRGB(255, 255, 255)
+    local seq = ColorSequence.new(col)
     for i = 1, #_G.aurp do
-        p = _G.aurp[i]
+        local p = _G.aurp[i]
         if p then
-            if p:IsA("ParticleEmitter") or p:IsA("Trail") or p:IsA("Beam") then
-                p.Color = seq
-            elseif p:IsA("PointLight") or p:IsA("SpotLight") then
-                p.Color = col
-            end
+            if p:IsA("ParticleEmitter") or p:IsA("Trail") or p:IsA("Beam") then p.Color = seq
+            elseif p:IsA("PointLight") or p:IsA("SpotLight") then p.Color = col end
             local des = p:GetDescendants()
             for j = 1, #des do
                 local d = des[j]
-                if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") then
-                    d.Color = seq
-                elseif d:IsA("PointLight") or d:IsA("SpotLight") then
-                    d.Color = col
-                end
+                if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") then d.Color = seq
+                elseif d:IsA("PointLight") or d:IsA("SpotLight") then d.Color = col end
             end
         end
     end
@@ -690,7 +1196,7 @@ end
 
 _G.clraur = function()
     for i = 1, #_G.aurp do
-        v = _G.aurp[i]
+        local v = _G.aurp[i]
         if v then v:Destroy() end
     end
     table.clear(_G.aurp)
@@ -698,9 +1204,7 @@ end
 
 _G.aur_apply_children = function(src, char)
     if not src or not src.Parent then return end
-
     local target = _G.aur_find_target(char, src.Name)
-
     if not target then
         local node = src.Parent
         local depth = 0
@@ -713,16 +1217,13 @@ _G.aur_apply_children = function(src, char)
             depth = depth + 1
         end
     end
-
     if not target then return end
-
     local kids = src:GetChildren()
     for i = 1, #kids do
         local c = kids[i]
         if c:IsA("Motor6D") or c:IsA("Weld") or c:IsA("WeldConstraint")
             or c:IsA("Humanoid") or c:IsA("SpecialMesh") or c:IsA("Mesh")
-            or c:IsA("Camera") or c:IsA("Script") or c:IsA("ModuleScript")
-            or c:IsA("LocalScript") then
+            or c:IsA("Camera") or c:IsA("Script") or c:IsA("ModuleScript") or c:IsA("LocalScript") then
             c:Destroy()
         else
             c.Name = "\0"
@@ -735,19 +1236,15 @@ end
 _G.applaur = function()
     _G.clraur()
     if not _G.aurenabwtff then return end
-
-    char = LocalPlayer.Character
+    local char = LocalPlayer.Character
     if not char then return end
-
-    asset = _G.aurasst[_G.selaurwtff or "angel"]
+    local asset = _G.aurasst[_G.selaurwtff or "angel"]
     if not asset then return end
-
-    clo = asset:Clone()
+    local clo = asset:Clone()
 
     local tops = clo:GetChildren()
     for i = 1, #tops do
         local node = tops[i]
-
         if node and node.Parent then
             if _G.aur_is_body_part(node.Name) then
                 _G.aur_apply_children(node, char)
@@ -783,7 +1280,6 @@ _G.applaur = function()
                 walk = walk.Parent
                 depth = depth + 1
             end
-
             if target then
                 eff.Name = "\0"
                 eff.Parent = target
@@ -791,15 +1287,14 @@ _G.applaur = function()
             end
         end
     end
-
     clo:Destroy()
     _G.updaurcol()
 end
 
 getgenv().createFF = function()
-    char = LocalPlayer.Character
+    local char = LocalPlayer.Character
     if char and not char:FindFirstChild("FakeFF") then
-        ff = Instance.new("ForceField")
+        local ff = Instance.new("ForceField")
         ff.Name = "FakeFF"
         ff.Visible = true
         ff.Parent = char
@@ -807,14 +1302,14 @@ getgenv().createFF = function()
 end
 
 getgenv().removeFF = function()
-    char = LocalPlayer.Character
+    local char = LocalPlayer.Character
     if char then
-        ff = char:FindFirstChild("FakeFF")
+        local ff = char:FindFirstChild("FakeFF")
         if ff then ff:Destroy() end
     end
 end
 
-LocalPlayer.CharacterAdded:Connect(function(char)
+LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     if _G.aurenabwtff then _G.applaur() end
     if getgenv().AuraFFEnabled then getgenv().createFF() end
@@ -823,31 +1318,30 @@ end)
 AuraToggle = AuraSection:AddToggle('ApplyAura', {
     Text = 'Apply Aura',
     Default = false,
+}) do
+    AuraToggle:AddColorPicker('AuraColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Aura Color',
+    })
+end
+
+AuraDep = AuraSection:AddDependencyBox()
+AuraDep:AddDropdown('AuraType', {
+    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves", "pixel", "soundwaves", "king", "balloflight", "robes"},
+    Default = 'angel',
+    Text = 'Aura Type',
 })
-AuraToggle:AddColorPicker('AuraColor', {
-    Default = Color3.fromRGB(255, 255, 255),
-    Title = 'Aura Color',
-})
+AuraDep:SetupDependencies({ { Toggles.ApplyAura, true } })
 
 Toggles.ApplyAura:OnChanged(function()
     _G.aurenabwtff = Toggles.ApplyAura.Value
-    if _G.aurenabwtff then
-        _G.applaur()
-    else
-        _G.clraur()
-    end
+    if _G.aurenabwtff then _G.applaur() else _G.clraur() end
 end)
 
 Options.AuraColor:OnChanged(function()
     _G.aurcolwtff = Options.AuraColor.Value
     _G.updaurcol()
 end)
-
-AuraSection:AddDropdown('AuraType', {
-    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves", "pixel", "soundwaves", "king", "balloflight", "robes"},
-    Default = 'angel',
-    Text = 'Aura Type',
-})
 
 Options.AuraType:OnChanged(function()
     _G.selaurwtff = Options.AuraType.Value
@@ -862,13 +1356,528 @@ AuraSection:AddToggle('FakeRobloxFF', {
 
 Toggles.FakeRobloxFF:OnChanged(function()
     getgenv().AuraFFEnabled = Toggles.FakeRobloxFF.Value
-    if getgenv().AuraFFEnabled then 
-        getgenv().createFF() 
-    else 
-        getgenv().removeFF() 
+    if getgenv().AuraFFEnabled then getgenv().createFF() else getgenv().removeFF() end
+end)
+
+-- ------------------------------------------------------------
+-- Character Trail
+-- ------------------------------------------------------------
+TrailSection = WorldTab:AddLeftGroupbox('Character Trail')
+
+_G.TrailEnabled = false
+_G.TrailColor1 = Color3.fromRGB(0, 86, 255)
+_G.TrailColor2 = Color3.fromRGB(255, 0, 0)
+_G.TrailLifetime = 1.6
+
+function ApplyTrail(enable)
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild('HumanoidRootPart')
+    if not hrp then return end
+
+    if enable then
+        if not hrp:FindFirstChild('PlayerTrail') then
+            local trail = Instance.new('Trail', hrp)
+            trail.Name = 'PlayerTrail'
+            local a0 = Instance.new('Attachment', hrp)
+            a0.Position = Vector3.new(0, 1, 0)
+            local a1 = Instance.new('Attachment', hrp)
+            a1.Position = Vector3.new(0, -1, 0)
+            trail.Attachment0 = a0
+            trail.Attachment1 = a1
+            trail.Color = ColorSequence.new(_G.TrailColor1, _G.TrailColor2)
+            trail.Lifetime = _G.TrailLifetime
+            trail.Transparency = NumberSequence.new(0, 0)
+            trail.LightEmission = 0.2
+            trail.Brightness = 10
+            trail.WidthScale = NumberSequence.new{
+                NumberSequenceKeypoint.new(0, 0.1),
+                NumberSequenceKeypoint.new(1, 0),
+            }
+        end
+    else
+        for _, child in ipairs(hrp:GetChildren()) do
+            if child:IsA('Trail') and child.Name == 'PlayerTrail' then
+                child:Destroy()
+            end
+        end
+    end
+end
+
+function RefreshTrail()
+    ApplyTrail(false)
+    if _G.TrailEnabled then ApplyTrail(true) end
+end
+
+TrailToggle = TrailSection:AddToggle('TrailToggle', {
+    Text = 'Trail',
+    Default = false,
+    Searchable = true,
+}) do
+    TrailToggle:AddColorPicker('TrailColor1', {
+        Default = Color3.fromRGB(0, 86, 255),
+        Title = 'Trail Color 1',
+    })
+    TrailToggle:AddColorPicker('TrailColor2', {
+        Default = Color3.fromRGB(255, 0, 0),
+        Title = 'Trail Color 2',
+    })
+end
+
+TrailDep = TrailSection:AddDependencyBox()
+TrailDep:AddSlider('TrailLifetime', {
+    Text = 'Trail Lifetime',
+    Default = 1.6,
+    Min = 0.1,
+    Max = 5,
+    Rounding = 1,
+    Suffix = 's',
+})
+TrailDep:SetupDependencies({ { Toggles.TrailToggle, true } })
+
+Toggles.TrailToggle:OnChanged(function()
+    _G.TrailEnabled = Toggles.TrailToggle.Value
+    if _G.TrailEnabled then ApplyTrail(true) else ApplyTrail(false) end
+end)
+
+Options.TrailColor1:OnChanged(function()
+    _G.TrailColor1 = Options.TrailColor1.Value
+    if _G.TrailEnabled then RefreshTrail() end
+end)
+
+Options.TrailColor2:OnChanged(function()
+    _G.TrailColor2 = Options.TrailColor2.Value
+    if _G.TrailEnabled then RefreshTrail() end
+end)
+
+Options.TrailLifetime:OnChanged(function()
+    _G.TrailLifetime = Options.TrailLifetime.Value
+    if _G.TrailEnabled then RefreshTrail() end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if _G.TrailEnabled then ApplyTrail(true) end
+end)
+
+-- ------------------------------------------------------------
+-- Background Noise
+-- ------------------------------------------------------------
+BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
+
+_G.background_sounds = {
+    ["windy winter"] = "rbxassetid://6046340391",
+    ["light rain"]   = "rbxassetid://18862087062",
+    ["thunderstorm"] = "rbxassetid://4305545740",
+    ["night"]        = "rbxassetid://179507208",
+    ["day"]          = "rbxassetid://6189453706",
+}
+
+_G.background_sound = nil
+
+_G.updateBackgroundNoise = function()
+    if not Toggles.BackgroundNoise.Value then
+        if _G.background_sound then
+            _G.background_sound:Stop()
+            _G.background_sound:Destroy()
+            _G.background_sound = nil
+        end
+        return
+    end
+    if not _G.background_sound then
+        local soundId = _G.background_sounds[Options.BackgroundSound.Value or "night"]
+        _G.background_sound = Instance.new("Sound")
+        _G.background_sound.SoundId = soundId
+        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65
+        _G.background_sound.Looped = true
+        _G.background_sound.Name = "\0"
+        _G.background_sound.Parent = game.CoreGui
+        _G.background_sound:Play()
+    end
+end
+
+BackgroundNoiseToggle = BackgroundNoiseSection:AddToggle('BackgroundNoise', {
+    Text = 'Background Noise',
+    Default = false,
+    Searchable = true,
+})
+
+BackgroundNoiseDep = BackgroundNoiseSection:AddDependencyBox()
+BackgroundNoiseDep:AddDropdown('BackgroundSound', {
+    Values = { "windy winter", "light rain", "thunderstorm", "night", "day" },
+    Default = 'night',
+    Text = 'Sound',
+})
+BackgroundNoiseDep:AddSlider('BackgroundVolume', {
+    Text = 'Volume',
+    Default = 25,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = '%',
+})
+BackgroundNoiseDep:SetupDependencies({ { Toggles.BackgroundNoise, true } })
+
+Toggles.BackgroundNoise:OnChanged(function()
+    if Toggles.BackgroundNoise.Value then
+        _G.updateBackgroundNoise()
+    else
+        if _G.background_sound then
+            _G.background_sound:Stop()
+            _G.background_sound:Destroy()
+            _G.background_sound = nil
+        end
     end
 end)
 
+Options.BackgroundSound:OnChanged(function()
+    if _G.background_sound then
+        local new_sound = _G.background_sounds[Options.BackgroundSound.Value]
+        if new_sound then
+            _G.background_sound.SoundId = new_sound
+            _G.background_sound:Stop()
+            _G.background_sound:Play()
+        end
+    end
+end)
+
+Options.BackgroundVolume:OnChanged(function()
+    if _G.background_sound then
+        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65
+    end
+end)
+
+-- ------------------------------------------------------------
+-- Brightness
+-- ------------------------------------------------------------
+BrightnessSection = WorldTab:AddLeftGroupbox('Brightness')
+
+BrightnessToggle = BrightnessSection:AddToggle('Brightness', {
+    Text = 'Brightness',
+    Default = false,
+    Searchable = true,
+})
+
+BrightnessDep = BrightnessSection:AddDependencyBox()
+BrightnessDep:AddSlider('BrightnessLevel', {
+    Text = 'Level', Default = 1.6, Min = 0, Max = 10, Rounding = 1,
+})
+BrightnessDep:AddSlider('BrightnessEnvDiff', {
+    Text = 'Environment Diffuse Scale', Default = 1, Min = 0, Max = 1, Rounding = 2,
+})
+BrightnessDep:AddSlider('BrightnessEnvSpec', {
+    Text = 'Environment Specular Scale', Default = 0.9, Min = 0, Max = 1, Rounding = 2,
+})
+BrightnessDep:AddSlider('BrightnessExposure', {
+    Text = 'Exposure', Default = 0.15, Min = 0, Max = 1, Rounding = 2,
+})
+BrightnessDep:SetupDependencies({ { Toggles.Brightness, true } })
+
+Toggles.Brightness:OnChanged(function(value)
+    if value then
+        Lighting.Brightness = Options.BrightnessLevel.Value
+        Lighting.EnvironmentDiffuseScale = Options.BrightnessEnvDiff.Value
+        Lighting.EnvironmentSpecularScale = Options.BrightnessEnvSpec.Value
+        Lighting.ExposureCompensation = Options.BrightnessExposure.Value
+    else
+        Lighting.Brightness = OriginalLighting.Brightness
+        Lighting.EnvironmentDiffuseScale = OriginalLighting.EnvironmentDiffuseScale
+        Lighting.EnvironmentSpecularScale = OriginalLighting.EnvironmentSpecularScale
+        Lighting.ExposureCompensation = OriginalLighting.ExposureCompensation
+    end
+end)
+
+Options.BrightnessLevel:OnChanged(function(v)
+    if Toggles.Brightness.Value then Lighting.Brightness = v end
+end)
+Options.BrightnessEnvDiff:OnChanged(function(v)
+    if Toggles.Brightness.Value then Lighting.EnvironmentDiffuseScale = v end
+end)
+Options.BrightnessEnvSpec:OnChanged(function(v)
+    if Toggles.Brightness.Value then Lighting.EnvironmentSpecularScale = v end
+end)
+Options.BrightnessExposure:OnChanged(function(v)
+    if Toggles.Brightness.Value then Lighting.ExposureCompensation = v end
+end)
+
+-- ------------------------------------------------------------
+-- Fog (NEW)
+-- ------------------------------------------------------------
+FogSection = WorldTab:AddLeftGroupbox('Fog')
+
+FogToggle = FogSection:AddToggle('FogToggle', {
+    Text = 'Fog',
+    Default = false,
+    Searchable = true,
+}) do
+    FogToggle:AddColorPicker('FogColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Fog Color',
+    })
+end
+
+FogDep = FogSection:AddDependencyBox()
+FogDep:AddSlider('FogNear', {
+    Text = 'Fog Near', Default = 0, Min = 0, Max = 1000, Rounding = 1,
+})
+FogDep:AddSlider('FogFar', {
+    Text = 'Fog Far', Default = 1000, Min = 0, Max = 1000, Rounding = 1,
+})
+FogDep:SetupDependencies({ { Toggles.FogToggle, true } })
+
+Toggles.FogToggle:OnChanged(function(value)
+    if value then
+        Lighting.FogColor = Options.FogColor.Value
+        Lighting.FogStart = Options.FogNear.Value
+        Lighting.FogEnd = Options.FogFar.Value
+    else
+        Lighting.FogColor = OriginalLighting.FogColor
+        Lighting.FogStart = OriginalLighting.FogStart
+        Lighting.FogEnd = OriginalLighting.FogEnd
+    end
+end)
+
+Options.FogColor:OnChanged(function(v)
+    if Toggles.FogToggle.Value then Lighting.FogColor = v end
+end)
+Options.FogNear:OnChanged(function(v)
+    if Toggles.FogToggle.Value then Lighting.FogStart = v end
+end)
+Options.FogFar:OnChanged(function(v)
+    if Toggles.FogToggle.Value then Lighting.FogEnd = v end
+end)
+
+-- ------------------------------------------------------------
+-- Shadow Modification (NEW)
+-- ------------------------------------------------------------
+ShadowSection = WorldTab:AddLeftGroupbox('Shadow Modification')
+
+ShadowToggle = ShadowSection:AddToggle('ShadowMod', {
+    Text = 'Shadow Modification',
+    Default = false,
+    Searchable = true,
+})
+
+ShadowDep = ShadowSection:AddDependencyBox()
+ShadowDep:AddSlider('ShadowSoftness', {
+    Text = 'Shadow Softness', Default = 0.5, Min = 0, Max = 1, Rounding = 2,
+})
+ShadowDep:AddToggle('GlobalShadows', {
+    Text = 'Enable Global Shadows', Default = true,
+})
+ShadowDep:SetupDependencies({ { Toggles.ShadowMod, true } })
+
+Toggles.ShadowMod:OnChanged(function(value)
+    if value then
+        Lighting.ShadowSoftness = Options.ShadowSoftness.Value
+        Lighting.GlobalShadows = Toggles.GlobalShadows.Value
+    else
+        Lighting.ShadowSoftness = OriginalLighting.ShadowSoftness
+        Lighting.GlobalShadows = OriginalLighting.GlobalShadows
+    end
+end)
+
+Options.ShadowSoftness:OnChanged(function(v)
+    if Toggles.ShadowMod.Value then Lighting.ShadowSoftness = v end
+end)
+Toggles.GlobalShadows:OnChanged(function(v)
+    if Toggles.ShadowMod.Value then Lighting.GlobalShadows = v end
+end)
+
+-- ------------------------------------------------------------
+-- Lighting (consolidated: Clock Time + Latitude + ColorShift)
+-- ------------------------------------------------------------
+LightingFullSection = WorldTab:AddLeftGroupbox('Lighting')
+
+LightingFullToggle = LightingFullSection:AddToggle('LightingFull', {
+    Text = 'Lighting',
+    Default = false,
+    Searchable = true,
+}) do
+    LightingFullToggle:AddColorPicker('LightingShiftBottom', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'ColorShift Bottom',
+    })
+    LightingFullToggle:AddColorPicker('LightingShiftTop', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'ColorShift Top',
+    })
+end
+
+LightingFullDep = LightingFullSection:AddDependencyBox()
+LightingFullDep:AddSlider('LightingClockTime', {
+    Text = 'Clock Time', Default = 1, Min = 0, Max = 23, Rounding = 2,
+})
+LightingFullDep:AddSlider('LightingLatitude', {
+    Text = 'Geographic Latitude', Default = 0, Min = -90, Max = 90, Rounding = 1,
+})
+LightingFullDep:SetupDependencies({ { Toggles.LightingFull, true } })
+
+Toggles.LightingFull:OnChanged(function(value)
+    if value then
+        Lighting.ClockTime = Options.LightingClockTime.Value
+        Lighting.GeographicLatitude = Options.LightingLatitude.Value
+        Lighting.ColorShift_Bottom = Options.LightingShiftBottom.Value
+        Lighting.ColorShift_Top = Options.LightingShiftTop.Value
+    else
+        Lighting.ClockTime = OriginalLighting.ClockTime
+        Lighting.GeographicLatitude = OriginalLighting.GeographicLatitude
+        Lighting.ColorShift_Bottom = OriginalLighting.ColorShift_Bottom
+        Lighting.ColorShift_Top = OriginalLighting.ColorShift_Top
+    end
+end)
+
+Options.LightingClockTime:OnChanged(function(v)
+    if Toggles.LightingFull.Value then Lighting.ClockTime = v end
+end)
+Options.LightingLatitude:OnChanged(function(v)
+    if Toggles.LightingFull.Value then Lighting.GeographicLatitude = v end
+end)
+Options.LightingShiftBottom:OnChanged(function(v)
+    if Toggles.LightingFull.Value then Lighting.ColorShift_Bottom = v end
+end)
+Options.LightingShiftTop:OnChanged(function(v)
+    if Toggles.LightingFull.Value then Lighting.ColorShift_Top = v end
+end)
+
+-- ------------------------------------------------------------
+-- Lighting Mode
+-- ------------------------------------------------------------
+LightingModeSection = WorldTab:AddLeftGroupbox('Lighting Mode')
+
+LightingModeToggle = LightingModeSection:AddToggle('LightingMode', {
+    Text = 'Lighting Mode',
+    Default = false,
+    Searchable = true,
+})
+
+LightingModeDep = LightingModeSection:AddDependencyBox()
+LightingModeDep:AddDropdown('LightingModeValue', {
+    Text = 'Mode',
+    Values = { 'Compatibility', 'ShadowMap', 'Unified', 'Future', 'Legacy', 'Voxel' },
+    Default = 'Compatibility',
+})
+LightingModeDep:SetupDependencies({ { Toggles.LightingMode, true } })
+
+Toggles.LightingMode:OnChanged(function(value)
+    if value then
+        Lighting.Technology = Enum.Technology[Options.LightingModeValue.Value]
+    else
+        Lighting.Technology = OriginalLighting.Technology
+    end
+end)
+
+Options.LightingModeValue:OnChanged(function(value)
+    if Toggles.LightingMode.Value then
+        Lighting.Technology = Enum.Technology[value]
+    end
+end)
+
+-- ------------------------------------------------------------
+-- World Time
+-- ------------------------------------------------------------
+WorldTimeSection = WorldTab:AddLeftGroupbox('World Time')
+
+WorldTimeToggle = WorldTimeSection:AddToggle('WorldTime', {
+    Text = 'World Time',
+    Default = false,
+    Searchable = true,
+})
+
+WorldTimeDep = WorldTimeSection:AddDependencyBox()
+WorldTimeDep:AddSlider('WorldTimeValue', {
+    Text = 'Hour', Default = 4.5, Min = 0, Max = 24, Rounding = 1,
+})
+WorldTimeDep:SetupDependencies({ { Toggles.WorldTime, true } })
+
+Toggles.WorldTime:OnChanged(function(value)
+    if value then
+        Lighting.ClockTime = Options.WorldTimeValue.Value
+    else
+        Lighting.ClockTime = OriginalLighting.ClockTime
+    end
+end)
+
+Options.WorldTimeValue:OnChanged(function(value)
+    if Toggles.WorldTime.Value then Lighting.ClockTime = value end
+end)
+
+-- ------------------------------------------------------------
+-- Atmosphere
+-- ------------------------------------------------------------
+AtmosphereSection = WorldTab:AddLeftGroupbox('Atmosphere')
+
+AtmosphereObject = nil
+
+AtmosphereToggle = AtmosphereSection:AddToggle('Atmosphere', {
+    Text = 'Atmosphere',
+    Default = false,
+    Searchable = true,
+}) do
+    AtmosphereToggle:AddColorPicker('AtmosphereColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Atmosphere Color',
+    })
+    AtmosphereToggle:AddColorPicker('DecayColor', {
+        Default = Color3.fromRGB(120, 120, 120),
+        Title = 'Decay Color',
+    })
+end
+
+AtmosphereDep = AtmosphereSection:AddDependencyBox()
+AtmosphereDep:AddSlider('Haze', {
+    Text = 'Haze', Default = 1, Min = 0, Max = 10, Rounding = 3,
+})
+AtmosphereDep:AddSlider('Glare', {
+    Text = 'Glare', Default = 10, Min = 0, Max = 10, Rounding = 3,
+})
+AtmosphereDep:AddSlider('Offset', {
+    Text = 'Offset', Default = 0, Min = 0, Max = 1, Rounding = 3,
+})
+AtmosphereDep:AddSlider('Density', {
+    Text = 'Density', Default = 0.35, Min = 0, Max = 1, Rounding = 3,
+})
+AtmosphereDep:SetupDependencies({ { Toggles.Atmosphere, true } })
+
+function UpdateAtmosphere()
+    if not AtmosphereObject then return end
+    AtmosphereObject.Color = Options.AtmosphereColor.Value
+    AtmosphereObject.Decay = Options.DecayColor.Value
+    AtmosphereObject.Haze = Options.Haze.Value
+    AtmosphereObject.Glare = Options.Glare.Value
+    AtmosphereObject.Offset = Options.Offset.Value
+    AtmosphereObject.Density = Options.Density.Value
+end
+
+Toggles.Atmosphere:OnChanged(function(value)
+    if value then
+        if not AtmosphereObject then
+            AtmosphereObject = Instance.new('Atmosphere')
+            AtmosphereObject.Parent = Lighting
+        end
+        UpdateAtmosphere()
+    else
+        if AtmosphereObject then
+            AtmosphereObject:Destroy()
+            AtmosphereObject = nil
+        end
+    end
+end)
+
+Options.AtmosphereColor:OnChanged(UpdateAtmosphere)
+Options.DecayColor:OnChanged(UpdateAtmosphere)
+Options.Haze:OnChanged(UpdateAtmosphere)
+Options.Glare:OnChanged(UpdateAtmosphere)
+Options.Offset:OnChanged(UpdateAtmosphere)
+Options.Density:OnChanged(UpdateAtmosphere)
+
+-- ============================================================
+-- RIGHT COLUMN
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- Emotes (kept as-is — data tables unchanged)
+-- ------------------------------------------------------------
 EmoteTabBox = WorldTab:AddRightTabbox()
 EmoteTab = EmoteTabBox:AddTab('Emotes')
 
@@ -952,16 +1961,11 @@ RefreshSerial = 0
 
 function getEmoteAnimation(id)
     if EmoteObjectCache[id] then return EmoteObjectCache[id] end
-
-    local success, objects = pcall(function()
-        return game:GetObjects("rbxassetid://" .. tostring(id))
-    end)
-
+    local success, objects = pcall(function() return game:GetObjects("rbxassetid://" .. tostring(id)) end)
     if success and objects and #objects > 0 and objects[1]:IsA("Animation") then
         EmoteObjectCache[id] = objects[1]
         return objects[1]
     end
-
     local anim = Instance.new("Animation")
     anim.AnimationId = "rbxassetid://" .. tostring(id)
     EmoteObjectCache[id] = anim
@@ -979,32 +1983,24 @@ end
 _G.PlayEmote = function(name, speed)
     speed = tonumber(speed) or 1
     if speed <= 0 then speed = 1 end
-
     local id = _G.Emotes.Anims[name]
     if not id then return false end
-
     local char = LocalPlayer.Character
     if not char then return false end
-
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
-
     local animator = hum:FindFirstChildOfClass("Animator")
     if not animator then return false end
-
     if _G.Emotes.CurrentAnimation then
         pcall(function() _G.Emotes.CurrentAnimation:Stop(0) end)
         _G.Emotes.CurrentAnimation = nil
     end
-
     local anim = getEmoteAnimation(id)
     if not anim then return false end
-
     local track = animator:LoadAnimation(anim)
     track.Priority = Enum.AnimationPriority.Action4
     track.Looped = true
     track:Play(0, 1, speed)
-
     _G.Emotes.CurrentAnimation = track
     _G.Emotes.CurrentAnimator = animator
     _G.Emotes.CurrentAnimId = id
@@ -1022,24 +2018,18 @@ end
 
 _G.RefreshEmote = function()
     if not _G.Emotes.Enabled then return end
-
     RefreshSerial = RefreshSerial + 1
     local serial = RefreshSerial
-
     task.spawn(function()
         task.wait()
-
         if serial ~= RefreshSerial then return end
         if not _G.Emotes.Enabled then return end
         if not LocalPlayer.Character then return end
-
         local speed = tonumber(Options.EmoteSpeed and Options.EmoteSpeed.Value) or 10
         local spd = speed / 10
         if spd <= 0 then spd = 1 end
-
         local selected = Options.EmoteSelect and Options.EmoteSelect.Value or "floss"
         if type(selected) == "table" then selected = selected[1] end
-
         _G.PlayEmote(selected, spd)
         _G.Emotes.LastRefresh = tick()
     end)
@@ -1079,53 +2069,39 @@ EmoteTab:AddSlider('EmoteSpeed', {
 
 Toggles.EmotesEnabled:OnChanged(function()
     _G.Emotes.Enabled = Toggles.EmotesEnabled.Value
-    if not _G.Emotes.Enabled then
-        _G.StopEmote()
-        return
-    end
+    if not _G.Emotes.Enabled then _G.StopEmote() return end
     _G.RefreshEmote()
 end)
 
 Options.EmoteSelect:OnChanged(function()
-    if _G.Emotes.Enabled then
-        _G.RefreshEmote()
-    end
+    if _G.Emotes.Enabled then _G.RefreshEmote() end
 end)
 
 Options.EmoteSpeed:OnChanged(function()
     if _G.Emotes.Enabled and _G.Emotes.CurrentAnimation then
         local speed = tonumber(Options.EmoteSpeed.Value) or 10
-        pcall(function()
-            _G.Emotes.CurrentAnimation:AdjustSpeed(speed / 10)
-        end)
+        pcall(function() _G.Emotes.CurrentAnimation:AdjustSpeed(speed / 10) end)
     end
 end)
 
 LocalPlayer.CharacterAdded:Connect(function()
     if not _G.Emotes.Enabled then return end
     task.delay(0.5, function()
-        if _G.Emotes.Enabled then
-            _G.RefreshEmote()
-        end
+        if _G.Emotes.Enabled then _G.RefreshEmote() end
     end)
 end)
 
 task.spawn(function()
     while task.wait(0.5) do
         if not _G.Emotes.Enabled then continue end
-
         local anim = _G.Emotes.CurrentAnimation
         local animator = _G.Emotes.CurrentAnimator
         local liveAnimator = getCurrentAnimator()
-
         if not liveAnimator or (animator and liveAnimator ~= animator) then
             _G.RefreshEmote()
             continue
         end
-
-        if not anim or not anim.IsPlaying then
-            _G.RefreshEmote()
-        end
+        if not anim or not anim.IsPlaying then _G.RefreshEmote() end
     end
 end)
 
@@ -1136,152 +2112,30 @@ task.spawn(function()
     end
 end)
 
-TrailSection = WorldTab:AddLeftGroupbox('Character Trail')
-
-_G.TrailEnabled = false
-_G.TrailColor1 = Color3.fromRGB(0, 86, 255)
-_G.TrailColor2 = Color3.fromRGB(255, 0, 0)
-_G.TrailLifetime = 1.6
-
-function ApplyTrail(enable)
-    char = LocalPlayer.Character
-    if not char then return end
-    hrp = char:FindFirstChild('HumanoidRootPart')
-    if not hrp then return end
-
-    if enable then
-        if not hrp:FindFirstChild('PlayerTrail') then
-            trail = Instance.new('Trail', hrp)
-            trail.Name = 'PlayerTrail'
-            
-            attachment0 = Instance.new('Attachment', hrp)
-            attachment0.Position = Vector3.new(0, 1, 0)
-            
-            attachment1 = Instance.new('Attachment', hrp)
-            attachment1.Position = Vector3.new(0, -1, 0)
-            
-            trail.Attachment0 = attachment0
-            trail.Attachment1 = attachment1
-            trail.Color = ColorSequence.new(_G.TrailColor1, _G.TrailColor2)
-            trail.Lifetime = _G.TrailLifetime
-            trail.Transparency = NumberSequence.new(0, 0)
-            trail.LightEmission = 0.2
-            trail.Brightness = 10
-            trail.WidthScale = NumberSequence.new{
-                NumberSequenceKeypoint.new(0, 0.1),
-                NumberSequenceKeypoint.new(1, 0),
-            }
-        end
-    else
-        for _, child in ipairs(hrp:GetChildren()) do
-            if child:IsA('Trail') and child.Name == 'PlayerTrail' then
-                child:Destroy()
-            end
-        end
-    end
-end
-
-function RefreshTrail()
-    ApplyTrail(false)
-    if _G.TrailEnabled then
-        ApplyTrail(true)
-    end
-end
-
-TrailSection:AddToggle('TrailToggle', {
-    Text = 'Trail',
-    Default = false,
-    Searchable = true,
-})
-
-Toggles.TrailToggle:OnChanged(function()
-    _G.TrailEnabled = Toggles.TrailToggle.Value
-    if _G.TrailEnabled then
-        ApplyTrail(true)
-    else
-        ApplyTrail(false)
-    end
-end)
-
-TrailSection:AddLabel('Trail Color 1'):AddColorPicker('TrailColor1', {
-    Default = Color3.fromRGB(0, 86, 255),
-    Title = 'Trail Color 1',
-})
-
-Options.TrailColor1:OnChanged(function()
-    _G.TrailColor1 = Options.TrailColor1.Value
-    if _G.TrailEnabled then
-        RefreshTrail()
-    end
-end)
-
-TrailSection:AddLabel('Trail Color 2'):AddColorPicker('TrailColor2', {
-    Default = Color3.fromRGB(255, 0, 0),
-    Title = 'Trail Color 2',
-})
-
-Options.TrailColor2:OnChanged(function()
-    _G.TrailColor2 = Options.TrailColor2.Value
-    if _G.TrailEnabled then
-        RefreshTrail()
-    end
-end)
-
-TrailSection:AddSlider('TrailLifetime', {
-    Text = 'Trail Lifetime',
-    Default = 1.6,
-    Min = 0.1,
-    Max = 5,
-    Rounding = 1,
-    Suffix = 's',
-})
-
-Options.TrailLifetime:OnChanged(function()
-    _G.TrailLifetime = Options.TrailLifetime.Value
-    if _G.TrailEnabled then
-        RefreshTrail()
-    end
-end)
-
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    if _G.TrailEnabled then
-        ApplyTrail(true)
-    end
-end)
-
+-- ------------------------------------------------------------
+-- Weather (existing logic kept, UI converted)
+-- ------------------------------------------------------------
 WeatherSection = WorldTab:AddRightGroupbox('Weather')
 
-if _G.weather_render_conn then
-    pcall(function() _G.weather_render_conn:Disconnect() end)
-    _G.weather_render_conn = nil
-end
+if _G.weather_render_conn then pcall(function() _G.weather_render_conn:Disconnect() end) _G.weather_render_conn = nil end
 if _G.destroy_weather then pcall(_G.destroy_weather) end
 
 _G.weather_part        = nil
 _G.weather_particle    = nil
 _G.weather_render_conn = nil
-
 _G.weather_base_rate = 2000
 
 _G.weather_type_scale = {
-    ["light rain"] = 0.35,
-    ["rain"]       = 1.00,
-    ["snow"]       = 1.50,
+    ["light rain"] = 0.35, ["rain"] = 1.00, ["snow"] = 1.50,
 }
 
 _G.weather_types = {
     ["light rain"] = {
         ["LockedToPart"] = true,
-        ["Squash"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 3),
-            NumberSequenceKeypoint.new(1, 3)
-        },
+        ["Squash"] = NumberSequence.new{ NumberSequenceKeypoint.new(0, 3), NumberSequenceKeypoint.new(1, 3) },
         ["LightInfluence"] = 0.15,
         ["Transparency"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0),
-            NumberSequenceKeypoint.new(0.435, 0),
-            NumberSequenceKeypoint.new(1, 1)
+            NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.435, 0), NumberSequenceKeypoint.new(1, 1),
         },
         ["Texture"] = "rbxasset://textures/particles/sparkles_main.dds",
         ["Speed"] = NumberRange.new(30, 50),
@@ -1290,10 +2144,7 @@ _G.weather_types = {
         ["Brightness"] = 3,
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
-        ["Size"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.35),
-            NumberSequenceKeypoint.new(1, 0.35)
-        }
+        ["Size"] = NumberSequence.new{ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.35) },
     },
     ["rain"] = {
         ["Speed"] = NumberRange.new(60, 60),
@@ -1301,25 +2152,18 @@ _G.weather_types = {
         ["Texture"] = "rbxassetid://1822883048",
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Transparency"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.85),
-            NumberSequenceKeypoint.new(0.25, 0.55),
-            NumberSequenceKeypoint.new(0.75, 0.55),
-            NumberSequenceKeypoint.new(1, 0.85)
+            NumberSequenceKeypoint.new(0, 0.85), NumberSequenceKeypoint.new(0.25, 0.55),
+            NumberSequenceKeypoint.new(0.75, 0.55), NumberSequenceKeypoint.new(1, 0.85),
         },
         ["Lifetime"] = NumberRange.new(0.8, 0.8),
         ["LightEmission"] = 0.4,
         ["LightInfluence"] = 0.4,
         ["Orientation"] = Enum.ParticleOrientation.FacingCameraWorldUp,
-        ["Size"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 10),
-            NumberSequenceKeypoint.new(1, 10)
-        }
+        ["Size"] = NumberSequence.new{ NumberSequenceKeypoint.new(0, 10), NumberSequenceKeypoint.new(1, 10) },
     },
     ["snow"] = {
         ["Transparency"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.5),
-            NumberSequenceKeypoint.new(0.973, 0.6),
-            NumberSequenceKeypoint.new(1, 1)
+            NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(0.973, 0.6), NumberSequenceKeypoint.new(1, 1),
         },
         ["Texture"] = "http://www.roblox.com/asset/?id=99851851",
         ["SpreadAngle"] = Vector2.new(50, 50),
@@ -1327,11 +2171,9 @@ _G.weather_types = {
         ["LightEmission"] = 0.8,
         ["EmissionDirection"] = Enum.NormalId.Bottom,
         ["Size"] = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.45),
-            NumberSequenceKeypoint.new(0.551, 0.55),
-            NumberSequenceKeypoint.new(1, 0.45)
-        }
-    }
+            NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(0.551, 0.55), NumberSequenceKeypoint.new(1, 0.45),
+        },
+    },
 }
 
 _G.weather_offset = Vector3.new(0, 20, 0)
@@ -1344,23 +2186,14 @@ end
 
 function _G.get_scaled_rate(weather_name)
     local typeScale = _G.weather_type_scale[weather_name] or 1.0
-    local slider    = (Options.WeatherRate and Options.WeatherRate.Value or 100) / 100
+    local slider = (Options.WeatherRate and Options.WeatherRate.Value or 100) / 100
     return math.max(1, math.floor(_G.weather_base_rate * typeScale * slider))
 end
 
 function _G.destroy_weather()
-    if _G.weather_render_conn then
-        pcall(function() _G.weather_render_conn:Disconnect() end)
-        _G.weather_render_conn = nil
-    end
-    if _G.weather_particle then
-        pcall(function() _G.weather_particle:Destroy() end)
-        _G.weather_particle = nil
-    end
-    if _G.weather_part then
-        pcall(function() _G.weather_part:Destroy() end)
-        _G.weather_part = nil
-    end
+    if _G.weather_render_conn then pcall(function() _G.weather_render_conn:Disconnect() end) _G.weather_render_conn = nil end
+    if _G.weather_particle then pcall(function() _G.weather_particle:Destroy() end) _G.weather_particle = nil end
+    if _G.weather_part then pcall(function() _G.weather_part:Destroy() end) _G.weather_part = nil end
 end
 
 function _G.build_weather_part()
@@ -1374,12 +2207,9 @@ function _G.build_weather_part()
     _G.weather_part.Anchored = true
     _G.weather_part.Name = "\0"
     _G.weather_part.Parent = workspace
-
     _G.weather_render_conn = RunService.Heartbeat:Connect(function()
-        local part = _G.weather_part
-        local cam = workspace.CurrentCamera
-        if part and cam then
-            part.CFrame = CFrame.new(cam.CFrame.Position + _G.weather_offset)
+        if _G.weather_part and workspace.CurrentCamera then
+            _G.weather_part.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position + _G.weather_offset)
         end
     end)
 end
@@ -1389,69 +2219,49 @@ function _G.rebuild_weather_particle()
         pcall(function() _G.weather_particle:Destroy() end)
         _G.weather_particle = nil
     end
-
     if not (Toggles.WeatherToggle and Toggles.WeatherToggle.Value) then return end
-
     _G.build_weather_part()
-
     local wtype = _G.get_weather_type()
-    local data  = _G.weather_types[wtype]
+    local data = _G.weather_types[wtype]
     if not data then return end
-
     local pe = Instance.new("ParticleEmitter")
     for k, v in pairs(data) do
-        if k ~= "Rate" then
-            pe[k] = v
-        end
+        if k ~= "Rate" then pe[k] = v end
     end
-    pe.Rate  = _G.get_scaled_rate(wtype)
+    pe.Rate = _G.get_scaled_rate(wtype)
     pe.Color = ColorSequence.new(Options.WeatherColor and Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
     pe.Parent = _G.weather_part
-
     _G.weather_particle = pe
 end
 
-function _G.updateWeather()
-    if not (Toggles.WeatherToggle and Toggles.WeatherToggle.Value) then
-        _G.destroy_weather()
-        return
-    end
-    if not _G.weather_particle then
-        _G.rebuild_weather_particle()
-    else
-        local wtype = _G.get_weather_type()
-        _G.weather_particle.Rate  = _G.get_scaled_rate(wtype)
-        _G.weather_particle.Color = ColorSequence.new(Options.WeatherColor and Options.WeatherColor.Value or Color3.fromRGB(255, 255, 255))
-    end
-end
-
-WeatherSection:AddToggle('WeatherToggle', {
+WeatherToggle = WeatherSection:AddToggle('WeatherToggle', {
     Text = 'Weather',
     Default = false,
     Searchable = true,
-}):AddColorPicker('WeatherColor', {
-    Default = Color3.fromRGB(255, 255, 255),
-    Title = 'Weather Color',
-})
+}) do
+    WeatherToggle:AddColorPicker('WeatherColor', {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = 'Weather Color',
+    })
+end
 
-Toggles.WeatherToggle:OnChanged(function()
-    if Toggles.WeatherToggle.Value then
-        _G.rebuild_weather_particle()
-    else
-        _G.destroy_weather()
-    end
-end)
-
-WeatherSection:AddDropdown('WeatherType', {
-    Values = {"light rain", "rain", "snow"},
+WeatherDep = WeatherSection:AddDependencyBox()
+WeatherDep:AddDropdown('WeatherType', {
+    Values = { "light rain", "rain", "snow" },
     Default = 'rain',
     Text = 'Weather Type',
 })
+WeatherDep:AddSlider('WeatherRate', {
+    Text = 'Weather Rate', Default = 100, Min = 1, Max = 500, Rounding = 0, Suffix = '%',
+})
+WeatherDep:SetupDependencies({ { Toggles.WeatherToggle, true } })
+
+Toggles.WeatherToggle:OnChanged(function()
+    if Toggles.WeatherToggle.Value then _G.rebuild_weather_particle() else _G.destroy_weather() end
+end)
 
 Options.WeatherType:OnChanged(function()
-    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
-        _G.rebuild_weather_particle()
-    end
+    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then _G.rebuild_weather_particle() end
 end)
 
 Options.WeatherColor:OnChanged(function()
@@ -1460,19 +2270,9 @@ Options.WeatherColor:OnChanged(function()
     end
 end)
 
-WeatherSection:AddSlider('WeatherRate', {
-    Text = 'Weather Rate',
-    Default = 100,
-    Min = 1,
-    Max = 500,
-    Rounding = 0,
-    Suffix = '%',
-})
-
 Options.WeatherRate:OnChanged(function()
     if _G.weather_particle then
-        local wtype = _G.get_weather_type()
-        _G.weather_particle.Rate = _G.get_scaled_rate(wtype)
+        _G.weather_particle.Rate = _G.get_scaled_rate(_G.get_weather_type())
     elseif Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
         _G.rebuild_weather_particle()
     end
@@ -1480,252 +2280,126 @@ end)
 
 task.spawn(function()
     task.wait(2)
-    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then
-        _G.rebuild_weather_particle()
-    end
+    if Toggles.WeatherToggle and Toggles.WeatherToggle.Value then _G.rebuild_weather_particle() end
 end)
 
-_48:OnUnload(function()
-    _G.destroy_weather()
-end)
+_48:OnUnload(function() _G.destroy_weather() end)
 
-BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
+EffectsSection = WorldTab:AddRightGroupbox('Effects')
 
-_G.background_sounds = {
-    ["windy winter"] = "rbxassetid://6046340391",
-    ["light rain"] = "rbxassetid://18862087062",
-    ["thunderstorm"] = "rbxassetid://4305545740",
-    ["night"] = "rbxassetid://179507208",
-    ["day"] = "rbxassetid://6189453706"
-}
+BloomEffect = nil
+SunRaysEffect = nil
+DoFEffect = nil
+ColorGradingEffect = nil
 
-_G.background_sound = nil
-
-_G.updateBackgroundNoise = function()
-    if not Toggles.BackgroundNoise.Value then
-        if _G.background_sound then
-            _G.background_sound:Stop()
-            _G.background_sound:Destroy()
-            _G.background_sound = nil
-        end
-        return
+function ApplyBloom()
+    if not BloomEffect then
+        BloomEffect = Lighting:FindFirstChildOfClass('BloomEffect') or Instance.new('BloomEffect')
+        BloomEffect.Parent = Lighting
     end
-
-    if not _G.background_sound then
-        soundId = _G.background_sounds[Options.BackgroundSound.Value or "night"]
-        _G.background_sound = Instance.new("Sound")
-        _G.background_sound.SoundId = soundId
-        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65 or 0.38
-        _G.background_sound.Looped = true
-        _G.background_sound.Name = "\0"
-        _G.background_sound.Parent = game.CoreGui
-        _G.background_sound:Play()
+    if Toggles.Bloom.Value then
+        BloomEffect.Enabled = true
+        BloomEffect.Intensity = Options.BloomIntensity.Value
+        BloomEffect.Size = Options.BloomSize.Value
+        BloomEffect.Threshold = Options.BloomThreshold.Value
+    else
+        BloomEffect.Enabled = false
     end
 end
 
-BackgroundNoiseSection:AddToggle('BackgroundNoise', {
-    Text = 'Background Noise',
-    Default = false,
-    Searchable = true,
-})
-
-Toggles.BackgroundNoise:OnChanged(function()
-    if Toggles.BackgroundNoise.Value then
-        _G.updateBackgroundNoise()
+function ApplySunRays()
+    if not SunRaysEffect then
+        SunRaysEffect = Lighting:FindFirstChildOfClass('SunRaysEffect') or Instance.new('SunRaysEffect')
+        SunRaysEffect.Parent = Lighting
+    end
+    if Toggles.SunRays.Value then
+        SunRaysEffect.Enabled = true
+        SunRaysEffect.Intensity = Options.SunRaysIntensity.Value
+        SunRaysEffect.Spread = Options.SunRaysSpread.Value
     else
-        if _G.background_sound then
-            _G.background_sound:Stop()
-            _G.background_sound:Destroy()
-            _G.background_sound = nil
-        end
+        SunRaysEffect.Enabled = false
     end
-end)
-
-BackgroundNoiseSection:AddDropdown('BackgroundSound', {
-    Values = {"windy winter", "light rain", "thunderstorm", "night", "day"},
-    Default = 'night',
-    Text = 'Sound',
-})
-
-Options.BackgroundSound:OnChanged(function()
-    if _G.background_sound then
-        new_sound = _G.background_sounds[Options.BackgroundSound.Value]
-        if new_sound then
-            _G.background_sound.SoundId = new_sound
-            _G.background_sound:Stop()
-            _G.background_sound:Play()
-        end
-    end
-end)
-
-BackgroundNoiseSection:AddSlider('BackgroundVolume', {
-    Text = 'Volume',
-    Default = 25,
-    Min = 0,
-    Max = 100,
-    Rounding = 0,
-    Suffix = '%',
-})
-
-Options.BackgroundVolume:OnChanged(function()
-    if _G.background_sound then
-        _G.background_sound.Volume = Options.BackgroundVolume.Value / 65
-    end
-end)
-
-OriginalLighting = {
-    Technology = Lighting.Technology,
-    ClockTime = Lighting.ClockTime,
-    Ambient = Lighting.Ambient,
-    OutdoorAmbient = Lighting.OutdoorAmbient,
-}
-
--- Lighting Mode Section
-LightingModeSection = WorldTab:AddLeftGroupbox('Lighting Mode')
-
-LightingModeSection:AddToggle('LightingMode', {
-    Text = 'Lighting Mode',
-    Default = false,
-    Searchable = true,
-})
-
-LightingModeSection:AddDropdown('LightingModeValue', {
-    Text = 'Mode',
-    Values = {'Compatibility', 'ShadowMap', 'Unified', 'Future', 'Legacy', 'Voxel'},
-    Default = 'Compatibility',
-})
-
-Toggles.LightingMode:OnChanged(function(value)
-    if value then
-        Lighting.Technology = Enum.Technology[Options.LightingModeValue.Value]
-    else
-        Lighting.Technology = OriginalLighting.Technology
-    end
-end)
-
-Options.LightingModeValue:OnChanged(function(value)
-    if Toggles.LightingMode and Toggles.LightingMode.Value then
-        Lighting.Technology = Enum.Technology[value]
-    end
-end)
-
--- World Time Section
-WorldTimeSection = WorldTab:AddLeftGroupbox('World Time')
-
-WorldTimeSection:AddToggle('WorldTime', {
-    Text = 'World Time',
-    Default = false,
-    Searchable = true,
-})
-
-WorldTimeSection:AddSlider('WorldTimeValue', {
-    Text = 'Hour',
-    Default = 4.5,
-    Min = 0,
-    Max = 24,
-    Rounding = 1,
-})
-
-Toggles.WorldTime:OnChanged(function(value)
-    if value then
-        Lighting.ClockTime = Options.WorldTimeValue.Value
-    else
-        Lighting.ClockTime = OriginalLighting.ClockTime
-    end
-end)
-
-Options.WorldTimeValue:OnChanged(function(value)
-    if Toggles.WorldTime and Toggles.WorldTime.Value then
-        Lighting.ClockTime = value
-    end
-end)
-
--- Atmosphere Section
-AtmosphereSection = WorldTab:AddLeftGroupbox('Atmosphere')
-
-AtmosphereSection:AddToggle('Atmosphere', {
-    Text = 'Atmosphere',
-    Default = false,
-    Searchable = true,
-})
-
-AtmosphereObject = nil
-
-AtmosphereSection:AddLabel('Atmosphere Color'):AddColorPicker('AtmosphereColor', {
-    Default = Color3.fromRGB(255, 255, 255),
-    Title = 'Atmosphere Color',
-})
-
-AtmosphereSection:AddLabel('Decay Color'):AddColorPicker('DecayColor', {
-    Default = Color3.fromRGB(120, 120, 120),
-    Title = 'Decay Color',
-})
-
-AtmosphereSection:AddSlider('Haze', {
-    Text = 'Haze',
-    Default = 1,
-    Min = 0,
-    Max = 10,
-    Rounding = 3,
-})
-
-AtmosphereSection:AddSlider('Glare', {
-    Text = 'Glare',
-    Default = 10,
-    Min = 0,
-    Max = 10,
-    Rounding = 3,
-})
-
-AtmosphereSection:AddSlider('Offset', {
-    Text = 'Offset',
-    Default = 0,
-    Min = 0,
-    Max = 1,
-    Rounding = 3,
-})
-
-AtmosphereSection:AddSlider('Density', {
-    Text = 'Density',
-    Default = 0.35,
-    Min = 0,
-    Max = 1,
-    Rounding = 3,
-})
-
-function UpdateAtmosphere()
-    if not AtmosphereObject then return end
-    AtmosphereObject.Color = Options.AtmosphereColor.Value
-    AtmosphereObject.Decay = Options.DecayColor.Value
-    AtmosphereObject.Haze = Options.Haze.Value
-    AtmosphereObject.Glare = Options.Glare.Value
-    AtmosphereObject.Offset = Options.Offset.Value
-    AtmosphereObject.Density = Options.Density.Value
 end
 
-Toggles.Atmosphere:OnChanged(function(value)
-    if value then
-        if not AtmosphereObject then
-            AtmosphereObject = Instance.new('Atmosphere')
-            AtmosphereObject.Parent = Lighting
-        end
-        UpdateAtmosphere()
-    else
-        if AtmosphereObject then
-            AtmosphereObject:Destroy()
-            AtmosphereObject = nil
-        end
+function ApplyDoF()
+    if not DoFEffect then
+        DoFEffect = Lighting:FindFirstChildOfClass('DepthOfFieldEffect') or Instance.new('DepthOfFieldEffect')
+        DoFEffect.Parent = Lighting
     end
-end)
+    if Toggles.DepthOfField.Value then
+        DoFEffect.Enabled = true
+        DoFEffect.FarIntensity = Options.DoFFarIntensity.Value
+        DoFEffect.NearIntensity = Options.DoFNearIntensity.Value
+        DoFEffect.FocusDistance = Options.DoFFocusDistance.Value
+        DoFEffect.InFocusRadius = Options.DoFInFocusRadius.Value
+    else
+        DoFEffect.Enabled = false
+    end
+end
 
-Options.AtmosphereColor:OnChanged(UpdateAtmosphere)
-Options.DecayColor:OnChanged(UpdateAtmosphere)
-Options.Haze:OnChanged(UpdateAtmosphere)
-Options.Glare:OnChanged(UpdateAtmosphere)
-Options.Offset:OnChanged(UpdateAtmosphere)
-Options.Density:OnChanged(UpdateAtmosphere)
+function ApplyColorGrading()
+    if not ColorGradingEffect then
+        ColorGradingEffect = Lighting:FindFirstChildOfClass('ColorGradingEffect') or Instance.new('ColorGradingEffect')
+        ColorGradingEffect.Parent = Lighting
+    end
+    if Toggles.ColorGrading.Value then
+        ColorGradingEffect.Enabled = true
+        local preset = Enum.TonemapperPreset[Options.ColorGradingTonemap.Value]
+        if preset then ColorGradingEffect.TonemapperPreset = preset end
+    else
+        ColorGradingEffect.Enabled = false
+    end
+end
 
--- Color Correction Section
+BloomToggle = EffectsSection:AddToggle('Bloom', {
+    Text = 'Bloom', Default = false, Searchable = true,
+})
+
+BloomDep = EffectsSection:AddDependencyBox()
+BloomDep:AddSlider('BloomIntensity', { Text = 'Intensity', Default = 0.5, Min = 0, Max = 1, Rounding = 2 })
+BloomDep:AddSlider('BloomSize', { Text = 'Size', Default = 24, Min = 0, Max = 56, Rounding = 0 })
+BloomDep:AddSlider('BloomThreshold', { Text = 'Threshold', Default = 0.5, Min = 0, Max = 1, Rounding = 2 })
+BloomDep:SetupDependencies({ { Toggles.Bloom, true } })
+
+EffectsSection:AddDivider()
+
+SunRaysToggle = EffectsSection:AddToggle('SunRays', {
+    Text = 'Sun Rays', Default = false, Searchable = true,
+})
+
+SunRaysDep = EffectsSection:AddDependencyBox()
+SunRaysDep:AddSlider('SunRaysIntensity', { Text = 'Intensity', Default = 0.1, Min = 0, Max = 1, Rounding = 2 })
+SunRaysDep:AddSlider('SunRaysSpread', { Text = 'Spread', Default = 0.5, Min = 0, Max = 1, Rounding = 2 })
+SunRaysDep:SetupDependencies({ { Toggles.SunRays, true } })
+
+EffectsSection:AddDivider()
+
+DoFToggle = EffectsSection:AddToggle('DepthOfField', {
+    Text = 'Depth of Field', Default = false, Searchable = true,
+})
+
+DoFDep = EffectsSection:AddDependencyBox()
+DoFDep:AddSlider('DoFFarIntensity', { Text = 'Far Intensity', Default = 0.28, Min = 0, Max = 1, Rounding = 2 })
+DoFDep:AddSlider('DoFNearIntensity', { Text = 'Near Intensity', Default = 0.7, Min = 0, Max = 1, Rounding = 2 })
+DoFDep:AddSlider('DoFFocusDistance', { Text = 'Focus Distance', Default = 20, Min = 0, Max = 100, Rounding = 2 })
+DoFDep:AddSlider('DoFInFocusRadius', { Text = 'In Focus Radius', Default = 20, Min = -100, Max = 100, Rounding = 2 })
+DoFDep:SetupDependencies({ { Toggles.DepthOfField, true } })
+
+Toggles.Bloom:OnChanged(ApplyBloom)
+Options.BloomIntensity:OnChanged(ApplyBloom)
+Options.BloomSize:OnChanged(ApplyBloom)
+Options.BloomThreshold:OnChanged(ApplyBloom)
+
+Toggles.SunRays:OnChanged(ApplySunRays)
+Options.SunRaysIntensity:OnChanged(ApplySunRays)
+Options.SunRaysSpread:OnChanged(ApplySunRays)
+
+Toggles.DepthOfField:OnChanged(ApplyDoF)
+Options.DoFFarIntensity:OnChanged(ApplyDoF)
+Options.DoFNearIntensity:OnChanged(ApplyDoF)
+Options.DoFFocusDistance:OnChanged(ApplyDoF)
+Options.DoFInFocusRadius:OnChanged(ApplyDoF)
+
 ColorCorrectionSection = WorldTab:AddRightGroupbox('Color Correction')
 
 ColorCorrection = Lighting:FindFirstChildOfClass('ColorCorrectionEffect')
@@ -1734,94 +2408,61 @@ if not ColorCorrection then
     ColorCorrection.Parent = Lighting
 end
 
-ColorCorrectionSection:AddToggle('Saturation', {
-    Text = 'Saturation',
-    Default = false,
-    Searchable = true,
+SaturationToggle = ColorCorrectionSection:AddToggle('Saturation', {
+    Text = 'Saturation', Default = false, Searchable = true,
 })
 
-ColorCorrectionSection:AddSlider('SaturationValue', {
-    Text = 'Saturation Value',
-    Default = ColorCorrection.Saturation,
-    Min = -1,
-    Max = 1,
-    Rounding = 2,
+SaturationDep = ColorCorrectionSection:AddDependencyBox()
+SaturationDep:AddSlider('SaturationValue', {
+    Text = 'Saturation Value', Default = 0.1, Min = -1, Max = 1, Rounding = 2,
 })
+SaturationDep:SetupDependencies({ { Toggles.Saturation, true } })
 
 Toggles.Saturation:OnChanged(function(value)
-    if value then
-        ColorCorrection.Saturation = Options.SaturationValue.Value
-    else
-        ColorCorrection.Saturation = 0.1
-    end
+    ColorCorrection.Saturation = value and Options.SaturationValue.Value or 0.1
 end)
 
 Options.SaturationValue:OnChanged(function(value)
-    if Toggles.Saturation and Toggles.Saturation.Value then
-        ColorCorrection.Saturation = value
-    end
+    if Toggles.Saturation.Value then ColorCorrection.Saturation = value end
 end)
 
-ColorCorrectionSection:AddToggle('Contrast', {
-    Text = 'Contrast',
-    Default = false,
-    Searchable = true,
+ContrastToggle = ColorCorrectionSection:AddToggle('Contrast', {
+    Text = 'Contrast', Default = false, Searchable = true,
 })
 
-ColorCorrectionSection:AddSlider('ContrastValue', {
-    Text = 'Contrast Value',
-    Default = ColorCorrection.Contrast,
-    Min = -1,
-    Max = 1,
-    Rounding = 2,
+ContrastDep = ColorCorrectionSection:AddDependencyBox()
+ContrastDep:AddSlider('ContrastValue', {
+    Text = 'Contrast Value', Default = 0.05, Min = -1, Max = 1, Rounding = 2,
 })
+ContrastDep:SetupDependencies({ { Toggles.Contrast, true } })
 
 Toggles.Contrast:OnChanged(function(value)
-    if value then
-        ColorCorrection.Contrast = Options.ContrastValue.Value
-    else
-        ColorCorrection.Contrast = 0.05
-    end
+    ColorCorrection.Contrast = value and Options.ContrastValue.Value or 0.05
 end)
 
 Options.ContrastValue:OnChanged(function(value)
-    if Toggles.Contrast and Toggles.Contrast.Value then
-        ColorCorrection.Contrast = value
-    end
+    if Toggles.Contrast.Value then ColorCorrection.Contrast = value end
 end)
 
--- Aspect Ratio with horizontal and vertical only
+-- stretch res 
 AspectRatioSection = WorldTab:AddRightGroupbox('Rendering & Camera')
 
-getgenv().Resolution = {
-    ["HorizontalStretch"] = 1,
-    ["VerticalStretch"] = 1
-}
-
+getgenv().Resolution = { ["HorizontalStretch"] = 1, ["VerticalStretch"] = 1 }
 getgenv().AspectRatioStarted = nil
 getgenv().AspectRatioEnabled = false
 
-AspectRatioSection:AddToggle('AspectRatio', {
-    Text = 'Aspect Ratio',
-    Default = false,
-    Searchable = true,
+AspectRatioToggle = AspectRatioSection:AddToggle('AspectRatio', {
+    Text = 'Aspect Ratio', Default = false, Searchable = true,
 })
 
-AspectRatioSection:AddSlider('AspectRatioHorizontalSlider', {
-    Text = 'Horizontal',
-    Default = 1,
-    Min = 0.1,
-    Max = 1.2,
-    Rounding = 2,
+AspectRatioDep = AspectRatioSection:AddDependencyBox()
+AspectRatioDep:AddSlider('AspectRatioHorizontalSlider', {
+    Text = 'Horizontal', Default = 1, Min = 0.1, Max = 1.2, Rounding = 2,
 })
-
-AspectRatioSection:AddSlider('AspectRatioVerticalSlider', {
-    Text = 'Vertical',
-    Default = 1,
-    Min = 0.1,
-    Max = 1.2,
-    Rounding = 2,
+AspectRatioDep:AddSlider('AspectRatioVerticalSlider', {
+    Text = 'Vertical', Default = 1, Min = 0.1, Max = 1.2, Rounding = 2,
 })
+AspectRatioDep:SetupDependencies({ { Toggles.AspectRatio, true } })
 
 Toggles.AspectRatio:OnChanged(function(value)
     getgenv().AspectRatioEnabled = value
@@ -1834,8 +2475,7 @@ Toggles.AspectRatio:OnChanged(function(value)
                     if not getgenv().AspectRatioEnabled then return end
                     local cam = workspace.CurrentCamera
                     if cam then
-                        local currentCFrame = cam.CFrame
-                        local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = currentCFrame:GetComponents()
+                        local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = cam.CFrame:GetComponents()
                         local hStretch = getgenv().Resolution["HorizontalStretch"]
                         local vStretch = getgenv().Resolution["VerticalStretch"]
                         cam.CFrame = CFrame.new(X, Y, Z, R00 * hStretch, R01 * vStretch, R02, R10, R11 * vStretch, R12, R20 * hStretch, R21 * vStretch, R22)
@@ -1859,9 +2499,7 @@ Options.AspectRatioVerticalSlider:OnChanged(function(value)
 end)
 
 AspectRatioSection:AddToggle('DisableRendering', {
-    Text = 'Disable Rendering',
-    Default = false,
-    Searchable = true,
+    Text = 'Disable Rendering', Default = false, Searchable = true,
     Callback = function(value)
         pcall(function()
             RunService:Set3dRenderingEnabled(not value)
@@ -1869,24 +2507,14 @@ AspectRatioSection:AddToggle('DisableRendering', {
     end,
 })
 
--- textures
+-- ------------------------------------------------------------
+-- Textures
+-- ------------------------------------------------------------
 TexturesSection = WorldTab:AddRightGroupbox('Textures')
-
-TexturesSection:AddToggle('Textures', {
-    Text = 'Textures',
-    Default = false,
-    Searchable = true,
-})
-
-TexturesSection:AddDropdown('TexturesPack', {
-    Text = 'Pack',
-    Values = {'Minecraft', 'Carti', 'Sand Minecraft', 'Ice'},
-    Default = 'Minecraft',
-})
 
 TextureVariants = {}
 TextureRestores = {}
-TextureFaces = {"Front", "Back", "Bottom", "Top", "Right", "Left"}
+TextureFaces = { "Front", "Back", "Bottom", "Top", "Right", "Left" }
 
 TexturePackData = {
     Minecraft = {
@@ -1932,13 +2560,8 @@ function ApplyTextureToPart(part)
         for _, materialData in ipairs(TexturePackData[Options.TexturesPack.Value]) do
             if part.Material.Name == materialData[1] then
                 if not TextureRestores[part] then
-                    TextureRestores[part] = {
-                        Material = part.Material,
-                        Color = part.Color,
-                        Transparency = part.Transparency,
-                    }
+                    TextureRestores[part] = { Material = part.Material, Color = part.Color, Transparency = part.Transparency }
                 end
-                
                 for _, face in ipairs(TextureFaces) do
                     local texture = Instance.new("Texture")
                     texture.ZIndex = 2147483647
@@ -1948,7 +2571,6 @@ function ApplyTextureToPart(part)
                     texture.Transparency = part.Transparency
                     texture.Parent = part
                 end
-                
                 part.Material = Enum.Material.SmoothPlastic
                 break
             end
@@ -1958,48 +2580,31 @@ end
 
 function ApplyTextures()
     pcall(function()
-        for _, variant in ipairs(TextureVariants) do
-            variant:Destroy()
-        end
+        for _, variant in ipairs(TextureVariants) do variant:Destroy() end
         TextureVariants = {}
-        
         for part, _ in pairs(TextureRestores) do
             for _, child in ipairs(part:GetChildren()) do
-                if child:IsA("Texture") and child.ZIndex == 2147483647 then
-                    child:Destroy()
-                end
+                if child:IsA("Texture") and child.ZIndex == 2147483647 then child:Destroy() end
             end
             part.Material = TextureRestores[part].Material
             part.Color = TextureRestores[part].Color
             part.Transparency = TextureRestores[part].Transparency
         end
         TextureRestores = {}
-        
-        local targetFolder = workspace:FindFirstChild('MAP')
-        if not targetFolder then
-            targetFolder = workspace
-        end
-        
+        local targetFolder = workspace:FindFirstChild('MAP') or workspace
         for _, part in ipairs(targetFolder:GetDescendants()) do
-            if part:IsA("BasePart") then
-                ApplyTextureToPart(part)
-            end
+            if part:IsA("BasePart") then ApplyTextureToPart(part) end
         end
     end)
 end
 
 function CleanupTextures()
     pcall(function()
-        for _, variant in ipairs(TextureVariants) do
-            variant:Destroy()
-        end
+        for _, variant in ipairs(TextureVariants) do variant:Destroy() end
         TextureVariants = {}
-        
         for part, original in pairs(TextureRestores) do
             for _, child in ipairs(part:GetChildren()) do
-                if child:IsA("Texture") and child.ZIndex == 2147483647 then
-                    child:Destroy()
-                end
+                if child:IsA("Texture") and child.ZIndex == 2147483647 then child:Destroy() end
             end
             part.Material = original.Material
             part.Color = original.Color
@@ -2009,38 +2614,41 @@ function CleanupTextures()
     end)
 end
 
+TexturesToggle = TexturesSection:AddToggle('Textures', {
+    Text = 'Textures', Default = false, Searchable = true,
+})
+
+TexturesDep = TexturesSection:AddDependencyBox()
+TexturesDep:AddDropdown('TexturesPack', {
+    Text = 'Pack',
+    Values = { 'Minecraft', 'Carti', 'Sand Minecraft', 'Ice' },
+    Default = 'Minecraft',
+})
+TexturesDep:SetupDependencies({ { Toggles.Textures, true } })
+
 Toggles.Textures:OnChanged(function(value)
-    if value then
-        ApplyTextures()
-    else
-        CleanupTextures()
-    end
+    if value then ApplyTextures() else CleanupTextures() end
 end)
 
 Options.TexturesPack:OnChanged(function()
-    if Toggles.Textures and Toggles.Textures.Value then
-        ApplyTextures()
-    end
+    if Toggles.Textures.Value then ApplyTextures() end
 end)
 
--- ambient
+-- ------------------------------------------------------------
+-- Ambient (Outdoor)
+-- ------------------------------------------------------------
 AmbientSection = WorldTab:AddRightGroupbox('Ambient')
 
-AmbientSection:AddToggle('Ambient', {
-    Text = 'Ambient',
-    Default = false,
-    Searchable = true,
-})
-
-AmbientSection:AddLabel('Ambient Color'):AddColorPicker('AmbientColor', {
-    Default = Lighting.Ambient,
-    Title = 'Ambient Color',
-})
-
-AmbientSection:AddLabel('Outdoor Ambient'):AddColorPicker('OutdoorAmbientColor', {
-    Default = Lighting.OutdoorAmbient,
-    Title = 'Outdoor Ambient Color',
-})
+AmbientToggle = AmbientSection:AddToggle('Ambient', {
+    Text = 'Ambient', Default = false, Searchable = true,
+}) do
+    AmbientToggle:AddColorPicker('AmbientColor', {
+        Default = Lighting.Ambient, Title = 'Ambient Color',
+    })
+    AmbientToggle:AddColorPicker('OutdoorAmbientColor', {
+        Default = Lighting.OutdoorAmbient, Title = 'Outdoor Ambient Color',
+    })
+end
 
 Toggles.Ambient:OnChanged(function(value)
     if value then
@@ -2053,15 +2661,11 @@ Toggles.Ambient:OnChanged(function(value)
 end)
 
 Options.AmbientColor:OnChanged(function(value)
-    if Toggles.Ambient and Toggles.Ambient.Value then
-        Lighting.Ambient = value
-    end
+    if Toggles.Ambient.Value then Lighting.Ambient = value end
 end)
 
 Options.OutdoorAmbientColor:OnChanged(function(value)
-    if Toggles.Ambient and Toggles.Ambient.Value then
-        Lighting.OutdoorAmbient = value
-    end
+    if Toggles.Ambient.Value then Lighting.OutdoorAmbient = value end
 end)
 
 -- tabs 4
@@ -3001,6 +3605,28 @@ local _74 = _67:AddToggle('AutoShoot', {
     Searchable = true,
 })
 
+AutoShootDistToggle = _67:AddToggle('AutoShootDistCheck', {
+    Text = 'Distance Check',
+    Default = false,
+    Searchable = true,
+})
+
+AutoShootDistDep = _67:AddDependencyBox()
+
+AutoShootDistDep:AddSlider('AutoShootMaxDist', {
+    Text = 'Max Distance',
+    Default = 500,
+    Min = 5,
+    Max = 2000,
+    Rounding = 0,
+    Suffix = ' studs',
+    Searchable = true,
+})
+
+AutoShootDistDep:SetupDependencies({
+    { AutoShootDistToggle, true },
+})
+
 _67:AddToggle('FaceTarget', {
     Text = 'Face Target',
     Default = false,
@@ -3729,6 +4355,10 @@ _WSToggle:AddKeyPicker('WalkSpeedKeybind', {
     Text = 'Bind',
     NoUI = false
 })
+_78:AddToggle('WalkSpeedInstantStop', {
+    Text = 'Instant Stop',
+    Default = false,
+})
 
 _78:AddSlider('WalkSpeed', {
     Text = 'Speed',
@@ -4380,6 +5010,7 @@ _48:OnUnload(function()
     RapidNewDisable()
 end)
 
+-- death ac detection
 task.spawn(function()
     local RS = game:GetService("ReplicatedStorage")
     while true do
@@ -7049,10 +7680,10 @@ task.spawn(function()
     end
 end)
 
-_78:AddLabel('Gif Player')
+_78:AddLabel('Player/ idk what to name')
 
 WaifuToggle = _78:AddToggle("visuals/camera/waifu", {
-    Text = "Gif Player",
+    Text = "Enable Player",
     Default = false,
     Searchable = true,
 })
@@ -7862,6 +8493,184 @@ Toggles.AutoloadScript:OnChanged(function(v)
         else
             Library:Notify("Autoload disabled (ER113)", 3)
         end
+    end
+end)
+
+RejoinToggle = _96:AddToggle('RejoinOnKick', {
+    Text = 'Rejoin on Kick/Disconnect',
+    Default = false,
+    Searchable = true,
+})
+
+RejoinDep = _96:AddDependencyBox()
+
+RejoinDep:AddDropdown('RejoinMode', {
+    Text = 'Rejoin Mode',
+    Default = 'Same Server',
+    Values = { 'Same Server', 'Server Hop', 'Random' },
+})
+
+RejoinDep:SetupDependencies({
+    { Toggles.RejoinOnKick, true },
+})
+
+RejoinState = {
+    Enabled = false,
+    Attempting = false,
+    LastAttempt = 0,
+    Kicked = false,
+    Connections = {},
+}
+
+RejoinCooldown = 0.5
+
+function RejoinGetTeleport()
+    local ok, ts = pcall(function()
+        return game:GetService("TeleportService")
+    end)
+    return ok and ts or nil
+end
+
+function RejoinGetHttp()
+    local ok, hs = pcall(function()
+        return game:GetService("HttpService")
+    end)
+    return ok and hs or nil
+end
+
+function RejoinSameServer()
+    local ts = RejoinGetTeleport()
+    if not ts then return false end
+    local ok = pcall(function()
+        ts:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+    end)
+    return ok
+end
+
+function RejoinServerHop()
+    local ts = RejoinGetTeleport()
+    local hs = RejoinGetHttp()
+    if not ts or not hs then return false end
+
+    local ok, response = pcall(function()
+        return game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?limit=100")
+    end)
+    if not ok or not response then return false end
+
+    local decoded = nil
+    pcall(function()
+        decoded = hs:JSONDecode(response)
+    end)
+    if not decoded or not decoded.data then return false end
+
+    local pool = {}
+    for _, server in ipairs(decoded.data) do
+        if server.id ~= game.JobId and server.playing and server.playing < server.maxPlayers then
+            table.insert(pool, server.id)
+        end
+    end
+    if #pool == 0 then return false end
+
+    local target = pool[math.random(1, #pool)]
+    local hopOk = pcall(function()
+        ts:TeleportToPlaceInstance(game.PlaceId, target, LocalPlayer)
+    end)
+    return hopOk
+end
+
+function RejoinCleanup()
+    for _, conn in ipairs(RejoinState.Connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    RejoinState.Connections = {}
+    RejoinState.Enabled = false
+    RejoinState.Attempting = false
+end
+
+function RejoinAttempt()
+    if RejoinState.Attempting then return end
+    if not Toggles.RejoinOnKick or not Toggles.RejoinOnKick.Value then return end
+
+    local now = tick()
+    if now - RejoinState.LastAttempt < RejoinCooldown then return end
+
+    RejoinState.Attempting = true
+    RejoinState.LastAttempt = now
+
+    local mode = Options.RejoinMode and Options.RejoinMode.Value or "Same Server"
+
+    local success = false
+
+    if mode == "Same Server" then
+        success = RejoinSameServer()
+    elseif mode == "Server Hop" then
+        success = RejoinServerHop()
+    else
+        success = RejoinSameServer()
+        if not success then
+            success = RejoinServerHop()
+        end
+    end
+
+    RejoinState.Attempting = false
+
+    if not success then
+        task.wait(RejoinCooldown)
+        RejoinAttempt()
+    end
+end
+
+function RejoinSetup()
+    RejoinCleanup()
+    RejoinState.Enabled = true
+
+    table.insert(RejoinState.Connections, LocalPlayer.OnTeleport:Connect(function(state)
+        if state == Enum.TeleportState.Started then
+            RejoinState.Attempting = false
+            RejoinState.LastAttempt = 0
+        end
+    end))
+
+    table.insert(RejoinState.Connections, game:GetService("Players").PlayerRemoving:Connect(function(plr)
+        if plr == LocalPlayer and Toggles.RejoinOnKick and Toggles.RejoinOnKick.Value then
+            RejoinAttempt()
+        end
+    end))
+
+    table.insert(RejoinState.Connections, game:GetService("GuiService").ErrorMessageChanged:Connect(function()
+        if Toggles.RejoinOnKick and Toggles.RejoinOnKick.Value then
+            RejoinAttempt()
+        end
+    end))
+
+    table.insert(RejoinState.Connections, game:GetService("CoreGui").ChildAdded:Connect(function(child)
+        if not Toggles.RejoinOnKick or not Toggles.RejoinOnKick.Value then return end
+        if child.Name == "RobloxPromptGui" or child:FindFirstChild("ErrorPrompt", true) then
+            RejoinAttempt()
+        end
+    end))
+
+    table.insert(RejoinState.Connections, game:GetService("Players").LocalPlayer.ChildRemoved:Connect(function(child)
+        if child.Name == "PlayerScripts" and Toggles.RejoinOnKick and Toggles.RejoinOnKick.Value then
+            RejoinAttempt()
+        end
+    end))
+
+    task.spawn(function()
+        while Toggles.RejoinOnKick and Toggles.RejoinOnKick.Value do
+            task.wait(0.25)
+            if not LocalPlayer or not LocalPlayer.Parent then
+                RejoinAttempt()
+            end
+        end
+    end)
+end
+
+Toggles.RejoinOnKick:OnChanged(function(value)
+    if value then
+        RejoinSetup()
+    else
+        RejoinCleanup()
     end
 end)
 _96:AddLabel('Menu Bind'):AddKeyPicker('MenuKeybind', { Default = 'End', NoUI = true, Text = 'Menu Toggle' })
@@ -9563,7 +10372,7 @@ Toggles.Noclip:OnChanged(_NoclipToggleChanged)
 
 _lastCFrameTick = 0
 
-local _WalkSpeedLoop = function()
+_WalkSpeedLoop = function()
     if not Toggles.WalkSpeedEnabled.Value then return end
 
     local char = _56.Character
@@ -9603,7 +10412,14 @@ local _WalkSpeedLoop = function()
         if _54:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - right end
     end
 
-    if moveDir.Magnitude <= 0 then return end
+    if moveDir.Magnitude <= 0 then
+        if Toggles.WalkSpeedInstantStop and Toggles.WalkSpeedInstantStop.Value then
+            local vel = root.AssemblyLinearVelocity
+            root.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
+        end
+        return
+    end
+
     moveDir = moveDir.Unit
 
     local currentY = root.AssemblyLinearVelocity.Y
@@ -9633,7 +10449,7 @@ local _WalkSpeedLoop = function()
     end
 end
 
-local function _WalkSpeedChanged()
+_WalkSpeedChanged = function()
     if _WSConnection then
         _WSConnection:Disconnect()
         _WSConnection = nil
@@ -11018,7 +11834,7 @@ PositionSourceWeights = {
 }
 
 OUTLIER_THRESHOLD  = 15
-AnchorSmoothRate   = 0.35 
+AnchorSmoothRate   = 0.35
 LastAnchorPos      = nil
 LastAnchorLook     = nil
 
@@ -11331,7 +12147,6 @@ function IsWaitingForRespawn(target)
     targetRespawnTime = tick()
     respawnPending = true
 
-    -- new character for the same player -> this is a fresh engagement
     IdleSpamFirst = false
     IdleSpamSwitchAt = tick() + IdleSpamStrafeTime
 
@@ -11948,6 +12763,7 @@ function Orbit()
                 IdleSpamKnown[target] = true
             elseif now >= IdleSpamSwitchAt then
                 if IdleSpamFirst then
+                    IdleSpamFirst = false
                     IdleSpamSwitchAt = now + IdleSpamStrafeTime
                 else
                     IdleSpamState = "idling"
@@ -13651,12 +14467,23 @@ local function _206()
     local _207 = _145:FindFirstChild("Ammo")
     if _207 and _207.Value <= 0 then return end
 
+    local selfHRP = _56.Character and _56.Character:FindFirstChild("HumanoidRootPart")
+
+    local function InRange(plr)
+        if not AutoShootDistToggle.Value then return true end
+        if not selfHRP or not plr or not plr.Character then return false end
+        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return false end
+        return (selfHRP.Position - hrp.Position).Magnitude <= AutoShootMaxDist.Value
+    end
+
     if _104.deflectactive and (not _104.active or not _104.targetplayer or not _104.targetpart or not _104.targetpart.Parent) then
         local dPlr = _104.deflectplayer
         local dPart = _104.deflectpart
         if not dPlr or not dPart or not dPart.Parent then return end
         if not _182(dPlr) or hasKO(dPlr) then return end
         if HasForceField(dPlr) then return end
+        if not InRange(dPlr) then return end
         _145:Activate()
         task.wait(0.05)
         return
@@ -13666,7 +14493,7 @@ local function _206()
         local _174 = _173()
         if #_174 == 0 then return end
         for _, _154 in ipairs(_174) do
-            if _182(_154) and not hasKO(_154) and not HasForceField(_154) then
+            if _182(_154) and not hasKO(_154) and not HasForceField(_154) and InRange(_154) then
                 _145:Activate()
                 task.wait(0.05)
                 break
@@ -13675,6 +14502,7 @@ local function _206()
     else
         if not _104.targetplayer or not _182(_104.targetplayer) or hasKO(_104.targetplayer) then return end
         if HasForceField(_104.targetplayer) then return end
+        if not InRange(_104.targetplayer) then return end
         _145:Activate()
         task.wait(0.05)
     end
