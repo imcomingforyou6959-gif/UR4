@@ -104,13 +104,25 @@ if (identifyexecutor() == "AWP" or identifyexecutor() == "Nihon") then
     cleardrawcache()
 end
 
-isnetworkowner = isnetworkowner or (function()
-    local executor_name = identifyexecutor and select(1, identifyexecutor())
-    local KNOWN = { AWP = true, Nihon = true }
-    if executor_name and KNOWN[executor_name] then
-        return isnetworkowner
+isnetworkowner = (function()
+    if type(isnetworkowner) == "function" then return isnetworkowner end
+    for _, name in ipairs({"isnetworkowneroff","isNetOwner","is_network_owner","checknetworkowner","getnetworkowner","isOwner"}) do
+        local fn = _G[name]
+        if type(fn) == "function" then return fn end
     end
-    return function() return true end
+    if type(getnetworkowner) == "function" then
+        return function(part)
+            local ok, owner = pcall(getnetworkowner, part)
+            if not ok then return true end
+            return owner == game:GetService("Players").LocalPlayer
+        end
+    end
+    return function(part)
+        if not part or typeof(part) ~= "Instance" then return true end
+        local ok, owner = pcall(function() return part:GetNetworkOwner() end)
+        if not ok then return true end
+        return owner == game:GetService("Players").LocalPlayer
+    end
 end)()
 
 workspace.FallenPartsDestroyHeight = -0 / 0
@@ -350,48 +362,70 @@ if not _40 then
 end
 
 local originalNamecall
-originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-    if checkcaller() then return originalNamecall(self, ...) end
-    local args = {...}
-    local method = getnamecallmethod()
-    if method == "FireServer" and self.Name == "MainRemoteEvent" then
-        if args[1] == "Detection" then
-            return coroutine.yield()
-        elseif args[1] == "StompXD" then
-            args[3] = true
-            return originalNamecall(unpack(args))
+local _hook_ok, _hook_err = pcall(function()
+    originalNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        if checkcaller() then return originalNamecall(self, ...) end
+        local args = {...}
+        local method = getnamecallmethod()
+        if method == "FireServer" and self.Name == "MainRemoteEvent" then
+            if args[1] == "Detection" then
+                local ok, res = pcall(coroutine.yield)
+                if ok then return res end
+                return nil
+            elseif args[1] == "StompXD" then
+                args[3] = true
+                return originalNamecall(table.unpack(args))
+            end
         end
-    end
-    if method == "FireServer" then
-        local parent = self.Parent
-        if parent then
-            local name = parent.Name:lower()
-            local cancelWeapons = {
-                ["revolver"] = true,
-                ["double-barrel sg"] = true,
-                ["tacticalshotgun"] = true,
-                ["[Orbed Sniper]"] = true,
-                ["[Quested Rifle]"] = true
-            }
-            if cancelWeapons[name] then
-                if type(args[1]) == "string" and args[1]:lower() == "shoot" then
-                    return nil
+        if method == "FireServer" then
+            local parent = self.Parent
+            if parent then
+                local name = parent.Name:lower()
+                local cancelWeapons = {
+                    ["revolver"] = true,
+                    ["double-barrel sg"] = true,
+                    ["tacticalshotgun"] = true,
+                    ["[Orbed Sniper]"] = true,
+                    ["[Quested Rifle]"] = true
+                }
+                if cancelWeapons[name] then
+                    if type(args[1]) == "string" and args[1]:lower() == "shoot" then
+                        return nil
+                    end
                 end
             end
         end
-    end
-    return originalNamecall(self, ...)
+        return originalNamecall(self, ...)
+    end)
 end)
+if not _hook_ok then
+    originalNamecall = nil
+end
 
 wait(1)
 
 local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
-local _48 = loadstring(game:HttpGet(_47 .. 'Library.lua'))()
-local _49 = loadstring(game:HttpGet(_47 .. 'addons/ThemeManager.lua'))()
-local _50 = loadstring(game:HttpGet(_47 .. 'addons/SaveManager.lua'))()
-local Spotify = loadstring(game:HttpGet(_47 .. 'addons/Spotify.lua'))()
 
---# Waifu Loader
+function _safeLoad(url)
+    local ok, res = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    if ok and res then return res end
+    return nil
+end
+
+local _48      = _safeLoad(_47 .. 'Library.lua')
+local _49      = _safeLoad(_47 .. 'addons/ThemeManager.lua')
+local _50      = _safeLoad(_47 .. 'addons/SaveManager.lua')
+local Spotify  = _safeLoad(_47 .. 'addons/Spotify.lua')
+Library = _48
+
+if not _48 then
+    warn("[loader] Library.lua failed to load")
+    return
+end
+
+-- loader
 do
     local CACHE_BUST = tostring(os.time())
 
@@ -413,23 +447,43 @@ do
     DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
     RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
 
-    local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
-    if not decoderSrc then error("decoder fetch failed", 0) end
-    local GifDecoder = assert(loadstring(decoderSrc))()
-    assert(type(GifDecoder) == "table" and type(GifDecoder.decode) == "function",
-        "decoder module invalid")
-
     local env = getgenv and getgenv() or _G
-    env.GifDecoder = GifDecoder
 
-    local rendererSrc = fetch(RENDERER_URL, true) or fetch(RENDERER_URL, false)
-    if not rendererSrc then error("[Waifu] renderer fetch failed", 0) end
-    local GifRenderer = assert(loadstring(rendererSrc))()
-    assert(type(GifRenderer) == "table" and type(GifRenderer.new) == "function",
-        "renderer module invalid")
-
-    GifRenderer.RequiredDecoderVersion = GifDecoder.Version
-    env.GifRenderer = GifRenderer
+    local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
+    if decoderSrc then
+        local ok, decoded = pcall(function()
+            local mod = loadstring(decoderSrc)()
+            if type(mod) == "table" and type(mod.decode) == "function" then
+                return mod
+            end
+            return nil
+        end)
+        if ok and decoded then
+            env.GifDecoder = decoded
+            local rendererSrc = fetch(RENDERER_URL, true) or fetch(RENDERER_URL, false)
+            if rendererSrc then
+                local ok2, renderer = pcall(function()
+                    local mod = loadstring(rendererSrc)()
+                    if type(mod) == "table" and type(mod.new) == "function" then
+                        return mod
+                    end
+                    return nil
+                end)
+                if ok2 and renderer then
+                    renderer.RequiredDecoderVersion = decoded.Version
+                    env.GifRenderer = renderer
+                else
+                    warn("[ERROR] renderer load failed")
+                end
+            else
+                warn("[ERROR] renderer fetch failed")
+            end
+        else
+            warn("[ERROR] decoder load failed")
+        end
+    else
+        warn("[ERROR] decoder fetch failed")
+    end
 end
 
 Library:Notify('Thanks for using rawr <3')
@@ -1023,8 +1077,20 @@ SkySection:AddDropdown('Skybox', {
     Text = 'Skybox',
 })
 
+SkySection:AddSlider('SkyboxSpin', {
+    Text = 'Skybox Spin (deg/s)',
+    Default = 0,
+    Min = 0,
+    Max = 360,
+    Rounding = 1,
+    Compact = false,
+})
+
 OriginalSky = nil
 _activeCustomSky = nil
+
+_G._skySpinAngle = 0
+_G._skySpinSpeed = 0
 
 function applySkybox(skyName)
     if OriginalSky == nil then
@@ -1058,12 +1124,31 @@ function applySkybox(skyName)
     if data.MoonAngularSize ~= nil then sky.MoonAngularSize = data.MoonAngularSize end
     if data.SunTextureId ~= nil then sky.SunTextureId = data.SunTextureId end
     if data.MoonTextureId ~= nil then sky.MoonTextureId = data.MoonTextureId end
+
+    _G._skySpinAngle = 0
+    sky.SkyboxOrientation = Vector3.new(0, 0, 0)
+
     sky.Parent = Lighting
     _activeCustomSky = sky
 end
 
 Options.Skybox:OnChanged(function()
     applySkybox(Options.Skybox.Value)
+end)
+
+Options.SkyboxSpin:OnChanged(function()
+    _G._skySpinSpeed = Options.SkyboxSpin.Value or 0
+end)
+
+task.spawn(function()
+    while task.wait(0.03) do
+        if _activeCustomSky and _activeCustomSky.Parent and _G._skySpinSpeed > 0 then
+            _G._skySpinAngle = (_G._skySpinAngle + _G._skySpinSpeed * 0.03) % 360
+            pcall(function()
+                _activeCustomSky.SkyboxOrientation = Vector3.new(0, _G._skySpinAngle, 0)
+            end)
+        end
+    end
 end)
 
 task.spawn(function()
@@ -1089,29 +1174,29 @@ Lighting.ChildAdded:Connect(function(child)
     end
 end)
 
+-- auras
 AuraSection = WorldTab:AddLeftGroupbox('Auras')
 Players = game:GetService('Players')
 LocalPlayer = Players.LocalPlayer
 
 _G.aurp = _G.aurp or {}
 
-_G.aurasst = {
-    ["starlight"] = game:GetObjects("rbxassetid://134645216613107")[1],
-    ["heavenly"] = game:GetObjects("rbxassetid://139300897520961")[1],
-    ["ribbon"] = game:GetObjects("rbxassetid://132069507632161")[1],
-    ["sakura"] = game:GetObjects("rbxassetid://81755778619404")[1],
-    ["angel"] = game:GetObjects("rbxassetid://97658130917593")[1],
-    ["wind"] = game:GetObjects("rbxassetid://80694081850877")[1],
-    ["flow"] = game:GetObjects("rbxassetid://119913533725648")[1],
-    ["star"] = game:GetObjects("rbxassetid://73754563740680")[1],
-    ["explo"] = game:GetObjects("rbxassetid://75789713107155")[1],
-    ["waves"] = game:GetObjects("rbxassetid://94581063446738")[1],
-    ["pixel"] = game:GetObjects("rbxassetid://90816193741219")[1],
-    ["soundwaves"] = game:GetObjects("rbxassetid://114870034653215")[1],
-    ["king"] = game:GetObjects("rbxassetid://93563147247398")[1],
-    ["balloflight"] = game:GetObjects("rbxassetid://111538260393666")[1],
-    ["robes"] = game:GetObjects("rbxassetid://89189106998138")[1],
-}
+local _getobj = getobjects or (game and game.GetObjects and function(id) return game:GetObjects(id) end)
+_G.aurasst = {}
+if _getobj then
+    local _ids = {
+        starlight = "134645216613107", heavenly = "139300897520961", ribbon = "132069507632161",
+        sakura = "81755778619404", angel = "97658130917593", wind = "80694081850877",
+        flow = "119913533725648", star = "73754563740680", explo = "75789713107155",
+        waves = "94581063446738", pixel = "90816193741219", soundwaves = "114870034653215",
+        king = "93563147247398", balloflight = "111538260393666", robes = "89189106998138",
+        cinco = "108479261729538", hallownest = "13157241929", special = "126521784338665",
+    }
+    for name, id in pairs(_ids) do
+        local ok, objs = pcall(_getobj, "rbxassetid://" .. id)
+        if ok and objs and objs[1] then _G.aurasst[name] = objs[1] end
+    end
+end
 
 _G.aur_r6_to_r15 = {
     Head = "Head", Torso = "UpperTorso",
@@ -1128,6 +1213,7 @@ _G.aur_is_body_part = function(name)
         or l == "bodyeffect" or l == "bodyeffects"
         or l == "part" or l == "meshpart" or l == "unionoperation"
         or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx"
+        or l == "portal" or l == "portal particles" or l == "gravity"
         or l == "left arm" or l == "right arm" or l == "leftarm" or l == "rightarm"
         or l == "left leg" or l == "right leg" or l == "leftleg" or l == "rightleg"
         or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand"
@@ -1143,7 +1229,8 @@ _G.aur_find_target = function(char, name)
     if l == "aura" or l == "effect" or l == "effects"
         or l == "main" or l == "core" or l == "bodyeffect" or l == "bodyeffects"
         or l == "part" or l == "meshpart" or l == "unionoperation"
-        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx" then
+        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx"
+        or l == "portal" or l == "portal particles" or l == "gravity" then
         return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
     end
     if l == "head" then return char:FindFirstChild("Head") end
@@ -1223,7 +1310,8 @@ _G.aur_apply_children = function(src, char)
         local c = kids[i]
         if c:IsA("Motor6D") or c:IsA("Weld") or c:IsA("WeldConstraint")
             or c:IsA("Humanoid") or c:IsA("SpecialMesh") or c:IsA("Mesh")
-            or c:IsA("Camera") or c:IsA("Script") or c:IsA("ModuleScript") or c:IsA("LocalScript") then
+            or c:IsA("Camera") or c:IsA("Script") or c:IsA("ModuleScript") or c:IsA("LocalScript")
+            or c:IsA("BillboardGui") then
             c:Destroy()
         else
             c.Name = "\0"
@@ -1241,6 +1329,12 @@ _G.applaur = function()
     local asset = _G.aurasst[_G.selaurwtff or "angel"]
     if not asset then return end
     local clo = asset:Clone()
+
+    for _, d in ipairs(clo:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") then
+            d:Destroy()
+        end
+    end
 
     local tops = clo:GetChildren()
     for i = 1, #tops do
@@ -1287,6 +1381,69 @@ _G.applaur = function()
             end
         end
     end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+
+    local function isWelded(part)
+        if part:FindFirstChildWhichIsA("Weld") or part:FindFirstChildWhichIsA("WeldConstraint") then return true end
+        local p = part.Parent
+        if p then
+            for _, sib in ipairs(p:GetChildren()) do
+                if sib:IsA("Weld") or sib:IsA("WeldConstraint") then
+                    if sib.Part0 == part or sib.Part1 == part then return true end
+                end
+            end
+        end
+        return false
+    end
+
+    local function findAnchor(inst)
+        local walk = inst.Parent
+        while walk and walk ~= char do
+            if walk:IsA("BasePart") and walk.Parent == char then
+                return walk
+            end
+            walk = walk.Parent
+        end
+        return hrp
+    end
+
+    local function weldStray(container)
+        if not container or not container.Parent then return end
+        if container:IsA("BasePart") and not isWelded(container) then
+            local anchor = findAnchor(container) or hrp
+            if anchor then
+                container.Anchored = false
+                container.CanCollide = false
+                container.Massless = true
+                local w = Instance.new("WeldConstraint")
+                w.Part0 = anchor
+                w.Part1 = container
+                w.Parent = container
+            end
+        end
+        for _, d in ipairs(container:GetDescendants()) do
+            if d:IsA("BasePart") and not isWelded(d) then
+                local anchor = findAnchor(d) or hrp
+                if anchor then
+                    d.Anchored = false
+                    d.CanCollide = false
+                    d.Massless = true
+                    local w = Instance.new("WeldConstraint")
+                    w.Part0 = anchor
+                    w.Part1 = d
+                    w.Parent = d
+                end
+            end
+        end
+    end
+
+    if hrp then
+        for i = 1, #_G.aurp do
+            weldStray(_G.aurp[i])
+        end
+    end
+
     clo:Destroy()
     _G.updaurcol()
 end
@@ -1327,7 +1484,7 @@ end
 
 AuraDep = AuraSection:AddDependencyBox()
 AuraDep:AddDropdown('AuraType', {
-    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves", "pixel", "soundwaves", "king", "balloflight", "robes"},
+    Values = {"starlight", "heavenly", "ribbon", "sakura", "angel", "wind", "flow", "star", "explo", "waves", "pixel", "soundwaves", "king", "balloflight", "robes", "cinco", "hallownest", "special"},
     Default = 'angel',
     Text = 'Aura Type',
 })
@@ -1359,9 +1516,6 @@ Toggles.FakeRobloxFF:OnChanged(function()
     if getgenv().AuraFFEnabled then getgenv().createFF() else getgenv().removeFF() end
 end)
 
--- ------------------------------------------------------------
--- Character Trail
--- ------------------------------------------------------------
 TrailSection = WorldTab:AddLeftGroupbox('Character Trail')
 
 _G.TrailEnabled = false
@@ -1460,9 +1614,6 @@ LocalPlayer.CharacterAdded:Connect(function()
     if _G.TrailEnabled then ApplyTrail(true) end
 end)
 
--- ------------------------------------------------------------
--- Background Noise
--- ------------------------------------------------------------
 BackgroundNoiseSection = WorldTab:AddLeftGroupbox('Background Noise')
 
 _G.background_sounds = {
@@ -1547,9 +1698,6 @@ Options.BackgroundVolume:OnChanged(function()
     end
 end)
 
--- ------------------------------------------------------------
--- Brightness
--- ------------------------------------------------------------
 BrightnessSection = WorldTab:AddLeftGroupbox('Brightness')
 
 BrightnessToggle = BrightnessSection:AddToggle('Brightness', {
@@ -1600,9 +1748,6 @@ Options.BrightnessExposure:OnChanged(function(v)
     if Toggles.Brightness.Value then Lighting.ExposureCompensation = v end
 end)
 
--- ------------------------------------------------------------
--- Fog (NEW)
--- ------------------------------------------------------------
 FogSection = WorldTab:AddLeftGroupbox('Fog')
 
 FogToggle = FogSection:AddToggle('FogToggle', {
@@ -1647,9 +1792,6 @@ Options.FogFar:OnChanged(function(v)
     if Toggles.FogToggle.Value then Lighting.FogEnd = v end
 end)
 
--- ------------------------------------------------------------
--- Shadow Modification (NEW)
--- ------------------------------------------------------------
 ShadowSection = WorldTab:AddLeftGroupbox('Shadow Modification')
 
 ShadowToggle = ShadowSection:AddToggle('ShadowMod', {
@@ -1684,9 +1826,6 @@ Toggles.GlobalShadows:OnChanged(function(v)
     if Toggles.ShadowMod.Value then Lighting.GlobalShadows = v end
 end)
 
--- ------------------------------------------------------------
--- Lighting (consolidated: Clock Time + Latitude + ColorShift)
--- ------------------------------------------------------------
 LightingFullSection = WorldTab:AddLeftGroupbox('Lighting')
 
 LightingFullToggle = LightingFullSection:AddToggle('LightingFull', {
@@ -1740,9 +1879,6 @@ Options.LightingShiftTop:OnChanged(function(v)
     if Toggles.LightingFull.Value then Lighting.ColorShift_Top = v end
 end)
 
--- ------------------------------------------------------------
--- Lighting Mode
--- ------------------------------------------------------------
 LightingModeSection = WorldTab:AddLeftGroupbox('Lighting Mode')
 
 LightingModeToggle = LightingModeSection:AddToggle('LightingMode', {
@@ -1773,9 +1909,6 @@ Options.LightingModeValue:OnChanged(function(value)
     end
 end)
 
--- ------------------------------------------------------------
--- World Time
--- ------------------------------------------------------------
 WorldTimeSection = WorldTab:AddLeftGroupbox('World Time')
 
 WorldTimeToggle = WorldTimeSection:AddToggle('WorldTime', {
@@ -1802,9 +1935,6 @@ Options.WorldTimeValue:OnChanged(function(value)
     if Toggles.WorldTime.Value then Lighting.ClockTime = value end
 end)
 
--- ------------------------------------------------------------
--- Atmosphere
--- ------------------------------------------------------------
 AtmosphereSection = WorldTab:AddLeftGroupbox('Atmosphere')
 
 AtmosphereObject = nil
@@ -1871,13 +2001,6 @@ Options.Glare:OnChanged(UpdateAtmosphere)
 Options.Offset:OnChanged(UpdateAtmosphere)
 Options.Density:OnChanged(UpdateAtmosphere)
 
--- ============================================================
--- RIGHT COLUMN
--- ============================================================
-
--- ------------------------------------------------------------
--- Emotes (kept as-is — data tables unchanged)
--- ------------------------------------------------------------
 EmoteTabBox = WorldTab:AddRightTabbox()
 EmoteTab = EmoteTabBox:AddTab('Emotes')
 
@@ -2112,9 +2235,6 @@ task.spawn(function()
     end
 end)
 
--- ------------------------------------------------------------
--- Weather (existing logic kept, UI converted)
--- ------------------------------------------------------------
 WeatherSection = WorldTab:AddRightGroupbox('Weather')
 
 if _G.weather_render_conn then pcall(function() _G.weather_render_conn:Disconnect() end) _G.weather_render_conn = nil end
@@ -2507,9 +2627,6 @@ AspectRatioSection:AddToggle('DisableRendering', {
     end,
 })
 
--- ------------------------------------------------------------
--- Textures
--- ------------------------------------------------------------
 TexturesSection = WorldTab:AddRightGroupbox('Textures')
 
 TextureVariants = {}
@@ -2634,9 +2751,6 @@ Options.TexturesPack:OnChanged(function()
     if Toggles.Textures.Value then ApplyTextures() end
 end)
 
--- ------------------------------------------------------------
--- Ambient (Outdoor)
--- ------------------------------------------------------------
 AmbientSection = WorldTab:AddRightGroupbox('Ambient')
 
 AmbientToggle = AmbientSection:AddToggle('Ambient', {
@@ -3605,15 +3719,15 @@ local _74 = _67:AddToggle('AutoShoot', {
     Searchable = true,
 })
 
-AutoShootDistToggle = _67:AddToggle('AutoShootDistCheck', {
+AutoShootDep = _67:AddDependencyBox()
+
+AutoShootDistToggle = AutoShootDep:AddToggle('AutoShootDistCheck', {
     Text = 'Distance Check',
     Default = false,
     Searchable = true,
 })
 
-AutoShootDistDep = _67:AddDependencyBox()
-
-AutoShootDistDep:AddSlider('AutoShootMaxDist', {
+AutoShootMaxDist = AutoShootDep:AddSlider('AutoShootMaxDist', {
     Text = 'Max Distance',
     Default = 500,
     Min = 5,
@@ -3623,8 +3737,8 @@ AutoShootDistDep:AddSlider('AutoShootMaxDist', {
     Searchable = true,
 })
 
-AutoShootDistDep:SetupDependencies({
-    { AutoShootDistToggle, true },
+AutoShootDep:SetupDependencies({
+    { _74, true },
 })
 
 _67:AddToggle('FaceTarget', {
@@ -4415,6 +4529,7 @@ _78:AddSlider('SpreadAmount', {
     Suffix = '%',
 })
 
+-- provided by rawr.xyz <3
 local _oldRandom
 _oldRandom = hookfunction(math.random, function(...)
     if checkcaller() then return _oldRandom(...) end
@@ -5010,23 +5125,50 @@ _48:OnUnload(function()
     RapidNewDisable()
 end)
 
--- death ac detection
+-- des client ac
 task.spawn(function()
-    local RS = game:GetService("ReplicatedStorage")
+    local misses = 0
+    local missesmax = 50
     while true do
-        local mods = RS:FindFirstChild("Modules")
-        if mods then
-            local x = mods:FindFirstChild("Xeno")
-            if x then x:Destroy() end
+        local found = false
+        local ok = pcall(function()
+            local char = game.Players.LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then return end
+            local mods = RS and RS:FindFirstChild("Modules")
+            if mods then
+                local x = mods:FindFirstChild("Xeno")
+                if x then
+                    found = true
+                    pcall(function() x:Destroy() end)
+                end
+            end
+            local mods2 = RS and RS:FindFirstChild("Modules2")
+            if mods2 then
+                local x = mods2:FindFirstChild("Xeno")
+                if x then
+                    found = true
+                    pcall(function() x:Destroy() end)
+                end
+            end
+        end)
+
+        if ok and found then
+            misses = 0
+        else
+            misses = misses + 1
         end
-        local mods2 = RS:FindFirstChild("Modules2")
-        if mods2 then
-            local x = mods2:FindFirstChild("Xeno")
-            if x then x:Destroy() end
+
+        if misses >= missesmax then
+            break
         end
+
         task.wait(0.1)
     end
+    _G.__xeno_loop_running = false
 end)
+
+_G.__xeno_loop_running = true
 
 -- auto stim logic
 AS_busy = false
@@ -7817,6 +7959,7 @@ _afkto:OnChanged(function(value)
     end
 end)
 
+-- anti stomp
 _G.AntiStompEnabled = false
 _G.AntiStompConnection = nil
 _G.AntiStompCharAdded = nil
@@ -8254,14 +8397,15 @@ end)
 
 _51.PlayerRemoving:Connect(function(e4f5g6h7)
     local wasDetected = _G.b8n4v6d2[e4f5g6h7.UserId]
-    
+
     if wasDetected then
         _48:Notify('A detected Mod has left the game <3\nMod: ' .. e4f5g6h7.DisplayName .. ' ( @' .. e4f5g6h7.Name .. ' )')
     end
-    
+
     _G.b8n4v6d2[e4f5g6h7.UserId] = nil
     _G.j2h5g8f1[e4f5g6h7.UserId] = nil
     _G.lastNotifyTime[e4f5g6h7.UserId] = nil
+    _MOD_CACHE[e4f5g6h7.UserId] = nil
 end)
 
 -- SHARED FUNCTIONS
@@ -17447,8 +17591,10 @@ function DeflectUnload()
     for k in pairs(DeflectToolHooks) do DeflectToolHooks[k] = nil end
 end
 
-if _48 and library then
-    _48:BindDeflectUnload(library)
+if _48 and _48.OnUnload then
+    _48:OnUnload(function()
+        pcall(function() DeflectUnload() end)
+    end)
 end
 
 if Toggles.Deflect then
@@ -17816,7 +17962,6 @@ _48:OnUnload(function()
     _G.serverHopOnMod = false
 
     pcall(DeflectUnload)
-
     pcall(cleanup)
     pcall(_150)
     pcall(_161)
@@ -17843,6 +17988,9 @@ _48:OnUnload(function()
     VoidCycle = 0
     VoidCycleTime = 0
 
+    pcall(function() setfflag("S2PhysicsSenderRate", old_physics_rate) end)
+    
+    if _afkConn then _afkConn:Disconnect() _afkConn = nil end
     if _237 then _237:Disconnect() end
     if _121 then _121:Disconnect() _121 = nil end
     if _254 then _254:Disconnect() end
@@ -17858,6 +18006,39 @@ _48:OnUnload(function()
     if _AA_connections and _AA_connections.charAdded then
         _AA_connections.charAdded:Disconnect()
         _AA_connections.charAdded = nil
+    end
+
+    if _G.__charConns then
+        for _, c in ipairs(_G.__charConns) do
+            pcall(function() c:Disconnect() end)
+        end
+        _G.__charConns = {}
+    end
+
+    if _antislow_thread then pcall(task.cancel, _antislow_thread) _antislow_thread = nil end
+    if _antijump_thread then pcall(task.cancel, _antijump_thread) _antijump_thread = nil end
+    if _G.__autoequipdb_thread then pcall(task.cancel, _G.__autoequipdb_thread) _G.__autoequipdb_thread = nil end
+    if _G.__autoreload_thread then pcall(task.cancel, _G.__autoreload_thread) _G.__autoreload_thread = nil end
+    if _G.__timed_tick_thread then pcall(task.cancel, _G.__timed_tick_thread) _G.__timed_tick_thread = nil end
+    if _G.__xeno_cleanup then pcall(_G.__xeno_cleanup) end
+    if _XENO_stop then pcall(_XENO_stop) end
+    if stopAntiStomp then pcall(stopAntiStomp) end
+
+    if connections then
+        if connections.ESPAdded then pcall(function() connections.ESPAdded:Disconnect() end) connections.ESPAdded = nil end
+        if connections.ESPRemoved then pcall(function() connections.ESPRemoved:Disconnect() end) connections.ESPRemoved = nil end
+        if connections.FriendStatusMonitor then pcall(function() connections.FriendStatusMonitor:Disconnect() end) connections.FriendStatusMonitor = nil end
+    end
+
+    if _MOD_CACHE then table.clear(_MOD_CACHE) end
+    if RapidOldOriginalUpvalues then table.clear(RapidOldOriginalUpvalues) end
+    if RapidNewOriginalUpvalues then table.clear(RapidNewOriginalUpvalues) end
+
+    if _G.aurasst then
+        for _, asset in pairs(_G.aurasst) do
+            if asset then pcall(function() asset:Destroy() end) end
+        end
+        _G.aurasst = nil
     end
 
     if _G.box_esp_connection then
@@ -18025,6 +18206,20 @@ _48:OnUnload(function()
     table.clear(_G.j2h5g8f1)
     table.clear(_G.lastNotifyTime)
 
+    if DeflectHealthState then
+        DeflectHealthState.LastTrustedShooter = nil
+        DeflectHealthState.LastTrustedAt = 0
+        if DeflectHealthState.FiredAt then table.clear(DeflectHealthState.FiredAt) end
+    end
+    if DeflectFireTracker then
+        if DeflectFireTracker.FiredAt then table.clear(DeflectFireTracker.FiredAt) end
+        if DeflectFireTracker.Mouse then table.clear(DeflectFireTracker.Mouse) end
+        if DeflectFireTracker.FireWhy then table.clear(DeflectFireTracker.FireWhy) end
+    end
+    if DeflectPlayerHooks then table.clear(DeflectPlayerHooks) end
+    if DeflectToolHooks then table.clear(DeflectToolHooks) end
+    if DeflectToolNoAmmo then table.clear(DeflectToolNoAmmo) end
+
     if _originalRandom then
         pcall(function() hookfunction(math.random, _originalRandom) end)
         _originalRandom = nil
@@ -18074,6 +18269,17 @@ _48:OnUnload(function()
         end
     end
 
+    if _G.__LSC then
+        _G.__LSC.log = {}
+        _G.__LSC.running = false
+        _G.__LSC.current = nil
+        _G.__LSC.depth = 0
+    end
+    if _G.__capture then
+        _G.__capture.log = {}
+        _G.__capture.enabled = false
+    end
+
     if collectgarbage then collectgarbage() end
 end)
 
@@ -18083,79 +18289,82 @@ _G.IsReloading = false
 
 task.spawn(function()
     while _AR_Running do
-        if not Toggles.AutoReload.Value then
+        if not Toggles.AutoReload or not Toggles.AutoReload.Value then
             task.wait(0.5)
-            continue
-        end
-        local char = _56.Character
-        local tool = char and char:FindFirstChildWhichIsA("Tool")
-        if tool then
-            local ammo = tool:FindFirstChild("Ammo")
-            if not ammo then
-                for _, v in ipairs(tool:GetDescendants()) do
-                    if (v:IsA("IntValue") or v:IsA("NumberValue")) and string.lower(v.Name) == "ammo" then
-                        ammo = v
-                        break
+        else
+            local ok = pcall(function()
+                local char = _56.Character
+                if not char then return end
+                local tool = char:FindFirstChildWhichIsA("Tool")
+                if not tool then return end
+                local ammo = tool:FindFirstChild("Ammo")
+                if not ammo then
+                    for _, v in ipairs(tool:GetDescendants()) do
+                        if (v:IsA("IntValue") or v:IsA("NumberValue")) and string.lower(v.Name) == "ammo" then
+                            ammo = v
+                            break
+                        end
                     end
                 end
-            end
-            if ammo and ammo.Value <= 0 then
-                _G.IsReloading = true
-                keypress(0x52)
-                task.wait(0.05)
-                keyrelease(0x52)
-                task.wait(0.3)
+                if ammo and ammo.Value <= 0 then
+                    _G.IsReloading = true
+                    pcall(function() keypress(0x52) end)
+                    task.wait(0.05)
+                    pcall(function() keyrelease(0x52) end)
+                    task.wait(0.3)
+                    _G.IsReloading = false
+                end
+            end)
+            if not ok then
                 _G.IsReloading = false
             end
+            task.wait(0.3)
         end
-        task.wait(0.3)
     end
+    _G.IsReloading = false
 end)
 
 task.spawn(function()
-    while task.wait(0.15) do
+    while _AR_Running do
         if not Toggles.AutoEquipDB or not Toggles.AutoEquipDB.Value then
             task.wait(0.5)
-            continue
-        end
-        local char = _56.Character
-        if not char then
-            task.wait(0.5)
-            continue
-        end
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            task.wait(0.5)
-            continue
-        end
-        local holding = char:FindFirstChildWhichIsA("Tool")
-        if holding and holding.Name:lower():find("double") then
-            continue
-        end
-        local bp = _56.Backpack
-        local db = nil
-        if bp then
-            for _, t in ipairs(bp:GetChildren()) do
-                if t:IsA("Tool") and t.Name:lower():find("double") then
-                    db = t
-                    break
+        else
+            local ok = pcall(function()
+                local char = _56.Character
+                if not char then return end
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if not humanoid or humanoid.Health <= 0 then return end
+                local holding = char:FindFirstChildWhichIsA("Tool")
+                if holding and holding.Name:lower():find("double") then return end
+                local bp = _56:FindFirstChildOfClass("Backpack")
+                local db = nil
+                if bp then
+                    for _, t in ipairs(bp:GetChildren()) do
+                        if t:IsA("Tool") and t.Name:lower():find("double") then
+                            db = t
+                            break
+                        end
+                    end
                 end
-            end
-        end
-        if not db then
-            for _, t in ipairs(char:GetChildren()) do
-                if t:IsA("Tool") and t.Name:lower():find("double") then
-                    db = t
-                    break
+                if not db then
+                    for _, t in ipairs(char:GetChildren()) do
+                        if t:IsA("Tool") and t.Name:lower():find("double") then
+                            db = t
+                            break
+                        end
+                    end
                 end
-            end
-        end
-        if db and db.Parent ~= char then
-            pcall(function()
-                db.Parent = char
+                if db and db.Parent ~= char then
+                    pcall(function() db.Parent = char end)
+                end
             end)
+            task.wait(0.15)
         end
     end
+end)
+
+_56.CharacterAdded:Connect(function()
+    _G.IsReloading = false
 end)
 loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
 
@@ -18589,18 +18798,15 @@ do
     end
 
     task.spawn(function()
-        while task.wait(TICK) do
-            if Toggles.AutoStim and Toggles.AutoStim.Value then
-                _tryStim()
-            end
-            if Toggles.AutoArmor and Toggles.AutoArmor.Value then
-                _tryArmor()
-            end
-            if Toggles.AutoMask and Toggles.AutoMask.Value then
-                _tryMask()
-            end
+        while _AR_Running do
+            task.wait(TICK)
+            if not _AR_Running then break end
+            if Toggles.AutoStim and Toggles.AutoStim.Value then _tryStim() end
+            if Toggles.AutoArmor and Toggles.AutoArmor.Value then _tryArmor() end
+            if Toggles.AutoMask and Toggles.AutoMask.Value then _tryMask() end
         end
     end)
+
 end
 
 env = getgenv()
@@ -18714,6 +18920,7 @@ function Cleaner:Clean(group)
         return
     end
 
+    local wasRunning = self._running
     self:Stop()
 
     local names = {}
@@ -18731,6 +18938,8 @@ function Cleaner:Clean(group)
         self._playerConn = nil
     end
     table.clear(self._tables)
+
+    if wasRunning then self:Start() end
 end
 
 function Cleaner:Sweep()
@@ -18774,6 +18983,10 @@ function Cleaner:Stop()
 end
 
 function Cleaner:PruneOnLeave(tbl, keyType, cleanup)
+    for _, info in ipairs(self._tables) do
+        if info.tbl == tbl then return tbl end
+    end
+
     self._tables[#self._tables + 1] = { tbl = tbl, key = keyType or "player", cleanup = cleanup }
 
     if not self._playerConn then
@@ -18853,7 +19066,7 @@ function Cleaner:SweepOrphans(chunkName, signals)
         local ok, conns = pcall(getconnections, signal)
         if ok and conns then
             for _, conn in ipairs(conns) do
-                local fn = conn.Function
+                local fn = conn.Function or conn.func or conn.Fn or conn[1]
                 if type(fn) == "function" then
                     local executorOwned = true
                     if isexecutorclosure then executorOwned = isexecutorclosure(fn) end
@@ -18900,7 +19113,9 @@ function Cleaner:Stats()
 end
 
 function Cleaner:BindUnload(library)
-    _48:OnUnload(function() self:Clean() end)
+    local lib = library or _48
+    if not lib or not lib.OnUnload then return end
+    lib:OnUnload(function() self:Clean() end)
 end
 
 env.cleanupforhearts = Cleaner
