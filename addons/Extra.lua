@@ -2889,31 +2889,12 @@ end;
 
 -- < Create other UI elements >
 do
-    -- everything in this block lives in its own ScreenGui at the max DisplayOrder,
-    -- so nothing else can draw on top of notifications, the watermark or the keybind list
-    local OverlayGui = Instance.new('ScreenGui');
-    OverlayGui.Name = 'Overlay';
-    OverlayGui.DisplayOrder = 2147483647;
-    OverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
-    OverlayGui.ResetOnSpawn = false;
-    ProtectGui(OverlayGui);
-    OverlayGui.Parent = CoreGui;
-
-    Library.OverlayGui = OverlayGui;
-
-    -- the main ScreenGui's cleanup hook can't see this one, so give it its own
-    Library:GiveSignal(OverlayGui.DescendantRemoving:Connect(function(Obj)
-        if Library.RegistryMap[Obj] then
-            Library:RemoveFromRegistry(Obj);
-        end;
-    end));
-
     Library.NotificationArea = Library:Create('Frame', {
         BackgroundTransparency = 1;
         Position = UDim2.new(0, 0, 0, 40);
         Size = UDim2.new(0, 300, 0, 200);
         ZIndex = 100;
-        Parent = OverlayGui;
+        Parent = ScreenGui;
     });
 
     Library:Create('UIListLayout', {
@@ -2929,7 +2910,7 @@ do
         Size = UDim2.new(0, 213, 0, 20);
         ZIndex = 200;
         Visible = false;
-        Parent = OverlayGui;
+        Parent = ScreenGui;
     });
 
     local WatermarkInner = Library:Create('Frame', {
@@ -2994,7 +2975,7 @@ do
         Size = UDim2.new(0, 210, 0, 20);
         Visible = false;
         ZIndex = 100;
-        Parent = OverlayGui;
+        Parent = ScreenGui;
     });
 
     local KeybindInner = Library:Create('Frame', {
@@ -3055,6 +3036,109 @@ do
     Library.KeybindFrame = KeybindOuter;
     Library.KeybindContainer = KeybindContainer;
     Library:MakeDraggable(KeybindOuter);
+end;
+
+function Library:SetWatermarkVisibility(Bool)
+    Library.Watermark.Visible = Bool;
+end;
+
+function Library:SetWatermark(Text)
+    local X, Y = Library:GetTextBounds(Text, Library.Font, 14);
+    Library.Watermark.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3);
+    Library:SetWatermarkVisibility(true)
+
+    Library.WatermarkText.Text = Text;
+end;
+
+function Library:Notify(Text, Time)
+    local XSize, YSize = Library:GetTextBounds(Text, Library.Font, 14);
+
+    YSize = YSize + 7
+
+    local NotifyOuter = Library:Create('Frame', {
+        BorderColor3 = Color3.new(0, 0, 0);
+        Position = UDim2.new(0, 100, 0, 10);
+        Size = UDim2.new(0, 0, 0, YSize);
+        ClipsDescendants = true;
+        ZIndex = 100;
+        Parent = Library.NotificationArea;
+    });
+
+    local NotifyInner = Library:Create('Frame', {
+        BackgroundColor3 = Library.MainColor;
+        BorderColor3 = Library.OutlineColor;
+        BorderMode = Enum.BorderMode.Inset;
+        Size = UDim2.new(1, 0, 1, 0);
+        ZIndex = 101;
+        Parent = NotifyOuter;
+    });
+
+    Library:AddToRegistry(NotifyInner, {
+        BackgroundColor3 = 'MainColor';
+        BorderColor3 = 'OutlineColor';
+    }, true);
+
+    local InnerFrame = Library:Create('Frame', {
+        BackgroundColor3 = Color3.new(1, 1, 1);
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, 1, 0, 1);
+        Size = UDim2.new(1, -2, 1, -2);
+        ZIndex = 102;
+        Parent = NotifyInner;
+    });
+
+    local Gradient = Library:Create('UIGradient', {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Library:GetDarkerColor(Library.MainColor)),
+            ColorSequenceKeypoint.new(1, Library.MainColor),
+        });
+        Rotation = -90;
+        Parent = InnerFrame;
+    });
+
+    Library:AddToRegistry(Gradient, {
+        Color = function()
+            return ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Library:GetDarkerColor(Library.MainColor)),
+                ColorSequenceKeypoint.new(1, Library.MainColor),
+            });
+        end
+    });
+
+    local NotifyLabel = Library:CreateLabel({
+        Position = UDim2.new(0, 4, 0, 0);
+        Size = UDim2.new(1, -4, 1, 0);
+        Text = Text;
+        TextXAlignment = Enum.TextXAlignment.Left;
+        TextSize = 14;
+        ZIndex = 103;
+        Parent = InnerFrame;
+    });
+
+    local LeftColor = Library:Create('Frame', {
+        BackgroundColor3 = Library.AccentColor;
+        BorderSizePixel = 0;
+        Position = UDim2.new(0, -1, 0, -1);
+        Size = UDim2.new(0, 3, 1, 2);
+        ZIndex = 104;
+        Parent = NotifyOuter;
+    });
+
+    Library:AddToRegistry(LeftColor, {
+        BackgroundColor3 = 'AccentColor';
+    }, true);
+
+    pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, XSize + 8 + 4, 0, YSize), 'Out', 'Quad', 0.4, true);
+
+    task.spawn(function()
+        wait(Time or 5);
+
+        pcall(NotifyOuter.TweenSize, NotifyOuter, UDim2.new(0, 0, 0, YSize), 'Out', 'Quad', 0.4, true);
+
+        wait(0.4);
+
+        NotifyOuter:Destroy();
+    end);
 end;
 
 function Library:CreateWindow(...)
