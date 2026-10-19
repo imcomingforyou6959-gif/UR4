@@ -42,32 +42,51 @@ local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
 local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
 
 local function EnsureLogoAsset()
-    if type(isfolder) ~= 'function' or type(makefolder) ~= 'function' then
-        return nil;
-    end;
+    local canFS = (type(isfolder) == 'function')
+              and (type(makefolder) == 'function')
+              and (type(isfile) == 'function')
+              and (type(writefile) == 'function')
+
+    if not canFS then
+        return nil
+    end
 
     pcall(function()
         if not isfolder("woodie") then makefolder("woodie") end
+    end)
+    pcall(function()
         if not isfolder("woodie/assets") then makefolder("woodie/assets") end
+    end)
+    pcall(function()
         if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
-    end);
+    end)
 
-    if type(isfile) == 'function' and type(writefile) == 'function' and not isfile(LogoAssetPath) then
-        local ok, data = pcall(function() return game:HttpGet(LogoRawURL) end);
-        if ok and data and #data > 0 then
-            pcall(writefile, LogoAssetPath, data);
-        end;
-    end;
+    local exists = false
+    pcall(function() exists = isfile(LogoAssetPath) end)
 
-    if type(isfile) == 'function' and isfile(LogoAssetPath) then
-        local GetCustomAsset = getcustomasset or getsynasset;
+    if not exists then
+        local ok, data = pcall(function()
+            return game:HttpGet(LogoRawURL)
+        end)
+        if ok and type(data) == 'string' and #data > 0 then
+            pcall(writefile, LogoAssetPath, data)
+        end
+    end
+
+    local hasFile = false
+    pcall(function() hasFile = isfile(LogoAssetPath) end)
+
+    if hasFile then
+        local GetCustomAsset = getcustomasset or getsynasset
         if type(GetCustomAsset) == 'function' then
-            local aok, asset = pcall(GetCustomAsset, LogoAssetPath);
-            if aok then return asset end;
-        end;
-    end;
+            local aok, asset = pcall(GetCustomAsset, LogoAssetPath)
+            if aok and asset then
+                return asset
+            end
+        end
+    end
 
-    return nil;
+    return nil
 end
 
 local ScreenGui = Instance.new('ScreenGui');
