@@ -42,59 +42,45 @@ local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
 local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
 
 local function EnsureLogoAsset()
-    local _rawget = rawget
-    local _G = _G
-
-    local isfolder     = _rawget(_G, "isfolder")
-    local makefolder   = _rawget(_G, "makefolder")
-    local isfile       = _rawget(_G, "isfile")
-    local writefile    = _rawget(_G, "writefile")
-    local GetCustomAsset = _rawget(_G, "getcustomasset") or _rawget(_G, "getsynasset")
-
-    if type(isfolder) ~= "function"
-    or type(makefolder) ~= "function"
-    or type(isfile) ~= "function"
-    or type(writefile) ~= "function" then
-        return nil
-    end
-
-    pcall(makefolder, "woodie")
-    pcall(makefolder, "woodie/assets")
-    pcall(makefolder, LogoAssetFolder)
-
-    local exists = false
-    pcall(function() exists = isfile(LogoAssetPath) end)
-
-    if not exists then
-        local ok, data = pcall(function()
-            return game:HttpGet(LogoRawURL)
-        end)
-        if ok and type(data) == "string" and #data > 0 then
-            pcall(writefile, LogoAssetPath, data)
+    local Ok, Result = pcall(function()
+        if not (isfolder and makefolder and isfile and writefile) then
+            return nil
         end
-    end
 
-    local hasFile = false
-    pcall(function() hasFile = isfile(LogoAssetPath) end)
-    if not hasFile then
+        local GetAsset = getcustomasset or getsynasset
+        if not GetAsset then
+            return nil
+        end
+
+        pcall(makefolder, "woodie")
+        pcall(makefolder, "woodie/assets")
+        pcall(makefolder, LogoAssetFolder)
+
+        if not isfile(LogoAssetPath) then
+            local GOk, Data = pcall(game.HttpGet, game, LogoRawURL)
+            if GOk and type(Data) == "string" and #Data > 0 then
+                pcall(writefile, LogoAssetPath, Data)
+            end
+        end
+
+        if not isfile(LogoAssetPath) then
+            return nil
+        end
+
+        local AOk, Asset = pcall(GetAsset, LogoAssetPath)
+        if AOk and type(Asset) == "string" and Asset ~= "" then
+            return Asset
+        end
+
         return nil
-    end
-
-    if GetCustomAsset == nil then
-        return nil
-    end
-
-    -- getcustomasset may be a function OR a callable userdata; call it either way
-    local aok, asset = pcall(function()
-        return GetCustomAsset(LogoAssetPath)
     end)
 
-    if aok and type(asset) == "string" and asset ~= "" then
-        return asset
+    if Ok then
+        return Result
     end
 
     return nil
-end
+end;
 
 local ScreenGui = Instance.new('ScreenGui');
 ProtectGui(ScreenGui);
@@ -119,16 +105,18 @@ local Library = {
     BackgroundColor = Color3.fromRGB(20, 20, 20);
     AccentColor = Color3.fromRGB(0, 85, 255);
     OutlineColor = Color3.fromRGB(50, 50, 50);
-    RiskColor = Color3.fromRGB(255, 50, 50),
+    RiskColor = Color3.fromRGB(255, 50, 50);
 
     Black = Color3.new(0, 0, 0);
-    Font = Enum.Font.Code,
+    Font = Enum.Font.Code;
 
     OpenedFrames = {};
     DependencyBoxes = {};
     Searchables = {};
 
     Signals = {};
+    UnloadCallbacks = {};
+    Unloaded = false;
     ScreenGui = ScreenGui;
 };
 
@@ -172,7 +160,7 @@ local function GetTeamsString()
     end;
 
     table.sort(TeamList, function(str1, str2) return str1 < str2 end);
-    
+
     return TeamList;
 end;
 
@@ -188,6 +176,8 @@ function Library:SafeCallback(f, ...)
     local success, event = pcall(f, ...);
 
     if not success then
+        event = tostring(event);
+
         local _, i = event:find(":%d+: ");
 
         if not i then
@@ -280,7 +270,7 @@ function Library:MakeDraggable(Instance, Cutoff)
     end)
 
     Library:GiveSignal(InputService.InputChanged:Connect(function(Input)
-        if not Dragging or Input.UserInputType ~= Enum.UserInputType.Touch then return end
+        if not Dragging or not StartOffset or Input.UserInputType ~= Enum.UserInputType.Touch then return end
         Instance.Position = UDim2.new(
             0, Input.Position.X - StartOffset.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
             0, Input.Position.Y - StartOffset.Y + (Instance.Size.Y.Offset * Instance.AnchorPoint.Y)
@@ -297,7 +287,7 @@ end;
 
 Library.IsMobile = IsMobile;
 Library.HoldTime = 0.4;
-Library.TapSlop  = 12
+Library.TapSlop  = 12;
 Library.Scrollers = {};
 
 function Library:IsClick(Input)
@@ -352,7 +342,7 @@ function Library:OnTap(Gui, Callback)
             local Conn;
             Conn = Input.Changed:Connect(function()
                 if Library:IsHeld(Input) then return; end;
-                Conn:Disconnect();
+                if Conn then Conn:Disconnect(); end;
                 if Done then return; end;
                 Done = true;
                 SyncPointer(Input);
@@ -487,10 +477,10 @@ function Library:AddSearchable(Box, Info, Inst, Kind)
 
     while Cur and Guard < 16 do
         Guard = Guard + 1
-        WindowTab = WindowTab or Cur.WindowTab
-        TabboxTab = TabboxTab or Cur.TabboxTab
-        GroupName = GroupName or Cur.GroupName
-        Cur = Cur.ParentBox
+        WindowTab = WindowTab or rawget(Cur, 'WindowTab')
+        TabboxTab = TabboxTab or rawget(Cur, 'TabboxTab')
+        GroupName = GroupName or rawget(Cur, 'GroupName')
+        Cur = rawget(Cur, 'ParentBox')
     end
 
     local Path = WindowTab and WindowTab.Name or ''
@@ -520,10 +510,11 @@ function Library:IsSearchableAvailable(Entry)
     local Cur, Guard = Entry.Owner, 0
     while Cur and Guard < 16 do
         Guard = Guard + 1
-        if Cur.Holder and not Cur.Holder.Visible then
+        local Holder = rawget(Cur, 'Holder')
+        if Holder and not Holder.Visible then
             return false
         end
-        Cur = Cur.ParentBox
+        Cur = rawget(Cur, 'ParentBox')
     end
 
     return true
@@ -608,7 +599,7 @@ end;
 
 function Library:ApplyColorTransparency(Inst)
     local Window = Library.WindowOuter;
-    if not Window or not Inst.Parent then return end;
+    if not Window or not Inst or not Inst.Parent then return end;
 
     local Reg = Library.RegistryMap[Inst];
     if not Reg then return end;
@@ -697,20 +688,35 @@ function Library:GiveSignal(Signal)
 end
 
 function Library:Unload()
-    for Idx = #Library.Signals, 1, -1 do
-        local Connection = table.remove(Library.Signals, Idx)
-        Connection:Disconnect()
+    if Library.Unloaded then
+        return
     end
 
-    if Library.OnUnload then
-        Library.OnUnload()
+    Library.Unloaded = true
+
+    for Idx = #Library.Signals, 1, -1 do
+        local Connection = table.remove(Library.Signals, Idx)
+        pcall(function() Connection:Disconnect() end)
     end
+
+    for _, Callback in ipairs(Library.UnloadCallbacks) do
+        local Ok, Err = pcall(Callback)
+
+        if not Ok then
+            warn('[Library] unload callback errored: ' .. tostring(Err))
+        end
+    end
+
+    table.clear(Library.UnloadCallbacks)
+    table.clear(Library.Searchables)
 
     ScreenGui:Destroy()
 end
 
 function Library:OnUnload(Callback)
-    Library.OnUnload = Callback
+    if type(Callback) == 'function' then
+        table.insert(Library.UnloadCallbacks, Callback)
+    end
 end
 
 Library:GiveSignal(ScreenGui.DescendantRemoving:Connect(function(Instance)
@@ -1134,7 +1140,7 @@ do
             if enter then
                 local r, g, b = RgbBox.Text:match('(%d+),%s*(%d+),%s*(%d+)')
                 if r and g and b then
-                    ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib = Color3.toHSV(Color3.fromRGB(r, g, b))
+                    ColorPicker.Hue, ColorPicker.Sat, ColorPicker.Vib = Color3.toHSV(Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b)))
                 end
             end
 
@@ -1222,6 +1228,8 @@ do
             end;
 
             if Input.UserInputType == Enum.UserInputType.Touch then
+                Update();
+
                 local ChangedConn, EndedConn;
 
                 ChangedConn = InputService.InputChanged:Connect(function(Changed)
@@ -1269,6 +1277,8 @@ do
             end;
 
             if Input.UserInputType == Enum.UserInputType.Touch then
+                Update();
+
                 local ChangedConn, EndedConn;
 
                 ChangedConn = InputService.InputChanged:Connect(function(Changed)
@@ -1335,6 +1345,8 @@ do
                 end;
 
                 if Input.UserInputType == Enum.UserInputType.Touch then
+                    Update();
+
                     local ChangedConn, EndedConn;
 
                     ChangedConn = InputService.InputChanged:Connect(function(Changed)
@@ -1530,7 +1542,7 @@ do
             end;
 
             Label.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if Library:IsClick(Input) then
                     ModeButton:Select();
                     Library:AttemptSave();
                 end;
@@ -1550,7 +1562,7 @@ do
 
             local State = KeyPicker:GetState();
 
-            ContainerLabel.Text = string.format('[%s] %s (%s)', KeyPicker.Value, Info.Text, KeyPicker.Mode);
+            ContainerLabel.Text = string.format('[%s] %s (%s)', tostring(KeyPicker.Value), tostring(Info.Text or ''), tostring(KeyPicker.Mode));
 
             ContainerLabel.Visible = true;
             ContainerLabel.TextColor3 = State and Library.AccentColor or Library.FontColor;
@@ -1587,7 +1599,13 @@ do
                         or Key == 'MB2' and InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)
                         or Key == 'MB3' and InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton3);
                 else
-                    return InputService:IsKeyDown(Enum.KeyCode[KeyPicker.Value]);
+                    local KeyCode = Enum.KeyCode[KeyPicker.Value];
+
+                    if not KeyCode then
+                        return false;
+                    end;
+
+                    return InputService:IsKeyDown(KeyCode);
                 end;
             else
                 return KeyPicker.Toggled;
@@ -1598,7 +1616,11 @@ do
             local Key, Mode = Data[1], Data[2];
             DisplayLabel.Text = Key;
             KeyPicker.Value = Key;
-            ModeButtons[Mode]:Select();
+
+            if ModeButtons[Mode] then
+                ModeButtons[Mode]:Select();
+            end;
+
             KeyPicker:Update();
         end;
 
@@ -1626,62 +1648,74 @@ do
 
         local Picking = false;
 
-        PickOuter.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
-                Picking = true;
+        local function BeginPicking()
+            if Picking then
+                return;
+            end;
 
-                DisplayLabel.Text = '';
+            Picking = true;
 
-                local Break;
-                local Text = '';
+            DisplayLabel.Text = '';
 
-                task.spawn(function()
-                    while (not Break) do
-                        if Text == '...' then
-                            Text = '';
-                        end;
+            local Break;
+            local Text = '';
 
-                        Text = Text .. '.';
-                        DisplayLabel.Text = Text;
-
-                        wait(0.4);
-                    end;
-                end);
-
-                wait(0.2);
-
-                local Event;
-                Event = InputService.InputBegan:Connect(function(Input)
-                    local Key;
-
-                    if Input.UserInputType == Enum.UserInputType.Keyboard then
-                        Key = Input.KeyCode.Name;
-                    elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                        Key = 'MB1';
-                    elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
-                        Key = 'MB2';
-                    elseif Input.UserInputType == Enum.UserInputType.MouseButton3 then
-                        Key = 'MB3';
+            task.spawn(function()
+                while (not Break) do
+                    if Text == '...' then
+                        Text = '';
                     end;
 
-                    if not Key then
-                        return;
-                    end;
+                    Text = Text .. '.';
+                    DisplayLabel.Text = Text;
 
-                    Break = true;
-                    Picking = false;
+                    wait(0.4);
+                end;
+            end);
 
-                    DisplayLabel.Text = Key;
-                    KeyPicker.Value = Key;
+            wait(0.2);
 
-                    Library:SafeCallback(KeyPicker.ChangedCallback, Input.KeyCode or Input.UserInputType)
-                    Library:SafeCallback(KeyPicker.Changed, Input.KeyCode or Input.UserInputType)
+            local Event;
+            Event = InputService.InputBegan:Connect(function(Input)
+                local Key;
 
-                    Library:AttemptSave();
+                if Input.UserInputType == Enum.UserInputType.Keyboard then
+                    Key = Input.KeyCode.Name;
+                elseif Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    Key = 'MB1';
+                elseif Input.UserInputType == Enum.UserInputType.MouseButton2 then
+                    Key = 'MB2';
+                elseif Input.UserInputType == Enum.UserInputType.MouseButton3 then
+                    Key = 'MB3';
+                end;
 
-                    Event:Disconnect();
-                end);
-            elseif Input.UserInputType == Enum.UserInputType.MouseButton2 and not Library:MouseIsOverOpenedFrame() then
+                if not Key then
+                    return;
+                end;
+
+                Break = true;
+                Picking = false;
+
+                DisplayLabel.Text = Key;
+                KeyPicker.Value = Key;
+
+                Library:SafeCallback(KeyPicker.ChangedCallback, Input.KeyCode or Input.UserInputType)
+                Library:SafeCallback(KeyPicker.Changed, Input.KeyCode or Input.UserInputType)
+
+                Library:AttemptSave();
+
+                Event:Disconnect();
+            end);
+        end;
+
+        Library:OnTap(PickOuter, function(Kind)
+            if Library:MouseIsOverOpenedFrame() then
+                return;
+            end;
+
+            if Kind == 'Click' then
+                BeginPicking();
+            elseif Kind == 'Alt' then
                 ModeSelectOuter.Visible = true;
             end;
         end);
@@ -1713,7 +1747,7 @@ do
                 KeyPicker:Update();
             end;
 
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if Library:IsClick(Input) then
                 local AbsPos, AbsSize = ModeSelectOuter.AbsolutePosition, ModeSelectOuter.AbsoluteSize;
 
                 if Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
@@ -1904,7 +1938,7 @@ do
                     end
                 end)
                 task.delay(timeout, function()
-                    connection:disconnect()
+                    connection:Disconnect()
                     bindable:Fire(false)
                 end)
                 return bindable.Event:Wait()
@@ -2106,7 +2140,7 @@ do
             Parent = TextBoxInner;
         });
 
-        local Container = Library:Create('Frame', {
+        local InputContainer = Library:Create('Frame', {
             BackgroundTransparency = 1;
             ClipsDescendants = true;
 
@@ -2134,12 +2168,14 @@ do
             TextXAlignment = Enum.TextXAlignment.Left;
 
             ZIndex = 7;
-            Parent = Container;
+            Parent = InputContainer;
         });
 
         Library:ApplyTextStroke(Box);
 
         function Textbox:SetValue(Text)
+            Text = tostring(Text or '');
+
             if Info.MaxLength and #Text > Info.MaxLength then
                 Text = Text:sub(1, Info.MaxLength);
             end;
@@ -2173,7 +2209,7 @@ do
 
         local function Update()
             local PADDING = 2
-            local reveal = Container.AbsoluteSize.X
+            local reveal = InputContainer.AbsoluteSize.X
 
             if not Box:IsFocused() or Box.TextBounds.X <= reveal - 2 * PADDING then
                 Box.Position = UDim2.new(0, PADDING, 0, 0)
@@ -2952,7 +2988,7 @@ do
             if Dropdown.Multi then
                 local nTable = {};
 
-                for Value, Bool in next, Val do
+                for Value, Bool in next, (type(Val) == 'table' and Val or {}) do
                     if table.find(Dropdown.Values, Value) then
                         nTable[Value] = true
                     end;
@@ -3285,6 +3321,8 @@ function Library:SetWatermarkVisibility(Bool)
 end;
 
 function Library:SetWatermark(Text)
+    Text = tostring(Text);
+
     local X, Y = Library:GetTextBounds(Text, Library.Font, 14);
     Library.Watermark.Size = UDim2.new(0, X + 15, 0, (Y * 1.5) + 3);
     Library:SetWatermarkVisibility(true)
@@ -3293,6 +3331,8 @@ function Library:SetWatermark(Text)
 end;
 
 function Library:Notify(Text, Time)
+    Text = tostring(Text);
+
     local XSize, YSize = Library:GetTextBounds(Text, Library.Font, 14);
 
     YSize = YSize + 7
@@ -3852,8 +3892,8 @@ function Library:CreateWindow(...)
         end;
 
         function Tab:ShowTab()
-            for _, Tab in next, Window.Tabs do
-                Tab:HideTab();
+            for _, OtherTab in next, Window.Tabs do
+                OtherTab:HideTab();
             end;
 
             Blocker.Visible = true;
@@ -3873,7 +3913,6 @@ function Library:CreateWindow(...)
 
         function Tab:SetLayoutOrder(Position)
             TabButton.LayoutOrder = Position;
-            TabListLayout:ApplyLayout();
         end;
 
         function Tab:AddGroupbox(Info)
@@ -4092,8 +4131,8 @@ function Library:CreateWindow(...)
                 });
 
                 function Tab:Show()
-                    for _, Tab in next, Tabbox.Tabs do
-                        Tab:Hide();
+                    for _, OtherTab in next, Tabbox.Tabs do
+                        OtherTab:Hide();
                     end;
 
                     Container.Visible = true;
@@ -4118,7 +4157,7 @@ function Library:CreateWindow(...)
                 function Tab:Resize()
                     local TabCount = 0;
 
-                    for _, Tab in next, Tabbox.Tabs do
+                    for _, OtherTab in next, Tabbox.Tabs do
                         TabCount = TabCount + 1;
                     end;
 
@@ -4219,7 +4258,7 @@ function Library:CreateWindow(...)
         if Toggled then
             Outer.Visible = true;
 
-            if not IsMobile then
+            if not IsMobile and Drawing then
                 task.spawn(function()
                     local State = InputService.MouseIconEnabled;
 
@@ -4395,6 +4434,7 @@ function Library:CreateSpotifyPlayer()
     local PlaceholderImage = "rbxasset://textures/ui/GuiImagePlaceholder.png"
     local PollInterval  = 1
 
+    if not isfolder(Library.Directory or "spotifyforRawr") then makefolder(Library.Directory or "spotifyforRawr") end
     if not isfolder(SpotifyFolder) then makefolder(SpotifyFolder) end
     if not isfolder(CacheFolder)   then makefolder(CacheFolder)   end
 
@@ -4444,10 +4484,10 @@ function Library:CreateSpotifyPlayer()
         end
         return {
             Raw = Clean,
-            AccessToken  = tostring(parsed.access_token  or parsed.token or ""):gsub("^%s*(.-)%s*$","%1"),
-            RefreshToken = tostring(parsed.refresh_token or ""):gsub("^%s*(.-)%s*$","%1"),
-            ClientId     = tostring(parsed.client_id     or ""):gsub("^%s*(.-)%s*$","%1"),
-            ClientSecret = tostring(parsed.client_secret or ""):gsub("^%s*(.-)%s*$","%1"),
+            AccessToken  = (tostring(parsed.access_token  or parsed.token or ""):gsub("^%s*(.-)%s*$","%1")),
+            RefreshToken = (tostring(parsed.refresh_token or ""):gsub("^%s*(.-)%s*$","%1")),
+            ClientId     = (tostring(parsed.client_id     or ""):gsub("^%s*(.-)%s*$","%1")),
+            ClientSecret = (tostring(parsed.client_secret or ""):gsub("^%s*(.-)%s*$","%1")),
             ExpiresAt    = tonumber(parsed.expires_at) or 0,
         }
     end
@@ -5094,10 +5134,6 @@ function Library:CreateSpotifyPlayer()
         Items["VolumeFill"].Size = UDim2.new(1, 0, v / 100, 0)
     end
     SetVolumeUI(50)
-
-    if Icons["Previous"] then
-        Icons["Previous"].Rotation = 180
-    end
 
     Items["ExpandButton"] = New("ImageButton", {
         Name="\0", Parent=Items["SpotifyPlayer"],
