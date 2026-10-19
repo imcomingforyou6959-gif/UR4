@@ -42,26 +42,32 @@ local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
 local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
 
 local function EnsureLogoAsset()
-    if not isfolder("woodie") then makefolder("woodie") end
-    if not isfolder("woodie/assets") then makefolder("woodie/assets") end
-    if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
+    if type(isfolder) ~= 'function' or type(makefolder) ~= 'function' then
+        return nil;
+    end;
 
-    if not isfile(LogoAssetPath) then
-        local ok, data = pcall(game.HttpGet, game, LogoRawURL)
+    pcall(function()
+        if not isfolder("woodie") then makefolder("woodie") end
+        if not isfolder("woodie/assets") then makefolder("woodie/assets") end
+        if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
+    end);
+
+    if type(isfile) == 'function' and type(writefile) == 'function' and not isfile(LogoAssetPath) then
+        local ok, data = pcall(function() return game:HttpGet(LogoRawURL) end);
         if ok and data and #data > 0 then
-            writefile(LogoAssetPath, data)
-        end
-    end
+            pcall(writefile, LogoAssetPath, data);
+        end;
+    end;
 
-    if isfile(LogoAssetPath) then
-        local GetCustomAsset = getcustomasset or getsynasset
-        if GetCustomAsset then
-            local aok, asset = pcall(GetCustomAsset, LogoAssetPath)
-            if aok then return asset end
-        end
-    end
+    if type(isfile) == 'function' and isfile(LogoAssetPath) then
+        local GetCustomAsset = getcustomasset or getsynasset;
+        if type(GetCustomAsset) == 'function' then
+            local aok, asset = pcall(GetCustomAsset, LogoAssetPath);
+            if aok then return asset end;
+        end;
+    end;
 
-    return nil
+    return nil;
 end
 
 local ScreenGui = Instance.new('ScreenGui');
@@ -280,6 +286,16 @@ function Library:IsHeld(Input)
         return S ~= Enum.UserInputState.End and S ~= Enum.UserInputState.Cancel;
     end;
     return InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1);
+end;
+
+function Library:IsClickInput(Input)
+    if not Input then return false; end;
+    return Library:IsClick(Input);
+end;
+
+function Library:IsHoldingInput(Input)
+    if not Input then return false; end;
+    return Library:IsHeld(Input);
 end;
 
 function Library:SetScrollLock(Locked)
