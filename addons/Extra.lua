@@ -42,24 +42,25 @@ local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
 local LogoRawURL      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/mainlogo.png"
 
 local function EnsureLogoAsset()
-    local canFS = (type(isfolder) == 'function')
-              and (type(makefolder) == 'function')
-              and (type(isfile) == 'function')
-              and (type(writefile) == 'function')
+    local _rawget = rawget
+    local _G = _G
 
-    if not canFS then
+    local isfolder     = _rawget(_G, "isfolder")
+    local makefolder   = _rawget(_G, "makefolder")
+    local isfile       = _rawget(_G, "isfile")
+    local writefile    = _rawget(_G, "writefile")
+    local GetCustomAsset = _rawget(_G, "getcustomasset") or _rawget(_G, "getsynasset")
+
+    if type(isfolder) ~= "function"
+    or type(makefolder) ~= "function"
+    or type(isfile) ~= "function"
+    or type(writefile) ~= "function" then
         return nil
     end
 
-    pcall(function()
-        if not isfolder("woodie") then makefolder("woodie") end
-    end)
-    pcall(function()
-        if not isfolder("woodie/assets") then makefolder("woodie/assets") end
-    end)
-    pcall(function()
-        if not isfolder(LogoAssetFolder) then makefolder(LogoAssetFolder) end
-    end)
+    pcall(makefolder, "woodie")
+    pcall(makefolder, "woodie/assets")
+    pcall(makefolder, LogoAssetFolder)
 
     local exists = false
     pcall(function() exists = isfile(LogoAssetPath) end)
@@ -68,22 +69,28 @@ local function EnsureLogoAsset()
         local ok, data = pcall(function()
             return game:HttpGet(LogoRawURL)
         end)
-        if ok and type(data) == 'string' and #data > 0 then
+        if ok and type(data) == "string" and #data > 0 then
             pcall(writefile, LogoAssetPath, data)
         end
     end
 
     local hasFile = false
     pcall(function() hasFile = isfile(LogoAssetPath) end)
+    if not hasFile then
+        return nil
+    end
 
-    if hasFile then
-        local GetCustomAsset = getcustomasset or getsynasset
-        if type(GetCustomAsset) == 'function' then
-            local aok, asset = pcall(GetCustomAsset, LogoAssetPath)
-            if aok and asset then
-                return asset
-            end
-        end
+    if GetCustomAsset == nil then
+        return nil
+    end
+
+    -- getcustomasset may be a function OR a callable userdata; call it either way
+    local aok, asset = pcall(function()
+        return GetCustomAsset(LogoAssetPath)
+    end)
+
+    if aok and type(asset) == "string" and asset ~= "" then
+        return asset
     end
 
     return nil
@@ -2573,7 +2580,7 @@ do
 
                 Library:AttemptSave();
             end;
-        end;
+        end);
 
         Library:AddSearchable(Groupbox, Info, SliderOuter, 'Slider');
 
