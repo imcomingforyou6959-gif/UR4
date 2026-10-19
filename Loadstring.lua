@@ -350,7 +350,6 @@ if _1 and _1 ~= "" then
     _32()
 end
 
-local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
 local _40, _41 = pcall(function()
