@@ -1181,7 +1181,7 @@ LocalPlayer = Players.LocalPlayer
 
 _G.aurp = _G.aurp or {}
 
-local _getobj = getobjects or (game and game.GetObjects and function(id) return game:GetObjects(id) end)
+_getobj = getobjects or (game and game.GetObjects and function(id) return game:GetObjects(id) end)
 _G.aurasst = {}
 if _getobj then
     local _ids = {
@@ -1204,56 +1204,88 @@ _G.aur_r6_to_r15 = {
     ["Left Leg"] = "LeftUpperLeg", ["Right Leg"] = "RightUpperLeg",
 }
 
+_AUR_BODY_PARTS = {}
+for _, name in ipairs({
+    "head", "torso", "uppertorso", "lowertorso", "body", "humanoidrootpart",
+    "root", "hrp", "aura", "effect", "effects", "main", "core", "bodyeffect",
+    "bodyeffects", "part", "meshpart", "unionoperation", "model", "sphere",
+    "ball", "orb", "vfx", "portal", "portal particles", "gravity",
+    "left arm", "right arm", "leftarm", "rightarm",
+    "left leg", "right leg", "leftleg", "rightleg",
+    "leftupperarm", "leftlowerarm", "lefthand", "rightupperarm", "rightlowerarm",
+    "righthand", "leftupperleg", "leftlowerleg", "leftfoot", "rightupperleg",
+    "rightlowerleg", "rightfoot",
+}) do
+    _AUR_BODY_PARTS[name] = true
+end
+
+_AUR_TARGET_MAP = {
+    ["aura"] = "hrp", ["effect"] = "hrp", ["effects"] = "hrp",
+    ["main"] = "hrp", ["core"] = "hrp", ["bodyeffect"] = "hrp",
+    ["bodyeffects"] = "hrp",
+    ["part"] = "hrp", ["meshpart"] = "hrp", ["unionoperation"] = "hrp",
+    ["model"] = "hrp", ["sphere"] = "hrp", ["ball"] = "hrp",
+    ["orb"] = "hrp", ["vfx"] = "hrp",
+    ["portal"] = "hrp", ["portal particles"] = "hrp", ["gravity"] = "hrp",
+    ["head"] = "head",
+    ["torso"] = "torso", ["uppertorso"] = "torso", ["lowertorso"] = "torso",
+    ["body"] = "torso",
+    ["humanoidrootpart"] = "hrp", ["root"] = "hrp", ["hrp"] = "hrp",
+    ["left arm"] = "larm", ["leftarm"] = "larm", ["leftupperarm"] = "larm",
+    ["leftlowerarm"] = "larm", ["lefthand"] = "larm",
+    ["right arm"] = "rarm", ["rightarm"] = "rarm", ["rightupperarm"] = "rarm",
+    ["rightlowerarm"] = "rarm", ["righthand"] = "rarm",
+    ["left leg"] = "lleg", ["leftleg"] = "lleg", ["leftupperleg"] = "lleg",
+    ["leftlowerleg"] = "lleg", ["leftfoot"] = "lleg",
+    ["right leg"] = "rleg", ["rightleg"] = "rleg", ["rightupperleg"] = "rleg",
+    ["rightlowerleg"] = "rleg", ["rightfoot"] = "rleg",
+}
+
 _G.aur_is_body_part = function(name)
     if not name then return false end
-    local l = name:lower()
-    return l == "head" or l == "torso" or l == "uppertorso" or l == "lowertorso"
-        or l == "body" or l == "humanoidrootpart" or l == "root" or l == "hrp"
-        or l == "aura" or l == "effect" or l == "effects" or l == "main" or l == "core"
-        or l == "bodyeffect" or l == "bodyeffects"
-        or l == "part" or l == "meshpart" or l == "unionoperation"
-        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx"
-        or l == "portal" or l == "portal particles" or l == "gravity"
-        or l == "left arm" or l == "right arm" or l == "leftarm" or l == "rightarm"
-        or l == "left leg" or l == "right leg" or l == "leftleg" or l == "rightleg"
-        or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand"
-        or l == "rightupperarm" or l == "rightlowerarm" or l == "righthand"
-        or l == "leftupperleg" or l == "leftlowerleg" or l == "leftfoot"
-        or l == "rightupperleg" or l == "rightlowerleg" or l == "rightfoot"
+    return _AUR_BODY_PARTS[name:lower()] == true
 end
 
 _G.aur_find_target = function(char, name)
     if not char or not name then return nil end
-    local l = name:lower()
-
-    if l == "aura" or l == "effect" or l == "effects"
-        or l == "main" or l == "core" or l == "bodyeffect" or l == "bodyeffects"
-        or l == "part" or l == "meshpart" or l == "unionoperation"
-        or l == "model" or l == "sphere" or l == "ball" or l == "orb" or l == "vfx"
-        or l == "portal" or l == "portal particles" or l == "gravity" then
-        return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+    local key = _AUR_TARGET_MAP[name:lower()]
+    if not key then
+        local direct = char:FindFirstChild(name)
+        if direct then return direct end
+        local mapped = _G.aur_r6_to_r15[name]
+        if mapped then return char:FindFirstChild(mapped) end
+        return nil
     end
-    if l == "head" then return char:FindFirstChild("Head") end
-    if l == "torso" or l == "uppertorso" or l == "lowertorso" or l == "body" then
-        return char:FindFirstChild("UpperTorso") or char:FindFirstChild("LowerTorso") or char:FindFirstChild("Torso")
+    if key == "hrp" then
+        return char:FindFirstChild("HumanoidRootPart")
+            or char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("Torso")
+    elseif key == "head" then return char:FindFirstChild("Head")
+    elseif key == "torso" then
+        return char:FindFirstChild("UpperTorso")
+            or char:FindFirstChild("LowerTorso")
+            or char:FindFirstChild("Torso")
+    elseif key == "larm" then
+        return char:FindFirstChild("LeftUpperArm")
+            or char:FindFirstChild("LeftLowerArm")
+            or char:FindFirstChild("LeftHand")
+            or char:FindFirstChild("Left Arm")
+    elseif key == "rarm" then
+        return char:FindFirstChild("RightUpperArm")
+            or char:FindFirstChild("RightLowerArm")
+            or char:FindFirstChild("RightHand")
+            or char:FindFirstChild("Right Arm")
+    elseif key == "lleg" then
+        return char:FindFirstChild("LeftUpperLeg")
+            or char:FindFirstChild("LeftLowerLeg")
+            or char:FindFirstChild("LeftFoot")
+            or char:FindFirstChild("Left Leg")
+    elseif key == "rleg" then
+        return char:FindFirstChild("RightUpperLeg")
+            or char:FindFirstChild("RightLowerLeg")
+            or char:FindFirstChild("RightFoot")
+            or char:FindFirstChild("Right Leg")
     end
-    if l == "humanoidrootpart" or l == "root" or l == "hrp" then return char:FindFirstChild("HumanoidRootPart") end
-    if l == "left arm" or l == "leftarm" or l == "leftupperarm" or l == "leftlowerarm" or l == "lefthand" then
-        return char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("LeftLowerArm") or char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm")
-    end
-    if l == "right arm" or l == "rightarm" or l == "rightupperarm" or l == "rightlowerarm" or l == "righthand" then
-        return char:FindFirstChild("RightUpperArm") or char:FindFirstChild("RightLowerArm") or char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
-    end
-    if l == "left leg" or l == "leftleg" or l == "leftupperleg" or l == "leftlowerleg" or l == "leftfoot" then
-        return char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("LeftLowerLeg") or char:FindFirstChild("LeftFoot") or char:FindFirstChild("Left Leg")
-    end
-    if l == "right leg" or l == "rightleg" or l == "rightupperleg" or l == "rightlowerleg" or l == "rightfoot" then
-        return char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("RightLowerLeg") or char:FindFirstChild("RightFoot") or char:FindFirstChild("Right Leg")
-    end
-    local direct = char:FindFirstChild(name)
-    if direct then return direct end
-    local mapped = _G.aur_r6_to_r15[name]
-    if mapped then return char:FindFirstChild(mapped) end
     return nil
 end
 
@@ -1263,20 +1295,31 @@ _G.aur_is_effect = function(inst)
         or inst:IsA("Fire") or inst:IsA("Smoke") or inst:IsA("Attachment")
 end
 
+_G.aur_colorables = _G.aur_colorables or {}
+
+function _collectColorables(inst, out)
+    if not inst then return end
+    local c = inst.ClassName
+    if c == "ParticleEmitter" or c == "Trail" or c == "Beam" then
+        out[#out + 1] = { inst = inst, kind = "seq" }
+    elseif c == "PointLight" or c == "SpotLight" then
+        out[#out + 1] = { inst = inst, kind = "color" }
+    end
+    for _, child in ipairs(inst:GetChildren()) do
+        _collectColorables(child, out)
+    end
+end
+
 _G.updaurcol = function()
     local col = _G.aurcolwtff or Color3.fromRGB(255, 255, 255)
     local seq = ColorSequence.new(col)
-    for i = 1, #_G.aurp do
-        local p = _G.aurp[i]
-        if p then
-            if p:IsA("ParticleEmitter") or p:IsA("Trail") or p:IsA("Beam") then p.Color = seq
-            elseif p:IsA("PointLight") or p:IsA("SpotLight") then p.Color = col end
-            local des = p:GetDescendants()
-            for j = 1, #des do
-                local d = des[j]
-                if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") then d.Color = seq
-                elseif d:IsA("PointLight") or d:IsA("SpotLight") then d.Color = col end
-            end
+    local list = _G.aur_colorables
+    for i = 1, #list do
+        local e = list[i]
+        local inst = e.inst
+        if inst.Parent then
+            if e.kind == "seq" then inst.Color = seq
+            else inst.Color = col end
         end
     end
 end
@@ -1287,6 +1330,7 @@ _G.clraur = function()
         if v then v:Destroy() end
     end
     table.clear(_G.aurp)
+    table.clear(_G.aur_colorables)
 end
 
 _G.aur_apply_children = function(src, char)
@@ -1445,6 +1489,12 @@ _G.applaur = function()
     end
 
     clo:Destroy()
+
+    table.clear(_G.aur_colorables)
+    for i = 1, #_G.aurp do
+        _collectColorables(_G.aurp[i], _G.aur_colorables)
+    end
+
     _G.updaurcol()
 end
 
@@ -3452,7 +3502,7 @@ function _G.FOV.Destroy()
     _G.FOV.gui = nil
 end
 
-RunService.RenderStepped:Connect(function()
+_G.FOV._renderConn = RunService.RenderStepped:Connect(function()
     if not _G.FOV.enabled then
         container.Visible = false
         return
@@ -5125,6 +5175,7 @@ _48:OnUnload(function()
     RapidNewDisable()
 end)
 
+RS = _55
 -- des client ac
 task.spawn(function()
     local misses = 0
@@ -5456,13 +5507,35 @@ function AS_buyStim()
     end
 
     local ch = _56.Character
-    if not ch then AS_busy = false AS_shared_lock = false return end
+    if not ch then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+
     local rt = ch:FindFirstChild("HumanoidRootPart")
-    if not rt then AS_busy = false AS_shared_lock = false return end
+    if not rt then
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+
     local stimItem = AS_getStimItem()
-    if not stimItem then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
+    if not stimItem then
+        AS_reequipTool()
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+
     local clickDetector = stimItem:FindFirstChild("ClickDetector")
-    if not clickDetector then AS_reequipTool() AS_busy = false AS_shared_lock = false return end
+    if not clickDetector then
+        AS_reequipTool()
+        AS_busy = false
+        AS_shared_lock = false
+        return
+    end
+
     local primaryPart = stimItem:FindFirstChildWhichIsA("BasePart") or stimItem
     local oc = rt.CFrame
 
@@ -6711,38 +6784,24 @@ BT_Style = 'laser'
 BT_Type = 'Beam'
 BT_Enabled = false
 BT_Conn = nil
-BT_Heartbeat = {}
 BT_ActiveLines = {}
 BT_LineConnection = nil
 
 function BT_SequenceFade(beam, a0, a1)
-    local elapsed = 0
-    local kp = beam.Transparency.Keypoints
-    local t0 = kp[1].Value
-    local t1 = kp[2].Value
-
-    local fn
-    fn = function(dt)
-        elapsed = elapsed + dt
-        local a = math.clamp(elapsed / 0.2, 0, 1)
-        beam.Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, t0 + (1 - t0) * a),
-            NumberSequenceKeypoint.new(1, t1 + (1 - t1) * a),
-        })
-        if a >= 1 then
-            for i = 1, #BT_Heartbeat do
-                if BT_Heartbeat[i] == fn then
-                    table.remove(BT_Heartbeat, i)
-                    break
-                end
-            end
-            if beam then beam:Destroy() end
-            if a0 then a0:Destroy() end
-            if a1 then a1:Destroy() end
-        end
+    if beam then
+        pcall(function()
+            TweenService:Create(
+                beam,
+                TweenInfo.new(0.2, Enum.EasingStyle.Linear),
+                { Width0 = 0, Width1 = 0 }
+            ):Play()
+        end)
     end
-
-    BT_Heartbeat[#BT_Heartbeat + 1] = fn
+    task.delay(0.2, function()
+        if beam then pcall(function() beam:Destroy() end) end
+        if a0   then pcall(function() a0:Destroy()   end) end
+        if a1   then pcall(function() a1:Destroy()   end) end
+    end)
 end
 
 function BT_SpawnBeam(startCF, endCF)
@@ -6967,25 +7026,9 @@ GunVisuals:AddSlider('PlayerBulletTracersLifetime', {
     Callback = function(v) BT_Lifetime = v end,
 })
 
-task.spawn(function()
-    while task.wait(0.03) do
-        if #BT_Heartbeat > 0 then
-            local dt = 0.03
-            for i = #BT_Heartbeat, 1, -1 do
-                local fn = BT_Heartbeat[i]
-                if fn then pcall(fn, dt) end
-            end
-        end
-    end
-end)
-
 _48:OnUnload(function()
     if BT_Conn then BT_Conn:Disconnect() BT_Conn = nil end
     if BT_LineConnection then BT_LineConnection:Disconnect() BT_LineConnection = nil end
-
-    for i = #BT_Heartbeat, 1, -1 do
-        BT_Heartbeat[i] = nil
-    end
 
     for i = #BT_ActiveLines, 1, -1 do
         local entry = BT_ActiveLines[i]
@@ -8374,7 +8417,7 @@ function u6i8o0p2()
     end)
 end
 
-_51.PlayerAdded:Connect(function(a1b2c3d4)
+_G._MOD_PLAYER_ADDED_CONN = _51.PlayerAdded:Connect(function(a1b2c3d4)
     if not _G.x7f3k9m2 then return end
     
     task.spawn(function()
@@ -8395,7 +8438,7 @@ task.spawn(function()
     end
 end)
 
-_51.PlayerRemoving:Connect(function(e4f5g6h7)
+_G._MOD_PLAYER_REMOVING_CONN = _51.PlayerRemoving:Connect(function(e4f5g6h7)
     local wasDetected = _G.b8n4v6d2[e4f5g6h7.UserId]
 
     if wasDetected then
@@ -11020,16 +11063,18 @@ local function _172()
     return true
 end
 
-local function _173()
-    local _174 = {}
-    local _175 = _51:GetPlayers()
-    for _, _154 in ipairs(_175) do
-        if _154 == _56 then continue end
-        if _39 > 0 and _154.UserId == _39 then continue end
-        if not _WL_Allows(_154) then continue end
-        table.insert(_174, _154)
+local _playerBuf = {}
+function _173()
+    table.clear(_playerBuf)
+    for _, plr in ipairs(_51:GetPlayers()) do
+        if plr ~= _56
+            and not (_39 > 0 and plr.UserId == _39)
+            and _WL_Allows(plr)
+        then
+            _playerBuf[#_playerBuf + 1] = plr
+        end
     end
-    return _174
+    return _playerBuf
 end
 
 local function _178(_154)
@@ -11065,6 +11110,13 @@ function _104_IsInFOV(plr)
     if not head then return false end
     local cam = workspace.CurrentCamera
     if not cam then return false end
+
+    local myPos = _56.Character and _56.Character:FindFirstChild("HumanoidRootPart")
+    if myPos then
+        local dist = (cam.CFrame.Position - head.Position).Magnitude
+        if dist > _G.FOV.radius * 20 then return false end
+    end
+
     local screen, onScreen = cam:WorldToViewportPoint(head.Position)
     if not onScreen or screen.Z <= 0 then return false end
     local center = fovCenter()
@@ -11147,14 +11199,77 @@ local function _193()
     _161()
 end
 
+_194_PlayersFolder = workspace:FindFirstChild("Players")
+if not _194_PlayersFolder then
+    task.spawn(function()
+        _194_PlayersFolder = workspace:WaitForChild("Players", 30)
+    end)
+end
+
+_194_Cache = setmetatable({}, { __mode = "k" })
+
+function _194_GetCache(plr)
+    local c = _194_Cache[plr]
+    if c and c.be and c.be.Parent then return c end
+
+    local wpEntry = _194_PlayersFolder and _194_PlayersFolder:FindFirstChild(plr.Name)
+    local be = wpEntry and wpEntry:FindFirstChild("BodyEffects")
+    local armor, dead
+
+    if be then
+        armor = be:FindFirstChild("Armor")
+        dead  = be:FindFirstChild("Dead")
+    end
+
+    c = { be = be, armor = armor, dead = dead, conns = {} }
+    _194_Cache[plr] = c
+
+    if be and not armor then
+        c.conns[#c.conns + 1] = be.ChildAdded:Connect(function(ch)
+            if ch.Name == "Armor" then c.armor = ch end
+            if ch.Name == "Dead"  then c.dead  = ch end
+        end)
+    end
+    return c
+end
+
+function _194_Invalidate(plr)
+    local c = _194_Cache[plr]
+    if c then
+        for _, conn in ipairs(c.conns) do pcall(function() conn:Disconnect() end) end
+        _194_Cache[plr] = nil
+    end
+end
+
+_56.CharacterAdded:Connect(function()
+    _194_Cache = setmetatable({}, { __mode = "k" })
+end)
+
+_51.PlayerRemoving:Connect(function(plr)
+    _194_Invalidate(plr)
+    _104.lasthealth[plr] = nil
+    _104.wasknocked[plr] = nil
+end)
+
+_194_lastText = nil
+function _194_SetText(s)
+    if s ~= _194_lastText then
+        _194_lastText = s
+        _135.Text = s
+    end
+end
+
 local function _194()
     if not _104.active then
-        _135.Text = ""
+        _194_SetText("")
         return
     end
 
     if shared.hitman and shared.hitman.visuals and shared.hitman.visuals.targetinfo then
-        _135.TextColor3 = shared.hitman.visuals.targetinfo.textcolor
+        local tc = shared.hitman.visuals.targetinfo.textcolor
+        if _135.TextColor3 ~= tc then
+            _135.TextColor3 = tc
+        end
     end
 
     if _isMode("target all") or _isMode("multi") then
@@ -11166,14 +11281,14 @@ local function _194()
             end
         end
         if #_174 > 0 then
-            _135.Text = string.format("everyone [%d/%d]", _195, #_174)
+            _194_SetText(string.format("everyone [%d/%d]", _195, #_174))
         else
-            _135.Text = "no players"
+            _194_SetText("no players")
         end
     elseif _104.targetplayer then
         local _154 = _104.targetplayer
         if not _154 then
-            _135.Text = ""
+            _194_SetText("")
             return
         end
         local _144 = _154.Character
@@ -11194,26 +11309,15 @@ local function _194()
                 end
                 _104.lasthealth[_154] = _148.Health
 
+                local c = _194_GetCache(_154)
                 local _armor = 0
-                local _wp = workspace:FindFirstChild("Players")
-                local _wpEntry = _wp and _wp:FindFirstChild(_154.Name)
-                local _bodyFx = _wpEntry and _wpEntry:FindFirstChild("BodyEffects")
-                local _armorVal = _bodyFx and _bodyFx:FindFirstChild("Armor")
-                if _armorVal and _armorVal:IsA("NumberValue") then
-                    _armor = math.floor(_armorVal.Value)
-                elseif _armorVal and _armorVal:IsA("IntValue") then
-                    _armor = _armorVal.Value
+                if c.armor and c.armor:IsA("NumberValue") then
+                    _armor = math.floor(c.armor.Value)
+                elseif c.armor and c.armor:IsA("IntValue") then
+                    _armor = c.armor.Value
                 end
 
-                local _isDeadNow = false
-                if _bodyFx then
-                    local _deadVal = _bodyFx:FindFirstChild("Dead")
-                    if _deadVal and _deadVal.Value == true then
-                        _isDeadNow = true
-                    end
-                end
-
-                if _isDeadNow then
+                if c.dead and c.dead.Value == true then
                     _104._killFiredFor = _104._killFiredFor or {}
                     if not _104._killFiredFor[_154.UserId] then
                         _104._killFiredFor[_154.UserId] = true
@@ -11221,19 +11325,19 @@ local function _194()
                     end
                 end
 
-                _135.Text = string.format("%s  %.0f/%.0f  |  %d ARMOR",
+                _194_SetText(string.format("%s  %.0f/%.0f  |  %d ARMOR",
                     _154.DisplayName,
                     math.floor(_148.Health),
                     math.floor(_148.MaxHealth),
                     _armor
-                )
+                ))
             else
-                _135.Text = _154.DisplayName .. " (Knocked wait...)"
+                _194_SetText(_154.DisplayName .. " (Knocked wait...)")
                 _104.lasthealth[_154] = nil
                 _104.wasknocked[_154] = nil
             end
         else
-            _135.Text = _154.DisplayName .. " (no char)"
+            _194_SetText(_154.DisplayName .. " (no char)")
             _104.lasthealth[_154] = nil
             _104.wasknocked[_154] = nil
             if _154 then
@@ -11245,7 +11349,7 @@ local function _194()
             end
         end
     else
-        _135.Text = ""
+        _194_SetText("")
     end
 end
 
@@ -11921,12 +12025,12 @@ disengageAt = 0
 ReloadingActive = false
 ReloadHoldUntil = 0
 RELOAD_HOLD_TIME = 1.2
-VOID_THRESHOLD = 1000000
+VOID_THRESHOLD = 500000000
 VoidBasePos = nil
 
 VoidCycleTime = 0
 VoidCycleInterval = 0.05
-VoidDistance = 50000000
+VoidDistance = 500000000
 VoidJitterStrength = 4
 VoidJitterRate = 60
 VoidRandomCornerChance = 0.1
@@ -14799,6 +14903,10 @@ end
 
 local _originalRandom = math.random
 
+pcall(function()
+    _229_original = getrawmetatable(game).__namecall
+end)
+
 local _229; _229 = hookmetamethod(game, "__namecall", function(...)
     if checkcaller() then return _229(...) end
     local _230 = {...}
@@ -15211,7 +15319,7 @@ do
         end)
     end
 
-    RunService.RenderStepped:Connect(function()
+    _G.WaifuState._renderConn = RunService.RenderStepped:Connect(function()
         pcall(waifuTick)
     end)
 
@@ -15419,13 +15527,13 @@ function _cleanupPlayerFromDropdowns(plr)
     removeFromSelected("BlacklistEnabled", "BlacklistPlayers")
 end
 
-_51.PlayerAdded:Connect(function()
+_G._WL_BL_TP_PLAYER_ADDED_CONN = _51.PlayerAdded:Connect(function()
     task.defer(_WL_RefreshDropdown)
     task.defer(_BL_RefreshDropdown)
     task.defer(_TP_RefreshDropdown)
 end)
 
-_51.PlayerRemoving:Connect(function(plr)
+_G._WL_BL_TP_PLAYER_REMOVING_CONN = _51.PlayerRemoving:Connect(function(plr)
     _cleanupPlayerFromDropdowns(plr)
     task.defer(_WL_RefreshDropdown)
     task.defer(_BL_RefreshDropdown)
@@ -15679,29 +15787,34 @@ end
 function buildESPText(player, nameText)
     local showNames = espToggleOn("ESPShowNames")
     if not showNames then return "" end
-    local displayName = nameText
-    if _hasModFlag(player.UserId) then
-        displayName = displayName .. " [MOD]"
-    end
-    local character = player.Character
-    if not character then return displayName end
+
     local showDist = espToggleOn("ESPShowDistance")
     local showHp = espToggleOn("ESPShowHealth")
-    if not showDist and not showHp then return displayName end
-    if showDist then
-        local head = character:FindFirstChild("Head")
-        if head then
-            local dist = math.floor((Camera.CFrame.Position - head.Position).Magnitude)
-            displayName = displayName .. " [" .. dist .. "m]"
+    local character = player.Character
+    local dist, hp
+
+    if character and (showDist or showHp) then
+        if showDist then
+            local head = character:FindFirstChild("Head")
+            if head then
+                dist = math.floor((Camera.CFrame.Position - head.Position).Magnitude)
+            end
+        end
+        if showHp then
+            local hum = character:FindFirstChild("Humanoid")
+            if hum then hp = math.floor(hum.Health) end
         end
     end
-    if showHp then
-        local hum = character:FindFirstChild("Humanoid")
-        if hum then
-            displayName = displayName .. " " .. math.floor(hum.Health) .. " HP"
-        end
+
+    local mod = _hasModFlag(player.UserId) and " [MOD]" or ""
+    if not dist and not hp then
+        return nameText .. mod
     end
-    return displayName
+    return string.format("%s%s%s%s",
+        nameText, mod,
+        dist and (" [" .. dist .. "m]") or "",
+        hp and (" " .. hp .. " HP") or ""
+    )
 end
 
 function setAllESPVisible(visible)
@@ -16275,7 +16388,7 @@ Toggles.BoxESPEnabled:OnChanged(function(value)
     end
 end)
 
-Players.PlayerAdded:Connect(function(player)
+_G._BOX_ESP_PLAYER_ADDED_CONN = Players.PlayerAdded:Connect(function(player)
     if Toggles.BoxESPEnabled.Value and not _G.box_esp_boxes[player] then
         local screenGui, boxContainer, topLine, bottomLine, leftLine, rightLine,
               healthBarBackground, healthBar, armorBarBackground, armorBar = createBoxESP(player)
@@ -16294,7 +16407,7 @@ Players.PlayerAdded:Connect(function(player)
     end
 end)
 
-Players.PlayerRemoving:Connect(function(player)
+_G._BOX_ESP_PLAYER_REMOVING_CONN = Players.PlayerRemoving:Connect(function(player)
     if _G.box_esp_boxes[player] then
         if _G.box_esp_boxes[player].screenGui then
             pcall(function() _G.box_esp_boxes[player].screenGui:Destroy() end)
@@ -17961,6 +18074,27 @@ _48:OnUnload(function()
     _G.x7f3k9m2 = false
     _G.serverHopOnMod = false
 
+    if _oldRandom then
+        pcall(function() hookfunction(math.random, _oldRandom) end)
+        _oldRandom = nil
+    end
+
+    if originalNamecall then
+        pcall(function() hookmetamethod(game, "__namecall", originalNamecall) end)
+    end
+    originalNamecall = nil
+    _229_original = nil
+    _229 = nil
+
+    if ORIGINAL_FPDH ~= nil then
+        pcall(function() workspace.FallenPartsDestroyHeight = ORIGINAL_FPDH end)
+    end
+
+    _118 = false
+    _119 = nil
+    _120 = nil
+    _121 = nil
+
     pcall(DeflectUnload)
     pcall(cleanup)
     pcall(_150)
@@ -17989,10 +18123,37 @@ _48:OnUnload(function()
     VoidCycleTime = 0
 
     pcall(function() setfflag("S2PhysicsSenderRate", old_physics_rate) end)
-    
+    pcall(function() setfflag("DFIntDataSenderRate", old_data_rate) end)
+
+    if _G._MOD_PLAYER_ADDED_CONN then pcall(function() _G._MOD_PLAYER_ADDED_CONN:Disconnect() end) _G._MOD_PLAYER_ADDED_CONN = nil end
+    if _G._MOD_PLAYER_REMOVING_CONN then pcall(function() _G._MOD_PLAYER_REMOVING_CONN:Disconnect() end) _G._MOD_PLAYER_REMOVING_CONN = nil end
+    if _G._BOX_ESP_PLAYER_ADDED_CONN then pcall(function() _G._BOX_ESP_PLAYER_ADDED_CONN:Disconnect() end) _G._BOX_ESP_PLAYER_ADDED_CONN = nil end
+    if _G._BOX_ESP_PLAYER_REMOVING_CONN then pcall(function() _G._BOX_ESP_PLAYER_REMOVING_CONN:Disconnect() end) _G._BOX_ESP_PLAYER_REMOVING_CONN = nil end
+    if _G._WL_BL_TP_PLAYER_ADDED_CONN then pcall(function() _G._WL_BL_TP_PLAYER_ADDED_CONN:Disconnect() end) _G._WL_BL_TP_PLAYER_ADDED_CONN = nil end
+    if _G._WL_BL_TP_PLAYER_REMOVING_CONN then pcall(function() _G._WL_BL_TP_PLAYER_REMOVING_CONN:Disconnect() end) _G._WL_BL_TP_PLAYER_REMOVING_CONN = nil end
+
+    if _G.FOV then
+        if _G.FOV._renderConn then
+            pcall(function() _G.FOV._renderConn:Disconnect() end)
+            _G.FOV._renderConn = nil
+        end
+        if _G.FOV.Destroy then pcall(_G.FOV.Destroy) end
+    end
+
+    if _G.WaifuState then
+        if _G.WaifuState._renderConn then
+            pcall(function() _G.WaifuState._renderConn:Disconnect() end)
+            _G.WaifuState._renderConn = nil
+        end
+    end
+
+    if Toggles.AutoStim then pcall(function() Toggles.AutoStim:SetValue(false) end) end
+    if Toggles.AutoArmor then pcall(function() Toggles.AutoArmor:SetValue(false) end) end
+    if Toggles.AutoMask then pcall(function() Toggles.AutoMask:SetValue(false) end) end
+    if Toggles.TactRestock then pcall(function() Toggles.TactRestock:SetValue(false) end) end
+
     if _afkConn then _afkConn:Disconnect() _afkConn = nil end
     if _237 then _237:Disconnect() end
-    if _121 then _121:Disconnect() _121 = nil end
     if _254 then _254:Disconnect() end
     if _255 then _255:Disconnect() end
     if _ForceRestHeartbeat then _ForceRestHeartbeat:Disconnect() _ForceRestHeartbeat = nil end
@@ -18220,12 +18381,6 @@ _48:OnUnload(function()
     if DeflectToolHooks then table.clear(DeflectToolHooks) end
     if DeflectToolNoAmmo then table.clear(DeflectToolNoAmmo) end
 
-    if _originalRandom then
-        pcall(function() hookfunction(math.random, _originalRandom) end)
-        _originalRandom = nil
-    end
-
-    if ChinaHat then ChinaHat:setEnabled(false) end
     if _133 then _133:Destroy() end
 
     _138()
@@ -18280,7 +18435,7 @@ _48:OnUnload(function()
         _G.__capture.enabled = false
     end
 
-    if collectgarbage then collectgarbage() end
+    if collectgarbage then collectgarbage("collect") end
 end)
 
 _AR_Running = true
