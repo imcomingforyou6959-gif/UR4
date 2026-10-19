@@ -407,8 +407,10 @@ wait(1)
 local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
 
 function _safeLoad(url)
+    local separator = url:find("?") and "&" or "?"
+    local freshUrl = url .. separator .. "t=" .. os.time()
     local ok, res = pcall(function()
-        return loadstring(game:HttpGet(url))()
+        return loadstring(game:HttpGet(freshUrl))()
     end)
     if ok and res then return res end
     return nil
