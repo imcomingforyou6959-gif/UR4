@@ -35,7 +35,15 @@ InputService.InputChanged:Connect(SyncPointer);
 
 local HttpService = game:GetService('HttpService');
 local UserInputService = InputService;
-local ProtectGui = protectgui or (syn and syn.protect_gui) or (function() end);
+local ProtectGui = rawget(_G, "protectgui");
+if type(ProtectGui) ~= "function" then
+    local _syn = rawget(_G, "syn");
+    if _syn and type(_syn.protect_gui) == "function" then
+        ProtectGui = _syn.protect_gui;
+    else
+        ProtectGui = function() end;
+    end;
+end;
 
 local LogoAssetFolder = "woodie/assets/images"
 local LogoAssetPath   = LogoAssetFolder .. "/mainlogo.png"
@@ -91,8 +99,9 @@ ScreenGui.Parent = CoreGui;
 local Toggles = {};
 local Options = {};
 
-getgenv().Toggles = Toggles;
-getgenv().Options = Options;
+local _genv = rawget(_G, "getgenv") or function() return _G end;
+pcall(function() _genv().Toggles = Toggles; end);
+pcall(function() _genv().Options = Options; end);
 
 local Library = {
     Registry = {};
@@ -6797,5 +6806,5 @@ function Library:CreateSpotifyPlayer()
 end
 
 Library.Directory = "spotifyforRawr"
-getgenv().Library = Library
+pcall(function() _genv().Library = Library; end);
 return Library
