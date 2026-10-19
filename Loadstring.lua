@@ -8193,15 +8193,45 @@ Toggles.AntiJumpCooldown:OnChanged(function(value)
     end
 end)
 
-_G = _G or {}
 _G.x7f3k9m2 = false
 _G.q4w8r2t6 = "Notify"
 _G.z9m3x5c7 = {73315316, 878771546}
-_G.b8n4v6d2 = {}
-_G.j2h5g8f1 = {}
+_G.b8n4v6d2 = {}          -- detected mods cache (UserId -> true)
+_G.j2h5g8f1 = {}          -- detected mod player objects
 _G.lastNotifyTime = {}
 _G.serverHopDelay = 5
 _G.serverHopOnMod = false
+
+function findPublicServer()
+    local servers = {}
+    local ok, result = pcall(function()
+        return HttpService:JSONDecode(
+            game:HttpGet("https://games.roblox.com/v1/games/"
+                .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100")
+        )
+    end)
+    if ok and result and result.data then
+        for _, server in ipairs(result.data) do
+            if server.playing and server.playing < server.maxPlayers
+               and server.id ~= game.JobId then
+                table.insert(servers, server.id)
+            end
+        end
+    end
+    return servers
+end
+
+function doServerHop()
+    local servers = findPublicServer()
+    if #servers > 0 then
+        local pick = servers[math.random(1, #servers)]
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, pick, LocalPlayer)
+        end)
+    else
+        _48:Notify('No servers found to hop to')
+    end
+end
 
 _78:AddToggle('ModDetectorEnabled', {
     Text = 'Mod Detector',
@@ -8229,9 +8259,9 @@ _78:AddDropdown('ModDetectorAction', {
 
 Options.ModDetectorAction:OnChanged(function()
     _G.q4w8r2t6 = Options.ModDetectorAction.Value
-    
+
     if _G.q4w8r2t6 == "Kick" then
-        for userId, player in pairs(_G.j2h5g8f1) do
+        for _, player in pairs(_G.j2h5g8f1) do
             if player and player.Parent then
                 task.spawn(function()
                     pcall(function()
@@ -8243,54 +8273,28 @@ Options.ModDetectorAction:OnChanged(function()
     elseif _G.q4w8r2t6 == "Unload" then
         _48:Unload()
     elseif _G.q4w8r2t6 == "Server Hop" then
-        if not _G.serverHopOnMod then
-            local hasDetectedMod = false
-            for userId, player in pairs(_G.j2h5g8f1) do
-                if player and player.Parent then
-                    hasDetectedMod = true
-                    break
+        if _G.serverHopOnMod then return end
+        local hasDetectedMod = false
+        for _, player in pairs(_G.j2h5g8f1) do
+            if player and player.Parent then
+                hasDetectedMod = true
+                break
+            end
+        end
+        if hasDetectedMod then
+            _G.serverHopOnMod = true
+            _48:Notify('A Mod is in this server, hopping in '
+                .. _G.serverHopDelay .. ' seconds...')
+            task.spawn(function()
+                task.wait(_G.serverHopDelay)
+                local ok, err = pcall(doServerHop)
+                if not ok then
+                    _48:Notify('Server hop failed: ' .. tostring(err))
                 end
-            end
-            
-            if hasDetectedMod then
-                _G.serverHopOnMod = true
-                _48:Notify('A Mod is in this server, hopping in ' .. _G.serverHopDelay .. ' seconds...')
-                
-                task.spawn(function()
-                    task.wait(_G.serverHopDelay)
-                    
-                    local HttpService = game:GetService("HttpService")
-                    local TeleportService = game:GetService("TeleportService")
-                    local Players = game:GetService("Players")
-                    local LocalPlayer = Players.LocalPlayer
-                    
-                    local servers = {}
-                    local success, result = pcall(function()
-                        return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-                    end)
-                    
-                    if success and result and result.data then
-                        for _, server in ipairs(result.data) do
-                            if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
-                                table.insert(servers, server.id)
-                            end
-                        end
-                    end
-                    
-                    if #servers > 0 then
-                        local randomServer = servers[math.random(1, #servers)]
-                        pcall(function()
-                            TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
-                        end)
-                    else
-                        _48:Notify('No servers found to hop to')
-                    end
-                    
-                    _G.serverHopOnMod = false
-                end)
-            else
-                _48:Notify('No mods detected in this server')
-            end
+                _G.serverHopOnMod = false
+            end)
+        else
+            _48:Notify('No mods detected in this server')
         end
     end
 end)
@@ -8312,28 +8316,21 @@ function w3e5r7t9(a1s2d3f4)
     if not a1s2d3f4 then return false end
     if a1s2d3f4 == _56 then return false end
     if _G.b8n4v6d2[a1s2d3f4.UserId] then return false end
-    
+
     for _, m9n7b5v3 in ipairs(_G.z9m3x5c7) do
-        local c4x6z8a1, q2w4e6r8 = nil, nil
-        local p7o9i1k2 = 0
-        
-        while p7o9i1k2 < 3 do
-            c4x6z8a1, q2w4e6r8 = pcall(function()
+        local tries = 0
+        while tries < 3 do
+            local ok, isIn = pcall(function()
                 return a1s2d3f4:IsInGroup(m9n7b5v3)
             end)
-            
-            if c4x6z8a1 then
-                if q2w4e6r8 == true then
-                    return true
-                end
+            if ok then
+                if isIn == true then return true end
                 break
             end
-            
-            p7o9i1k2 = p7o9i1k2 + 1
+            tries = tries + 1
             task.wait(0.5)
         end
     end
-    
     return false
 end
 
@@ -8341,17 +8338,19 @@ function t5y7u9i1(p8o0l3k6)
     if not _G.x7f3k9m2 then return end
     if not p8o0l3k6 then return end
     if _G.b8n4v6d2[p8o0l3k6.UserId] then return end
-    
+
     _G.b8n4v6d2[p8o0l3k6.UserId] = true
     _G.j2h5g8f1[p8o0l3k6.UserId] = p8o0l3k6
-    
+
     local action = _G.q4w8r2t6 or "Notify"
-    
+
     if action == "Notify" then
-        local currentTime = os.time()
-        if not _G.lastNotifyTime[p8o0l3k6.UserId] or (currentTime - _G.lastNotifyTime[p8o0l3k6.UserId]) >= 300 then
-            _48:Notify('A Mod has joined or is in the game <3\nMod: ' .. p8o0l3k6.DisplayName .. ' ( @' .. p8o0l3k6.Name .. ' )')
-            _G.lastNotifyTime[p8o0l3k6.UserId] = currentTime
+        local now = os.time()
+        local last = _G.lastNotifyTime[p8o0l3k6.UserId]
+        if not last or (now - last) >= 300 then
+            _48:Notify('A Mod has joined or is in the game <3\nMod: '
+                .. p8o0l3k6.DisplayName .. ' ( @' .. p8o0l3k6.Name .. ' )')
+            _G.lastNotifyTime[p8o0l3k6.UserId] = now
         end
     elseif action == "Kick" then
         task.spawn(function()
@@ -8362,49 +8361,23 @@ function t5y7u9i1(p8o0l3k6)
     elseif action == "Unload" then
         _48:Unload()
     elseif action == "Server Hop" then
-        if not _G.serverHopOnMod then
-            _G.serverHopOnMod = true
-            _48:Notify('A Mod has joined, server hopping in ' .. _G.serverHopDelay .. ' seconds...')
-            
-            task.spawn(function()
-                task.wait(_G.serverHopDelay)
-                
-                 HttpService = game:GetService("HttpService")
-                 TeleportService = game:GetService("TeleportService")
-                 Players = game:GetService("Players")
-                 LocalPlayer = Players.LocalPlayer
-                
-                local servers = {}
-                local success, result = pcall(function()
-                    return HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"))
-                end)
-                
-                if success and result and result.data then
-                    for _, server in ipairs(result.data) do
-                        if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
-                            table.insert(servers, server.id)
-                        end
-                    end
-                end
-                
-                if #servers > 0 then
-                    local randomServer = servers[math.random(1, #servers)]
-                    pcall(function()
-                        TeleportService:TeleportToPlaceInstance(game.PlaceId, randomServer, LocalPlayer)
-                    end)
-                else
-                    _48:Notify('No servers found to hop to')
-                end
-                
-                _G.serverHopOnMod = false
-            end)
-        end
+        if _G.serverHopOnMod then return end
+        _G.serverHopOnMod = true
+        _48:Notify('A Mod has joined, server hopping in '
+            .. _G.serverHopDelay .. ' seconds...')
+        task.spawn(function()
+            task.wait(_G.serverHopDelay)
+            local ok, err = pcall(doServerHop)
+            if not ok then
+                _48:Notify('Server hop failed: ' .. tostring(err))
+            end
+            _G.serverHopOnMod = false
+        end)
     end
 end
 
 function u6i8o0p2()
     if not _G.x7f3k9m2 then return end
-    
     task.spawn(function()
         local s3d5f7g9 = _51:GetPlayers()
         for _, h1j2k3l4 in ipairs(s3d5f7g9) do
@@ -8421,7 +8394,6 @@ end
 
 _G._MOD_PLAYER_ADDED_CONN = _51.PlayerAdded:Connect(function(a1b2c3d4)
     if not _G.x7f3k9m2 then return end
-    
     task.spawn(function()
         task.wait(5)
         if a1b2c3d4 and a1b2c3d4.Parent and _G.x7f3k9m2 then
@@ -8444,13 +8416,13 @@ _G._MOD_PLAYER_REMOVING_CONN = _51.PlayerRemoving:Connect(function(e4f5g6h7)
     local wasDetected = _G.b8n4v6d2[e4f5g6h7.UserId]
 
     if wasDetected then
-        _48:Notify('A detected Mod has left the game <3\nMod: ' .. e4f5g6h7.DisplayName .. ' ( @' .. e4f5g6h7.Name .. ' )')
+        _48:Notify('A detected Mod has left the game <3\nMod: '
+            .. e4f5g6h7.DisplayName .. ' ( @' .. e4f5g6h7.Name .. ' )')
     end
 
-    _G.b8n4v6d2[e4f5g6h7.UserId] = nil
-    _G.j2h5g8f1[e4f5g6h7.UserId] = nil
+    _G.b8n4v6d2[e4f5g6h7.UserId]     = nil
+    _G.j2h5g8f1[e4f5g6h7.UserId]     = nil
     _G.lastNotifyTime[e4f5g6h7.UserId] = nil
-    _MOD_CACHE[e4f5g6h7.UserId] = nil
 end)
 
 -- SHARED FUNCTIONS
