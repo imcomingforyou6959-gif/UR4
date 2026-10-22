@@ -1,6 +1,6 @@
 --!native
 --!optimize 2
--- Decoder v9
+-- Decoder v11
 
 local bufferCreate = buffer.create
 local bufferLen    = buffer.len
@@ -30,11 +30,78 @@ local function readu32BE(src, pos)
          + readu8(src, pos + 3)
 end
 
+local SpeedKit
+do
+    local env = getgenv and getgenv() or nil
+    local cached = env and env.SpeedKit
+    if type(cached) == "table" and type(cached.Blend) == "function" then
+        SpeedKit = cached
+    else
+        local speedkitloading =
+            "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/SpeedKit.luau"
+        local ok, source = pcall(function()
+            local req = request or http_request or (syn and syn.request)
+            if req then
+                local rok, resp = pcall(req, {Url = speedkitloading, Method = "GET"})
+                if rok and type(resp) == "table"
+                    and tonumber(resp.StatusCode) == 200
+                    and type(resp.Body) == "string" and #resp.Body > 0 then
+                    return resp.Body
+                end
+            end
+            return game:HttpGet(speedkitloading)
+        end)
+        if ok and type(source) == "string" and #source > 0 then
+            local chunk, err = loadstring(source)
+            if chunk then
+                local bok, kit = pcall(chunk)
+                if bok and type(kit) == "table" then
+                    SpeedKit = kit
+                    if env then env.SpeedKit = kit end
+                else
+                    warn("GifDecoder: SpeedKit failed at runtime: " .. tostring(kit))
+                end
+            else
+                warn("GifDecoder: SpeedKit failed to compile: " .. tostring(err))
+            end
+        else
+            warn("GifDecoder: SpeedKit download failed: " .. tostring(source))
+        end
+    end
+end
+
 local GifDecoder = {}
-GifDecoder.Version = 9
+GifDecoder.Version = 11
+GifDecoder.SpeedKit = SpeedKit
+
+local function acquireBuf(size)
+    return SpeedKit and SpeedKit.acquire(size) or bufferCreate(size)
+end
+local function releaseBuf(buf)
+    if SpeedKit then SpeedKit.release(buf) end
+end
+local function blendPixels(c, dc)
+    if SpeedKit then return SpeedKit.Blend(c, dc) end
+    local a = rshift(c, 24)
+    if a == 255 then return c end
+    if a == 0 then return dc end
+    local cr = band(c, 0xFF)
+    local cg = band(rshift(c, 8), 0xFF)
+    local cb = band(rshift(c, 16), 0xFF)
+    local dr = band(dc, 0xFF)
+    local dg = band(rshift(dc, 8), 0xFF)
+    local db = band(rshift(dc, 16), 0xFF)
+    local da = rshift(dc, 24)
+    local inv = 255 - a
+    local orr = (cr * a + dr * inv) // 255
+    local ogg = (cg * a + dg * inv) // 255
+    local obb = (cb * a + db * inv) // 255
+    local oaa = a + (da * inv) // 255
+    return orr + ogg * 256 + obb * 65536 + oaa * 16777216
+end
 
 local MAX_CANVAS = 8192
-local MAX_FRAME_PIXELS = 67108864          -- 8192 * 8192
+local MAX_FRAME_PIXELS = 67108864           -- 8192 * 8192
 local MAX_TOTAL_FRAMES = 5000
 local DEFAULT_MAX_BYTES = 512 * 1024 * 1024 -- total RGBA kept across all frames
 local YIELD_BYTES = 262144                  -- inflate yields every this many output bytes
@@ -65,7 +132,7 @@ local function readSubBlocks(src, length, position)
         total += math.min(size, length - scan)
         scan += size
     end
-    local joined = bufferCreate(math.max(total, 1))
+    local joined = acquireBuf(math.max(total, 1))
     local write = 0
     scan = position
     while scan < length do
@@ -86,7 +153,7 @@ end
 
 local function extractRect(canvas, canvasWidth, x0, y0, x1, y1)
     local rowBytes = (x1 - x0) * 4
-    local out = bufferCreate(rowBytes * (y1 - y0))
+    local out = bufferCreate(rowBytes * (y1 - y0))  -- owned by caller
     local write = 0
     for y = y0, y1 - 1 do
         bufferCopy(out, write, canvas, (y * canvasWidth + x0) * 4, rowBytes)
@@ -313,7 +380,7 @@ local function decodeGif(data, options)
         globalPalette, position = readPaletteGif(src, length, position, count)
     end
 
-    local canvas = bufferCreate(canvasWidth * canvasHeight * 4)
+    local canvas = acquireBuf(canvasWidth * canvasHeight * 4)
     local tables = getTables()
     local indexBuffer = nil
 
@@ -351,11 +418,13 @@ local function decodeGif(data, options)
                 local idLength = math.min(appSize, length - position)
                 local appId = bufferReadString(src, position, idLength)
                 position += appSize
-                local appData, appSizeUsed
-                appData, appSizeUsed, position = readSubBlocks(src, length, position)
+                local appData, appSizeUsed, nextPos
+                appData, appSizeUsed, nextPos = readSubBlocks(src, length, position)
+                position = nextPos
                 if appId == "NETSCAPE2.0" and appSizeUsed >= 3 and readu8(appData, 0) == 1 then
                     loopCount = readu16(appData, 1)
                 end
+                releaseBuf(appData)
             else
                 position = skipSubBlocks(src, length, position)
             end
@@ -380,12 +449,14 @@ local function decodeGif(data, options)
 
             need(length, position, 1)
             local minCodeSize = readu8(src, position); position += 1
-            local compressed, compressedLength
-            compressed, compressedLength, position = readSubBlocks(src, length, position)
+            local compressed, compressedLength, nextPos
+            compressed, compressedLength, nextPos = readSubBlocks(src, length, position)
+            position = nextPos
 
             local required = expected + 4100
             if not indexBuffer or bufferLen(indexBuffer) < required then
-                indexBuffer = bufferCreate(required)
+                if indexBuffer then releaseBuf(indexBuffer) end
+                indexBuffer = acquireBuf(required)
             end
             local indices = indexBuffer
             lzwDecode(compressed, compressedLength, minCodeSize, expected, indices, tables,
@@ -402,6 +473,8 @@ local function decodeGif(data, options)
             compositeIndices(canvas, indices, left, top, width, height,
                 canvasWidth, canvasHeight, palette, gceTransparent,
                 band(imagePacked, 0x40) ~= 0)
+
+            releaseBuf(compressed)
 
             local dx0, dy0, dx1, dy1
             if frameCount == 0 or fullFrames then
@@ -447,6 +520,7 @@ local function decodeGif(data, options)
                 hasPending = true
             elseif gceDisposal == 3 and saved then
                 restoreRect(canvas, saved, canvasWidth, x0, y0, x1, y1)
+                releaseBuf(saved)
                 pendingX0, pendingY0, pendingX1, pendingY1 = x0, y0, x1, y1
                 hasPending = true
             end
@@ -463,6 +537,9 @@ local function decodeGif(data, options)
     end
 
     if frameCount == 0 then fail("GIF contains no frames") end
+
+    releaseBuf(canvas)
+    if indexBuffer then releaseBuf(indexBuffer) end
 
     return {
         Width = canvasWidth, Height = canvasHeight,
@@ -504,7 +581,8 @@ local function buildTable(lengths, n)
     end
 
     local size = lshift(1, maxLen)
-    local tbl = bufferCreate(size * 4)
+    local tbl = acquireBuf(size * 4)
+    bufferFill(tbl, 0, 0, size * 4)
     for sym = 0, n - 1 do
         local len = lengths[sym + 1]
         if len > 0 then
@@ -525,7 +603,7 @@ local fixedLit, fixedLitMask, fixedDist, fixedDistMask
 
 local function inflateRaw(src, startPos, srcEnd, expected, canYield)
     local bitBuf, bitCount, bytePos = 0, 0, startPos
-    local out = bufferCreate(expected)
+    local out = acquireBuf(expected)
     local outPos = 0
     local nextYield = YIELD_BYTES
 
@@ -638,6 +716,7 @@ local function inflateRaw(src, startPos, srcEnd, expected, canYield)
                 for j = 1, hdist do distL[j] = lengths[hlit + j] end
                 litTbl, litMask = buildTable(litL, hlit)
                 distTbl, distMask = buildTable(distL, hdist)
+                releaseBuf(clTbl)
             end
 
             while true do
@@ -676,6 +755,11 @@ local function inflateRaw(src, startPos, srcEnd, expected, canYield)
                     task.wait()
                 end
             end
+
+            if btype == 2 and litTbl ~= fixedLit then
+                releaseBuf(litTbl)
+                releaseBuf(distTbl)
+            end
         end
 
         if bfinal == 1 then break end
@@ -704,6 +788,43 @@ local function pixelAt(cur, x, bitDepth)
     return band(rshift(readu8(cur, byteIdx), bitOff), lshift(1, bitDepth) - 1)
 end
 
+local function fallbackUnfilter(raw, pos, rowBytes, bpp, filter, prev, cur)
+    bufferCopy(cur, 0, raw, pos, rowBytes)
+    if filter == 1 then
+        for i = bpp, rowBytes - 1 do
+            writeu8(cur, i, band(readu8(cur, i) + readu8(cur, i - bpp), 0xFF))
+        end
+    elseif filter == 2 then
+        for i = 0, rowBytes - 1 do
+            writeu8(cur, i, band(readu8(cur, i) + readu8(prev, i), 0xFF))
+        end
+    elseif filter == 3 then
+        for i = 0, rowBytes - 1 do
+            local a = if i >= bpp then readu8(cur, i - bpp) else 0
+            writeu8(cur, i, band(readu8(cur, i) + rshift(a + readu8(prev, i), 1), 0xFF))
+        end
+    elseif filter == 4 then
+        for i = 0, rowBytes - 1 do
+            local a, c = 0, 0
+            if i >= bpp then
+                a = readu8(cur, i - bpp)
+                c = readu8(prev, i - bpp)
+            end
+            local b = readu8(prev, i)
+            local pa = math.abs(b - c)
+            local pb = math.abs(a - c)
+            local pc = math.abs(a + b - 2 * c)
+            local predictor
+            if pa <= pb and pa <= pc then predictor = a
+            elseif pb <= pc then predictor = b
+            else predictor = c end
+            writeu8(cur, i, band(readu8(cur, i) + predictor, 0xFF))
+        end
+    elseif filter ~= 0 then
+        fail("invalid PNG filter type")
+    end
+end
+
 local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
     palette, colorKey, out, canYield)
 
@@ -711,46 +832,23 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
     local rowBytes = (width * channels * bitDepth + 7) // 8
     local prev = bufferCreate(rowBytes)
     local cur  = bufferCreate(rowBytes)
+    local filters = SpeedKit and SpeedKit.UNFILTER
 
     local pos = 0
     for y = 0, height - 1 do
         local filter = readu8(raw, pos); pos += 1
-        bufferCopy(cur, 0, raw, pos, rowBytes)
-        pos += rowBytes
 
-        if filter == 1 then
-            for i = bpp, rowBytes - 1 do
-                writeu8(cur, i, band(readu8(cur, i) + readu8(cur, i - bpp), 0xFF))
+        if filters then
+            local fn = filters[filter + 1]
+            if fn then
+                fn(raw, pos, rowBytes, bpp, prev, cur)
+            else
+                fail("invalid PNG filter type")
             end
-        elseif filter == 2 then
-            for i = 0, rowBytes - 1 do
-                writeu8(cur, i, band(readu8(cur, i) + readu8(prev, i), 0xFF))
-            end
-        elseif filter == 3 then
-            for i = 0, rowBytes - 1 do
-                local a = if i >= bpp then readu8(cur, i - bpp) else 0
-                writeu8(cur, i, band(readu8(cur, i) + rshift(a + readu8(prev, i), 1), 0xFF))
-            end
-        elseif filter == 4 then
-            for i = 0, rowBytes - 1 do
-                local a, c = 0, 0
-                if i >= bpp then
-                    a = readu8(cur, i - bpp)
-                    c = readu8(prev, i - bpp)
-                end
-                local b = readu8(prev, i)
-                local pa = math.abs(b - c)
-                local pb = math.abs(a - c)
-                local pc = math.abs(a + b - 2 * c)
-                local predictor
-                if pa <= pb and pa <= pc then predictor = a
-                elseif pb <= pc then predictor = b
-                else predictor = c end
-                writeu8(cur, i, band(readu8(cur, i) + predictor, 0xFF))
-            end
-        elseif filter ~= 0 then
-            fail("invalid PNG filter type")
+        else
+            fallbackUnfilter(raw, pos, rowBytes, bpp, filter, prev, cur)
         end
+        pos += rowBytes
 
         local outBase = y * width * 4
 
@@ -810,7 +908,7 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
                 writeu32(out, outBase + x * 4, v + v * 256 + v * 65536 + a * 16777216)
             end
 
-        else
+        else -- colorType 6, bitDepth 16
             for x = 0, width - 1 do
                 writeu32(out, outBase + x * 4,
                     readu8(cur, x * 8)
@@ -989,7 +1087,7 @@ local function decodePng(data, options)
     local decodedFrames = {}
     local totalDuration = 0
     local usedBytes = 0
-    local canvas = bufferCreate(width * height * 4)
+    local canvas = acquireBuf(width * height * 4)
 
     local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
     local hasPending = false
@@ -997,7 +1095,7 @@ local function decodePng(data, options)
     for idx, f in ipairs(frames) do
         local totalBytes = 0
         for _, c in ipairs(f.chunks) do totalBytes += c.len end
-        local comp = bufferCreate(math.max(totalBytes, 1))
+        local comp = acquireBuf(math.max(totalBytes, 1))
         local w = 0
         for _, c in ipairs(f.chunks) do
             bufferCopy(comp, w, src, c.start, c.len)
@@ -1008,7 +1106,7 @@ local function decodePng(data, options)
         local expected = (rowBytes + 1) * f.h
         local raw = zlibInflate(comp, 0, totalBytes, expected, canYield)
 
-        local frameRGBA = bufferCreate(f.w * f.h * 4)
+        local frameRGBA = acquireBuf(f.w * f.h * 4)
         unfilterToRGBA(raw, f.w, f.h, channels, bitDepth, colorType,
             palette, colorKey, frameRGBA, canYield)
 
@@ -1038,20 +1136,7 @@ local function decodePng(data, options)
                             writeu32(canvas, dstOff, c)
                         elseif a > 0 then
                             local dc = readu32(canvas, dstOff)
-                            local cr = band(c, 0xFF)
-                            local cg = band(rshift(c, 8), 0xFF)
-                            local cb = band(rshift(c, 16), 0xFF)
-                            local dr = band(dc, 0xFF)
-                            local dg = band(rshift(dc, 8), 0xFF)
-                            local db = band(rshift(dc, 16), 0xFF)
-                            local da = rshift(dc, 24)
-                            local inv = 255 - a
-                            local orr = (cr * a + dr * inv) // 255
-                            local ogg = (cg * a + dg * inv) // 255
-                            local obb = (cb * a + db * inv) // 255
-                            local oaa = a + (da * inv) // 255
-                            writeu32(canvas, dstOff,
-                                orr + ogg * 256 + obb * 65536 + oaa * 16777216)
+                            writeu32(canvas, dstOff, blendPixels(c, dc))
                         end
                     end
                 end
@@ -1104,9 +1189,14 @@ local function decodePng(data, options)
             hasPending = true
         elseif f.dispose == 2 and saved then
             restoreRect(canvas, saved, width, x0, y0, x1, y1)
+            releaseBuf(saved)
             pendingX0, pendingY0, pendingX1, pendingY1 = x0, y0, x1, y1
             hasPending = true
         end
+
+        releaseBuf(comp)
+        releaseBuf(raw)
+        releaseBuf(frameRGBA)
 
         if yieldEvery and yieldEvery > 0 and idx % yieldEvery == 0 then
             task.wait()
@@ -1116,6 +1206,8 @@ local function decodePng(data, options)
     if not isAnim and #decodedFrames >= 1 then
         decodedFrames[1].Duration = 0
     end
+
+    releaseBuf(canvas)
 
     return {
         Width = width, Height = height,
@@ -1203,18 +1295,23 @@ end
 
 function GifDecoder.decode(data, options)
     assert(typeof(data) == "string", "decode expects bytes as a string")
-    local kind = GifDecoder.detect(data)
-
-    if kind == "gif" then
-        return decodeGif(data, options)
-    elseif kind == "apng" or kind == "png" then
-        return decodePng(data, options)
-    elseif kind == "unknown" then
-        fail("unsupported file format")
-    else
-        fail("decoder only handles GIF/APNG/PNG; " .. kind ..
-             " must be loaded via getcustomasset (static path)")
+    local run = function()
+        local kind = GifDecoder.detect(data)
+        if kind == "gif" then
+            return decodeGif(data, options)
+        elseif kind == "apng" or kind == "png" then
+            return decodePng(data, options)
+        elseif kind == "unknown" then
+            fail("unsupported file format")
+        else
+            fail("decoder only handles GIF/APNG/PNG; " .. kind ..
+                 " must be loaded via getcustomasset (static path)")
+        end
     end
+    if SpeedKit and SpeedKit.hasDesync() and not (options and options.NoWorker) then
+        return SpeedKit.withDesync(run)
+    end
+    return run()
 end
 
 return GifDecoder
