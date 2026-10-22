@@ -7,7 +7,7 @@ local GifRenderer = {}
 GifRenderer.__index = GifRenderer
 
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-GifRenderer.RequiredDecoderVersion = 9
+GifRenderer.RequiredDecoderVersion = 11
 GifRenderer.MaxDeltaTime = 0.25
 
 GifRenderer.FrameBudget = 0.002
