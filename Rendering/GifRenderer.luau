@@ -85,10 +85,6 @@ local function getDecoder()
 	return DecoderCache
 end
 
--- ============================================================================
--- Decoded-GIF cache (LRU, bounded by bytes)
--- ============================================================================
-
 local cache = {}
 local cacheBytes = 0
 local cacheClock = 0
@@ -131,10 +127,6 @@ local function decodeOptions(options)
 	if yield == nil then yield = GifRenderer.DefaultYield end
 	return {Yield = yield, RawDelays = options.RawDelays}
 end
-
--- ============================================================================
--- Shared scheduler
--- ============================================================================
 
 local playing = {}
 local connection = nil
@@ -217,10 +209,6 @@ local function unregister(renderer)
 		connection = nil
 	end
 end
-
--- ============================================================================
--- Construction
--- ============================================================================
 
 local function createEditableImage(w, h)
 	local created, image = pcall(AssetService.CreateEditableImage, AssetService,
@@ -320,7 +308,6 @@ function GifRenderer.new(options: Options)
 	rows = math.ceil(height / tileH)
 
 	if cols == 1 and rows == 1 then
-		-- ---- Single-tile path (backward-compatible behavior) ----
 		local image = createEditableImage(width, height)
 		local label
 		if providedLabel then
@@ -341,7 +328,6 @@ function GifRenderer.new(options: Options)
 		self.ImageLabel = label
 		self._single = true
 	else
-		-- ---- Multi-tile path: split canvas into <=MAX_TILE x MAX_TILE tiles ----
 		local container = providedLabel
 		if not container then
 			container = Instance.new("Frame")
@@ -351,7 +337,7 @@ function GifRenderer.new(options: Options)
 			container.Position = UDim2.fromScale(0.5, 0.5)
 			container.Size = UDim2.fromOffset(width, height)
 		end
-		-- The container should not render its own image; tiles do the drawing.
+
 		if container:IsA("ImageLabel") then
 			container.Image = ""
 			container.ImageTransparency = 1
@@ -480,10 +466,6 @@ function GifRenderer.ClearCache()
 end
 
 function GifRenderer.GetCacheBytes(): number return cacheBytes end
-
--- ============================================================================
--- Frame writing
--- ============================================================================
 
 function GifRenderer:_writeFrame(index)
 	local frame = self.Frames[index]
