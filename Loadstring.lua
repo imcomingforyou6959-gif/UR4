@@ -446,10 +446,30 @@ do
         return nil
     end
 
+    SPEEDKIT_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/SpeedKit.luau"
     DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
     RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
 
     local env = getgenv and getgenv() or _G
+    if type(env.SpeedKit) ~= "table" or type(env.SpeedKit.Blend) ~= "function" then
+        local kitSrc = fetch(SPEEDKIT_URL, true) or fetch(SPEEDKIT_URL, false)
+        if kitSrc then
+            local ok, kit = pcall(function()
+                local mod = loadstring(kitSrc)()
+                if type(mod) == "table" and type(mod.Blend) == "function" then
+                    return mod
+                end
+                return nil
+            end)
+            if ok and kit then
+                env.SpeedKit = kit
+            else
+                warn("[ERROR] SK load failed")
+            end
+        else
+            warn("[ERROR] SK fetch failed")
+        end
+    end
 
     local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
     if decoderSrc then
@@ -462,6 +482,7 @@ do
         end)
         if ok and decoded then
             env.GifDecoder = decoded
+
             local rendererSrc = fetch(RENDERER_URL, true) or fetch(RENDERER_URL, false)
             if rendererSrc then
                 local ok2, renderer = pcall(function()
@@ -14975,7 +14996,7 @@ if _130 then
     setreadonly(_233, true)
 end
 
--- Renderer
+--# Waifu Renderer
 do
     _G.WaifuState = _G.WaifuState or {
         Link = nil, Label = nil, Gif = nil,
