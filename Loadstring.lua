@@ -14975,13 +14975,12 @@ if _130 then
     setreadonly(_233, true)
 end
 
---# Waifu Renderer
+-- Renderer
 do
-    local RunService = game:GetService("RunService")
-
     _G.WaifuState = _G.WaifuState or {
         Link = nil, Label = nil, Gif = nil,
         BaseW = 0, BaseH = 0, Loading = false, TmpFile = nil,
+        FailedLink = nil,
     }
     _G.WaifuGifCache   = _G.WaifuGifCache   or {}
     _G.WaifuBytesCache = _G.WaifuBytesCache or {}
@@ -14995,6 +14994,18 @@ do
         gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
         _G.WaifuGui = gui
+    end
+
+    local USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        .. "AppleWebKit/537.36 (KHTML, like Gecko) "
+        .. "Chrome/124.0.0.0 Safari/537.36"
+
+    local function waifuRefererFor(link)
+        local host = link:match("^https?://([^/]+)")
+        if host then
+            return "https://" .. host .. "/"
+        end
+        return nil
     end
 
     local function waifuDetect(bytes)
@@ -15046,6 +15057,14 @@ do
         end
 
         return "unknown"
+    end
+
+    local function waifuLooksLikeHtml(bytes)
+        local head = bytes:sub(1, 256):lower()
+        return head:match("^%s*<!doctype html") ~= nil
+            or head:match("^%s*<html") ~= nil
+            or head:find("<head", 1, true) ~= nil
+            or head:find("<body", 1, true) ~= nil
     end
 
     local function waifuPngSize(bytes)
@@ -15154,7 +15173,7 @@ do
         end
 
         if UNSUPPORTED_STATIC[kind] then
-            warn("[Rawr] " .. kind .. " is not supported by Roblox's image loader")
+            warn("[Rawr] " .. kind .. " is not supported")
             return false
         end
 
@@ -15232,23 +15251,49 @@ do
     local function waifuFetch(link)
         local sep = link:find("?", 1, true) and "&" or "?"
         local url = link .. sep .. "t=" .. tostring(os.time())
+        local referer = waifuRefererFor(link)
+
+        local headers = {
+            ["User-Agent"] = USER_AGENT,
+            ["Accept"] = "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            ["Accept-Language"] = "en-US,en;q=0.9",
+            ["Cache-Control"] = "no-cache",
+            ["Pragma"] = "no-cache",
+        }
+        if referer then headers["Referer"] = referer end
+
         local req = request or http_request or (syn and syn.request)
         if req then
             local ok, resp = pcall(req, {
-                Url = url, Method = "GET",
-                Headers = {
-                    ["Cache-Control"] = "no-cache, no-store, must-revalidate",
-                    ["Pragma"] = "no-cache",
-                },
+                Url = url, Method = "GET", Headers = headers,
             })
             if ok and type(resp) == "table"
                 and tonumber(resp.StatusCode) == 200
                 and type(resp.Body) == "string" and #resp.Body > 0 then
-                return resp.Body
+                local kind = waifuDetect(resp.Body)
+                if kind ~= "unknown" then
+                    return resp.Body
+                elseif waifuLooksLikeHtml(resp.Body) then
+                    warn("[Rawr] server returned HTML (likely ab or hb), not an image")
+                end
             end
         end
-        local ok, body = pcall(game.HttpGet, game, url)
-        if ok and type(body) == "string" and #body > 0 then return body end
+
+        local ok, body = pcall(function()
+            return game:HttpGet(url, true, headers)
+        end)
+        if ok and type(body) == "string" and #body > 0 then
+            if waifuDetect(body) ~= "unknown" then return body end
+            if waifuLooksLikeHtml(body) then
+                warn("[Rawr] server returned HTML (likely ab or hb), not an image")
+            end
+        end
+
+        local ok2, body2 = pcall(game.HttpGet, game, url)
+        if ok2 and type(body2) == "string" and #body2 > 0 then
+            if waifuDetect(body2) ~= "unknown" then return body2 end
+        end
+
         return nil
     end
 
@@ -15259,17 +15304,24 @@ do
         if not toggle.Value then
             if _G.WaifuState.Label or _G.WaifuState.Gif then waifuDestroy() end
             _G.WaifuState.Link = nil
+            _G.WaifuState.FailedLink = nil
             return
         end
 
         local link = Options["visuals/camera/waifu/link"].Value
         if type(link) ~= "string" or link == "" then return end
         if not link:match("^https?://") then return end
+        
+        if _G.WaifuState.FailedLink and _G.WaifuState.FailedLink ~= link then
+            _G.WaifuState.FailedLink = nil
+        end
 
         if _G.WaifuState.Link == link and (_G.WaifuState.Label or _G.WaifuState.Gif) then
             waifuApply()
             return
         end
+        
+        if _G.WaifuState.FailedLink == link then return end
 
         if _G.WaifuState.Loading then return end
         _G.WaifuState.Loading = true
@@ -15279,7 +15331,8 @@ do
         task.spawn(function()
             local bytes = waifuFetch(link)
             if not bytes or #bytes < 16 then
-                warn("HTTP fetch failed/invaild url")
+                warn("[Rawr] HTTP fetch failed/invalid url")
+                _G.WaifuState.FailedLink = link
                 _G.WaifuState.Link = nil
                 _G.WaifuState.Loading = false
                 return
@@ -15287,6 +15340,7 @@ do
             if waifuLoad(bytes, link) then
                 waifuApply()
             else
+                _G.WaifuState.FailedLink = link
                 _G.WaifuState.Link = nil
             end
             _G.WaifuState.Loading = false
@@ -15303,6 +15357,7 @@ do
             _G.WaifuState.Link = nil
         end
         _G.WaifuState.Loading = false
+        _G.WaifuState.FailedLink = nil
         waifuDestroy()
     end
 
@@ -17834,7 +17889,8 @@ do
         StatusHud.visible = false
     end
 
-    function StatusHud_getPing()
+    -- useless now / keepin cause im lazy
+    --[[ function StatusHud_getPing()
         local net = Stats_S:FindFirstChild("Network")
         if not net then return nil end
         local ssi = net:FindFirstChild("ServerStatsItem")
@@ -17844,7 +17900,7 @@ do
         local ok, v = pcall(function() return dp:GetValue() end)
         if ok and type(v) == "number" then return math.floor(v) end
         return nil
-    end
+    end ]]--
 
     function StatusHud_getTargetStatus(target)
         if not target or not target.Parent then
