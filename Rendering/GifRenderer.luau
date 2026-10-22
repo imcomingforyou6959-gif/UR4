@@ -1,5 +1,5 @@
 --!nonstrict
--- GifRenderer v2: one shared scheduler, near-zero idle cost, bounded cache.
+-- GifRenderer v3
 local AssetService = game:GetService("AssetService")
 local RunService   = game:GetService("RunService")
 
@@ -7,14 +7,16 @@ local GifRenderer = {}
 GifRenderer.__index = GifRenderer
 
 GifRenderer.DecoderUrl = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
-GifRenderer.RequiredDecoderVersion = 8
+GifRenderer.RequiredDecoderVersion = 9
 GifRenderer.MaxDeltaTime = 0.25
 
--- Tunables (global)
-GifRenderer.FrameBudget = 0.002            -- max seconds of texture writes per Heartbeat before deferring the rest
-GifRenderer.CacheBudgetBytes = 48 * 1024 * 1024
-GifRenderer.Adaptive = true                -- auto-lower update rate when the game's FPS drops
-GifRenderer.DefaultYield = 8               -- decoder yields every N frames so loading never freezes the game
+GifRenderer.FrameBudget = 0.002
+GifRenderer.CacheBudgetBytes = 256 * 1024 * 1024
+GifRenderer.Adaptive = true
+GifRenderer.DefaultYield = 8
+
+local MAX_TILE = 1024              -- hard limit for a single EditableImage side
+local MAX_CANVAS = 8192            -- overall canvas limit
 
 export type Frame = {
 	Pixels: buffer,
@@ -33,10 +35,10 @@ export type Options = {
 	Speed: number?,
 	OnFinished: ((any) -> ())?,
 
-	LowPower: boolean?,   -- caps updates at 30/s unless UpdateRate is set
-	UpdateRate: number?,  -- max texture updates per second (0 = uncapped)
-	MaxFrameSkip: number?, -- ignored, kept for compatibility
-	SkipDuplicates: boolean?, -- ignored, kept for compatibility
+	LowPower: boolean?,
+	UpdateRate: number?,
+	MaxFrameSkip: number?,
+	SkipDuplicates: boolean?,
 }
 
 local DecoderCache
@@ -84,7 +86,7 @@ local function getDecoder()
 end
 
 -- ============================================================================
--- Decoded-GIF cache (LRU, bounded by bytes so low-end devices don't run out of memory)
+-- Decoded-GIF cache (LRU, bounded by bytes)
 -- ============================================================================
 
 local cache = {}
@@ -131,14 +133,13 @@ local function decodeOptions(options)
 end
 
 -- ============================================================================
--- Shared scheduler: ONE Heartbeat connection drives every playing renderer.
--- Renderers only exist in the list while playing, so idle cost is zero.
+-- Shared scheduler
 -- ============================================================================
 
 local playing = {}
 local connection = nil
 local rotate = 0
-local throttle = 1      -- adaptive multiplier on each renderer's minimum update interval
+local throttle = 1
 local dtAverage = 1 / 60
 
 local function onHeartbeat(dt)
@@ -168,7 +169,6 @@ local function onHeartbeat(dt)
 			renderer.Playing = false
 		end
 		if not renderer.Playing then removeDead = true end
-		-- Out of write budget: resume from the next renderer next frame so nobody starves.
 		if k < count - 1 and os.clock() > deadline then
 			rotate = first + k + 1
 			cut = true
@@ -218,11 +218,25 @@ local function unregister(renderer)
 	end
 end
 
+-- ============================================================================
+-- Construction
+-- ============================================================================
+
+local function createEditableImage(w, h)
+	local created, image = pcall(AssetService.CreateEditableImage, AssetService,
+		{Size = Vector2.new(w, h)})
+	if not created then
+		error("GifRenderer: couldn't create an EditableImage (" .. tostring(image) .. ")", 3)
+	end
+	return image
+end
+
 function GifRenderer.new(options: Options)
 	assert(options and options.Frames and #options.Frames > 0, "Frames cannot be empty")
 	local width  = math.floor(options.Size.X)
 	local height = math.floor(options.Size.Y)
-	assert(width > 0 and height > 0 and width <= 1024 and height <= 1024, "Size must be 1..1024")
+	assert(width > 0 and height > 0 and width <= MAX_CANVAS and height <= MAX_CANVAS,
+		"Size must be 1.." .. MAX_CANVAS)
 
 	local frameCount = #options.Frames
 	local defaultDuration = options.DefaultFrameDuration or (1 / 12)
@@ -287,21 +301,95 @@ function GifRenderer.new(options: Options)
 		_visible = true,
 		_visibleCheckAt = 0,
 		_registered = false,
+		_tiles = {},
+		_images = {},
+		_labels = {},
+		_scratch = {},
+		_transparency = 0,
+		_single = true,
 	}, GifRenderer)
 
-	local created, image = pcall(AssetService.CreateEditableImage, AssetService,
-		{Size = Vector2.new(width, height)})
-	if not created then
-		error("GifRenderer: couldn't create an EditableImage (" .. tostring(image) .. ")", 2)
-	end
-	self.Image = image
-	self._write = image.WritePixelsBuffer
+	local providedLabel = options.ImageLabel
+	local cols = math.ceil(width / MAX_TILE)
+	local rows = math.ceil(height / MAX_TILE)
+	local tileW = math.ceil(width / cols)
+	local tileH = math.ceil(height / rows)
+	if tileW > MAX_TILE then tileW = MAX_TILE end
+	if tileH > MAX_TILE then tileH = MAX_TILE end
+	cols = math.ceil(width / tileW)
+	rows = math.ceil(height / tileH)
 
-	local label = options.ImageLabel
-	if label then
+	if cols == 1 and rows == 1 then
+		-- ---- Single-tile path (backward-compatible behavior) ----
+		local image = createEditableImage(width, height)
+		local label
+		if providedLabel then
+			label = providedLabel
+		else
+			label = Instance.new("ImageLabel")
+			label.BackgroundTransparency = 1
+			label.BorderSizePixel = 0
+			label.AnchorPoint = Vector2.new(0.5, 0.5)
+			label.Position = UDim2.fromScale(0.5, 0.5)
+			label.Size = UDim2.fromOffset(width, height)
+			label.ScaleType = Enum.ScaleType.Fit
+		end
 		label.ImageContent = Content.fromObject(image)
-		self.LabelConnection = label.Destroying:Connect(function() self:Destroy() end)
+		self._images[1] = image
+		self._labels[1] = label
+		self._tiles[1] = {x = 0, y = 0, w = width, h = height, image = image, label = label}
+		self.ImageLabel = label
+		self._single = true
+	else
+		-- ---- Multi-tile path: split canvas into <=MAX_TILE x MAX_TILE tiles ----
+		local container = providedLabel
+		if not container then
+			container = Instance.new("Frame")
+			container.BackgroundTransparency = 1
+			container.BorderSizePixel = 0
+			container.AnchorPoint = Vector2.new(0.5, 0.5)
+			container.Position = UDim2.fromScale(0.5, 0.5)
+			container.Size = UDim2.fromOffset(width, height)
+		end
+		-- The container should not render its own image; tiles do the drawing.
+		if container:IsA("ImageLabel") then
+			container.Image = ""
+			container.ImageTransparency = 1
+		end
+
+		local idx = 0
+		for row = 0, rows - 1 do
+			for col = 0, cols - 1 do
+				local x = col * tileW
+				local y = row * tileH
+				local w = math.min(tileW, width - x)
+				local h = math.min(tileH, height - y)
+				if w > 0 and h > 0 then
+					local image = createEditableImage(w, h)
+					local label = Instance.new("ImageLabel")
+					label.BackgroundTransparency = 1
+					label.BorderSizePixel = 0
+					label.ScaleType = Enum.ScaleType.Stretch
+					label.Position = UDim2.fromScale(x / width, y / height)
+					label.Size = UDim2.fromScale(w / width, h / height)
+					label.ImageTransparency = self._transparency
+					label.ImageContent = Content.fromObject(image)
+					label.Parent = container
+					idx += 1
+					self._images[idx] = image
+					self._labels[idx] = label
+					self._tiles[idx] = {x = x, y = y, w = w, h = h, image = image, label = label}
+				end
+			end
+		end
+		self.ImageLabel = container
+		self._single = false
 	end
+
+	if self.ImageLabel then
+		self.LabelConnection = self.ImageLabel.Destroying:Connect(function() self:Destroy() end)
+	end
+
 	self:_writeFrame(1)
 
 	if options.AutoPlay then self:Play() end
@@ -343,8 +431,6 @@ function GifRenderer.fromUrl(url: string, options)
 	return GifRenderer.fromGif(loadGif(url, options), options)
 end
 
--- Non-blocking: callback(renderer, nil) or callback(nil, errorMessage).
--- Concurrent requests for the same URL share one download + decode.
 local pendingLoads = {}
 
 function GifRenderer.fromUrlAsync(url: string, options, callback)
@@ -380,7 +466,6 @@ function GifRenderer.fromUrlAsync(url: string, options, callback)
 	end)
 end
 
--- Decode ahead of time so the first show is instant. callback(ok, err) is optional.
 function GifRenderer.preload(url: string, options, callback)
 	options = options or {}
 	task.spawn(function()
@@ -396,8 +481,51 @@ end
 
 function GifRenderer.GetCacheBytes(): number return cacheBytes end
 
+-- ============================================================================
+-- Frame writing
+-- ============================================================================
+
 function GifRenderer:_writeFrame(index)
-	self._write(self.Image, self._positions[index], self._sizes[index], self.Frames[index].Pixels)
+	local frame = self.Frames[index]
+	local fx = frame.X or 0
+	local fy = frame.Y or 0
+	local fw = frame.Width or self.Width
+	local fh = frame.Height or self.Height
+	local pixels = frame.Pixels
+
+	if self._single then
+		self._images[1]:WritePixelsBuffer(Vector2.new(fx, fy), Vector2.new(fw, fh), pixels)
+		return
+	end
+
+	for i = 1, #self._tiles do
+		local tile = self._tiles[i]
+		local ox = math.max(tile.x, fx)
+		local oy = math.max(tile.y, fy)
+		local ex = math.min(tile.x + tile.w, fx + fw)
+		local ey = math.min(tile.y + tile.h, fy + fh)
+		if ox < ex and oy < ey then
+			local sw = ex - ox
+			local sh = ey - oy
+			local srcFx = ox - fx
+			local srcFy = oy - fy
+			local rowBytes = sw * 4
+			local size = rowBytes * sh
+			local scr = self._scratch[i]
+			if not scr or buffer.len(scr) ~= size then
+				scr = buffer.create(size)
+				self._scratch[i] = scr
+			end
+			for row = 0, sh - 1 do
+				buffer.copy(scr, row * rowBytes, pixels,
+					((srcFy + row) * fw + srcFx) * 4, rowBytes)
+			end
+			self._images[i]:WritePixelsBuffer(
+				Vector2.new(ox - tile.x, oy - tile.y),
+				Vector2.new(sw, sh),
+				scr)
+		end
+	end
 end
 
 function GifRenderer:_showFrame(from: number, target: number)
@@ -414,7 +542,9 @@ function GifRenderer:_checkVisible(): boolean
 	local label = self.ImageLabel
 	if not label then return true end
 	if not label:IsDescendantOf(game) then return false end
-	if label.ImageTransparency >= 1 then return false end
+	if label:IsA("ImageLabel") and label.ImageTransparency >= 1 and self._single then
+		return false
+	end
 	local size = label.AbsoluteSize
 	if size.X <= 0 or size.Y <= 0 then return false end
 	local object = label
@@ -429,20 +559,19 @@ function GifRenderer:_checkVisible(): boolean
 	return true
 end
 
--- Called by the shared scheduler. Cheap unless a frame boundary was actually crossed.
 function GifRenderer:_tick(now: number)
 	if now >= self._visibleCheckAt then
 		self._visibleCheckAt = now + 0.25
 		self._visible = self:_checkVisible()
 	end
 	if not self._visible then
-		self._last = now -- hidden time doesn't count; no catch-up burst when shown again
+		self._last = now
 		return
 	end
 
 	local dt = (now - self._last) * self.Speed
 	if dt < self._minDt * throttle then return end
-	if dt < self._durations[self.FrameIndex] - self.Elapsed then return end -- next frame not due yet
+	if dt < self._durations[self.FrameIndex] - self.Elapsed then return end
 
 	self._last = now
 	self:_advance(math.min(dt, GifRenderer.MaxDeltaTime))
@@ -492,7 +621,6 @@ function GifRenderer:SetFrame(index: number)
 	self:_showFrame(if index > from then from else 0, index)
 end
 
--- Jump to a time in seconds (clamped to the animation length).
 function GifRenderer:Seek(seconds: number)
 	assert(not self.Destroyed, "Renderer has been destroyed")
 	seconds = math.clamp(seconds, 0, math.max(self.TotalDuration - 1e-4, 0))
@@ -510,6 +638,15 @@ end
 
 function GifRenderer:SetSpeed(speed: number) self.Speed = math.max(speed, 0) end
 function GifRenderer:SetLooped(looped: boolean) self.Looped = looped end
+
+function GifRenderer:SetTransparency(t: number)
+	t = math.clamp(t, 0, 1)
+	self._transparency = t
+	for i = 1, #self._labels do
+		self._labels[i].ImageTransparency = t
+	end
+end
+
 function GifRenderer:GetFrameCount(): number return self.FrameCount end
 function GifRenderer:GetDuration(): number return self.TotalDuration end
 function GifRenderer:IsPlaying(): boolean return self.Playing end
@@ -545,11 +682,22 @@ function GifRenderer:Destroy()
 	self.Playing = false
 	unregister(self)
 	if self.LabelConnection then self.LabelConnection:Disconnect(); self.LabelConnection = nil end
-	local label = self.ImageLabel
-	if label and label.Parent then
-		pcall(function() label.ImageContent = Content.none end)
+	if self._single then
+		local label = self.ImageLabel
+		if label and label.Parent and label:IsA("ImageLabel") then
+			pcall(function() label.ImageContent = Content.none end)
+		end
+	else
+		for i = 1, #self._labels do
+			local lbl = self._labels[i]
+			if lbl and lbl.Parent then
+				pcall(function() lbl:Destroy() end)
+			end
+		end
 	end
-	self.Image:Destroy()
+	for i = 1, #self._images do
+		pcall(function() self._images[i]:Destroy() end)
+	end
 end
 
 return GifRenderer
