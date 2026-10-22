@@ -1,6 +1,6 @@
 --!native
 --!optimize 2
--- Decoder v8: GIF, PNG and APNG to RGBA delta frames.
+-- Decoder v9
 
 local bufferCreate = buffer.create
 local bufferLen    = buffer.len
@@ -31,13 +31,14 @@ local function readu32BE(src, pos)
 end
 
 local GifDecoder = {}
-GifDecoder.Version = 8
+GifDecoder.Version = 9
 
-local MAX_CANVAS = 1024
-local MAX_FRAME_PIXELS = 16777216
+local MAX_CANVAS = 8192
+local MAX_FRAME_PIXELS = 67108864          -- 8192 * 8192
 local MAX_TOTAL_FRAMES = 5000
-local DEFAULT_MAX_BYTES = 128 * 1024 * 1024 -- total RGBA kept across all frames
+local DEFAULT_MAX_BYTES = 512 * 1024 * 1024 -- total RGBA kept across all frames
 local YIELD_BYTES = 262144                  -- inflate yields every this many output bytes
+local YIELD_PIXELS = 65536                  -- LZW yields every this many output pixels
 
 local function fail(msg) error("GifDecoder: " .. msg, 3) end
 local function need(len, pos, count)
@@ -139,7 +140,7 @@ local function readPaletteGif(src, length, position, count)
     return palette, position
 end
 
-local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, padValue)
+local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, padValue, canYield)
     if minCodeSize < 2 or minCodeSize > 8 then fail("invalid LZW minimum code size") end
     local prefix, suffix, length, first = tables.prefix, tables.suffix, tables.length, tables.first
     local clearCode = lshift(1, minCodeSize)
@@ -156,6 +157,8 @@ local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, 
     local oldCode = -1
 
     local bytePosition, bitBuffer, bitCount, outCount = 0, 0, 0, 0
+    local nextYield = YIELD_PIXELS
+
     while outCount < expected do
         while bitCount < codeSize and bytePosition < srcLength do
             bitBuffer = bor(bitBuffer, lshift(readu8(src, bytePosition), bitCount))
@@ -223,6 +226,11 @@ local function lzwDecode(src, srcLength, minCodeSize, expected, output, tables, 
             end
             oldCode = code
         end
+
+        if canYield and outCount >= nextYield then
+            nextYield = outCount + YIELD_PIXELS
+            task.wait()
+        end
     end
     if outCount < expected then
         bufferFill(output, outCount, padValue, expected - outCount)
@@ -277,6 +285,7 @@ end
 
 local function decodeGif(data, options)
     local yieldEvery  = options and options.Yield
+    local canYield    = yieldEvery ~= nil and yieldEvery > 0
     local fullFrames  = options ~= nil and options.FullFrames == true
     local rawDelays   = options ~= nil and options.RawDelays == true
     local maxBytes    = options and options.MaxBytes or DEFAULT_MAX_BYTES
@@ -379,7 +388,8 @@ local function decodeGif(data, options)
                 indexBuffer = bufferCreate(required)
             end
             local indices = indexBuffer
-            lzwDecode(compressed, compressedLength, minCodeSize, expected, indices, tables, gceTransparent or 0)
+            lzwDecode(compressed, compressedLength, minCodeSize, expected, indices, tables,
+                gceTransparent or 0, canYield)
 
             local x0, y0, x1, y1 = clampRect(left, top, width, height, canvasWidth, canvasHeight)
             local hasRect = x0 < x1 and y0 < y1
@@ -443,7 +453,7 @@ local function decodeGif(data, options)
 
             gceDelay, gceTransparent, gceDisposal = 0, nil, 0
 
-            if yieldEvery and yieldEvery > 0 and frameCount % yieldEvery == 0 then
+            if canYield and yieldEvery > 1 and frameCount % yieldEvery == 0 then
                 task.wait()
             end
         else
@@ -475,9 +485,6 @@ local function reverseBits(code, len)
     return r
 end
 
--- lengths is a 1-based array of code lengths for symbols 0..n-1.
--- Returns a buffer of u32 entries (codeLength * 65536 + symbol) indexed by the next
--- maxLen stream bits (LSB first), plus the mask for that index.
 local function buildTable(lengths, n)
     local count = {}
     for i = 0, 15 do count[i] = 0 end
@@ -497,7 +504,7 @@ local function buildTable(lengths, n)
     end
 
     local size = lshift(1, maxLen)
-    local tbl = bufferCreate(size * 4) -- zero filled, entry 0 = invalid
+    local tbl = bufferCreate(size * 4)
     for sym = 0, n - 1 do
         local len = lengths[sym + 1]
         if len > 0 then
@@ -556,7 +563,6 @@ local function inflateRaw(src, startPos, srcEnd, expected, canYield)
         local btype = bits(2)
 
         if btype == 0 then
-            -- stored block: drop partial byte, give back bytes we read ahead
             local drop = bitCount % 8
             bitBuf = rshift(bitBuf, drop)
             bitCount -= drop
@@ -749,7 +755,7 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
         local outBase = y * width * 4
 
         if colorType == 6 and bitDepth == 8 then
-            bufferCopy(out, outBase, cur, 0, rowBytes) -- already RGBA
+            bufferCopy(out, outBase, cur, 0, rowBytes)
 
         elseif colorType == 3 then
             for x = 0, width - 1 do
@@ -804,7 +810,7 @@ local function unfilterToRGBA(raw, width, height, channels, bitDepth, colorType,
                 writeu32(out, outBase + x * 4, v + v * 256 + v * 65536 + a * 16777216)
             end
 
-        else -- colorType 6, 16 bit
+        else
             for x = 0, width - 1 do
                 writeu32(out, outBase + x * 4,
                     readu8(cur, x * 8)
@@ -914,7 +920,6 @@ local function decodePng(data, options)
             }
 
         elseif ctype == "fcTL" then
-            -- an IDAT image seen before any fcTL is the hidden default image, not an animation frame
             if currentFrame and currentFrame.fromIDAT and currentFrame.w == nil then
                 frames[frameNum] = nil
                 frameNum -= 1
@@ -1120,7 +1125,6 @@ local function decodePng(data, options)
     }
 end
 
--- walks the chunk list up to the first IDAT; acTL must appear before it
 local function pngHasAnimation(data)
     local pos = 9
     local length = #data
@@ -1187,7 +1191,6 @@ function GifDecoder.detect(data)
     local b1, b2, b3 = data:byte(1, 3)
     if b1 == 0xFF and b2 == 0xD8 and b3 == 0xFF then return "jpg" end
 
-    -- static formats the renderer can't decode itself (use getcustomasset for these)
     if detectWebP(data, length) then return "webp" end
     if detectBmp(data, length) then return "bmp" end
     if detectIco(data, length) then return "ico" end
