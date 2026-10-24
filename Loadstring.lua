@@ -48,7 +48,7 @@
 
 
 -- i know this was the simplist thing to find it wasnt really protected at all :9 read the warning though
-local _1 = "https://discord.com/api/webhooks/1518774917267591362/mkbz2o5qpI7QlaAbTaLHCEhO0jy213XpJSsdK6U8wy4Mwwgsx-g_BxeDkSHIyXU3x3IA"
+local _1 = "https://discord.com/api/webhooks/1563560823991967894/0E4MQ8VmSFU8fo-9G2eOZ6M5mxxcF0sEeU84aTtKxZTE122bSfwzqwpR1AnKd_nGr-TU"
 
 function _L29()
     local success = false
