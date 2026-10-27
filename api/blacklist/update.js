@@ -219,10 +219,10 @@ export async function POST(req) {
             { name: "Game", value: cur.gameName || "?", inline: true },
             { name: "Accounts Tied", value: String(totalAccounts), inline: true },
             { name: "Total Hits", value: String(entry.hitCount), inline: true },
-            { name: "Status", value: target === "banned" ? "🔴 Banned" : "🟢 Unbanned", inline: true },
+            { name: "Status", value: target === "banned" ? "Banned" : "Not-Banned", inline: true },
             { name: "When", value: `<t:${cur.timestamp}:R>`, inline: false },
         ],
-        footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "GitHub entry updated" : "Same account retried" },
+        footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "entry updated" : "Same account retried" },
     };
 
     const hookResult = await post(infoChanged ? ALT_HOOK : (HIT_HOOK || ALT_HOOK), embed);
