@@ -67,6 +67,40 @@ function check(emb) {
     };
 }
 
+async function sendToDiscord(out) {
+    const url = process.env.DISCORD_WEBHOOK_URL;
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(out),
+                signal: controller.signal,
+            });
+            clearTimeout(timer);
+
+            if (res.status === 429) {
+                let wait = 1;
+                try {
+                    const j = await res.json();
+                    if (j && typeof j.retry_after === "number") wait = j.retry_after;
+                } catch {}
+                // Cap wait so we never exceed Vercel's timeout
+                await new Promise(r => setTimeout(r, Math.min(wait * 1000, 5000)));
+                continue;
+            }
+            return { ok: res.ok, status: res.status };
+        } catch (e) {
+            clearTimeout(timer);
+            if (attempt === 2) return { ok: false, status: 0, err: String(e) };
+            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+        }
+    }
+    return { ok: false, status: 429, err: "exhausted_retries" };
+}
+
 export async function POST(req) {
     let body;
     try {
@@ -104,11 +138,6 @@ export async function POST(req) {
         embeds: [v.out],
     };
 
-    const res = await fetch(process.env.DISCORD_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(out),
-    });
-
-    return Response.json({ ok: res.ok, status: res.status });
+    const r = await sendToDiscord(out);
+    return Response.json(r);
 }
