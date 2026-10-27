@@ -24,18 +24,11 @@ async function fetchRepoFile() {
         throw new Error(`fetch failed: ${res.status} ${t.slice(0, 200)}`);
     }
     const json = await res.json();
-    const content = Buffer.from(json.content, "base64").toString("utf8");
-    return { sha: json.sha, data: JSON.parse(content) };
+    return { sha: json.sha, data: JSON.parse(Buffer.from(json.content, "base64").toString("utf8")) };
 }
 
 async function writeRepoFile(data, sha, msg) {
     const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
-    const body = {
-        message: msg,
-        content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
-        sha,
-        branch: GH_BRANCH,
-    };
     const res = await fetch(url, {
         method: "PUT",
         headers: {
@@ -44,7 +37,12 @@ async function writeRepoFile(data, sha, msg) {
             "User-Agent": "ragebot-relay",
             "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+            message: msg,
+            content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
+            sha,
+            branch: GH_BRANCH,
+        }),
     });
     if (!res.ok) {
         const t = await res.text();
@@ -57,6 +55,10 @@ export async function POST(req) {
     const secret = req.headers.get("x-bot-secret");
     if (!BOT_SECRET || secret !== BOT_SECRET) {
         return Response.json({ err: "unauthorized" }, { status: 401 });
+    }
+
+    if (!GH_TOKEN) {
+        return Response.json({ err: "gh_read", msg: "GH_TOKEN not set in Vercel env" }, { status: 502 });
     }
 
     let body;
