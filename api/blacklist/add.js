@@ -1,5 +1,4 @@
 import { Redis } from "@upstash/redis";
-
 const db = Redis.fromEnv();
 
 const GH_OWNER = "madeformeanduu";
@@ -47,9 +46,7 @@ async function writeRepoFile(data, sha, msg) {
 
 export async function POST(req) {
     const secret = req.headers.get("x-bot-secret");
-    if (!BOT_SECRET || secret !== BOT_SECRET) {
-        return Response.json({ err: "unauthorized" }, { status: 401 });
-    }
+    if (!BOT_SECRET || secret !== BOT_SECRET) return Response.json({ err: "unauthorized" }, { status: 401 });
     if (!GH_TOKEN) return Response.json({ err: "gh_read", msg: "GH_TOKEN missing" }, { status: 502 });
 
     let body;
@@ -66,6 +63,10 @@ export async function POST(req) {
 
     const data = repo.data;
     if (!data.banned_hwids) data.banned_hwids = {};
+    if (!data.violations) data.violations = {};
+
+    const history = data.violations[hwid] || null;
+
     if (data.banned_hwids[hwid]) {
         return Response.json({ err: "already_banned" }, { status: 409 });
     }
@@ -75,31 +76,43 @@ export async function POST(req) {
     const username = String(body.username || "?").slice(0, 64);
     const displayName = String(body.displayName || "?").slice(0, 64);
 
-    data.banned_hwids[hwid] = {
-        username,
-        displayName,
-        userId: uid,
-        bannedAt: now,
-        reason,
-        hitCount: 0,
-        lastSeen: now,
-        accounts: uid ? {
-            [String(uid)]: {
-                username,
-                displayName,
-                userId: uid,
-                firstSeen: now,
-                lastSeen: now,
-                executors: [],
-                games: [],
-                hits: 0,
-            },
-        } : {},
-        attempts: [],
-    };
+    if (history) {
+        delete data.violations[hwid];
+        history.status = "banned";
+        history.reason = reason;
+        history.rebannedAt = now;
+        if (!history.rebanHistory) history.rebanHistory = [];
+        history.rebanHistory.push({ reason, at: now });
+        data.banned_hwids[hwid] = history;
+    } else {
+        data.banned_hwids[hwid] = {
+            username,
+            displayName,
+            userId: uid,
+            bannedAt: now,
+            reason,
+            status: "banned",
+            hitCount: 0,
+            lastSeen: now,
+            accounts: uid ? {
+                [String(uid)]: {
+                    username,
+                    displayName,
+                    userId: uid,
+                    firstSeen: now,
+                    lastSeen: now,
+                    executors: [],
+                    games: [],
+                    hits: 0,
+                },
+            } : {},
+            attempts: [],
+            rebanHistory: [],
+        };
+    }
 
-    try { await writeRepoFile(data, repo.sha, `blacklist: add ${hwid.slice(0, 12)}…`); }
+    try { await writeRepoFile(data, repo.sha, `blacklist: ban ${hwid.slice(0, 12)}…`); }
     catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
 
-    return Response.json({ ok: true, entry: data.banned_hwids[hwid] });
+    return Response.json({ ok: true, entry: data.banned_hwids[hwid], hadHistory: !!history });
 }
