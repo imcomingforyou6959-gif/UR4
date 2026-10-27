@@ -24,7 +24,7 @@ async function fetchRepoFile() {
         headers: {
             "Authorization": `Bearer ${GH_TOKEN}`,
             "Accept": "application/vnd.github+json",
-            "User-Agent": "ragebot-relay",
+            "User-Agent": "relay",
         },
     });
     if (!res.ok) {
@@ -61,28 +61,30 @@ async function writeRepoFile(data, sha) {
     return await res.json();
 }
 
-async function sendAltHook(prev, cur, hwid) {
+async function sendAltHook(prev, cur, hwid, changed) {
     if (!ALT_HOOK) {
-        return { ok: false, why: "no_alt_hook_env" };
+        console.log("[alt-hook] ALT_HOOK not set");
+        return { ok: false, why: "no_env" };
     }
+    const title = changed ? "Banned HWID — Info Changed" : "Banned HWID — Retry";
+    const color = changed ? 0xff9900 : 0xdd3333;
     const embed = {
         username: "Alt Detector",
         embeds: [{
-            title: "Banned HWID — Info Changed",
-            color: 0xff9900,
+            title,
+            color,
             fields: [
                 { name: "HWID", value: "`" + hwid.slice(0, 128) + "`", inline: false },
-                { name: "Old User", value: `${prev.username} (${prev.userId})`, inline: true },
-                { name: "New User", value: `${cur.username} (${cur.userId})`, inline: true },
-                { name: "Old Display", value: prev.displayName || "?", inline: true },
-                { name: "New Display", value: cur.displayName || "?", inline: true },
+                { name: "Stored User", value: `${prev.username} (${prev.userId})`, inline: true },
+                { name: "Current User", value: `${cur.username} (${cur.userId})`, inline: true },
+                { name: "Stored Display", value: prev.displayName || "?", inline: true },
+                { name: "Current Display", value: cur.displayName || "?", inline: true },
                 { name: "Executor", value: cur.executor || "?", inline: true },
                 { name: "When", value: `<t:${cur.timestamp}:R>`, inline: true },
             ],
-            footer: { text: "GitHub entry updated automatically" },
+            footer: { text: changed ? "GitHub entry updated automatically" : "Same info — no update needed" },
         }],
     };
-
     for (let i = 0; i < 2; i++) {
         try {
             const ctrl = new AbortController();
@@ -94,42 +96,27 @@ async function sendAltHook(prev, cur, hwid) {
                 signal: ctrl.signal,
             });
             clearTimeout(timer);
-
             if (res.status === 429) {
                 let wait = 1;
-                try {
-                    const j = await res.json();
-                    if (typeof j.retry_after === "number") wait = j.retry_after;
-                } catch {}
+                try { const j = await res.json(); if (typeof j.retry_after === "number") wait = j.retry_after; } catch {}
                 await new Promise(r => setTimeout(r, Math.min(wait * 1000, 4000)));
                 continue;
             }
-
-            if (!res.ok) {
-                const t = await res.text().catch(() => "");
-                return { ok: false, why: `discord_${res.status}`, msg: t.slice(0, 200) };
-            }
-            return { ok: true, status: res.status };
+            console.log("[alt-hook] sent, status=" + res.status);
+            return { ok: res.ok, status: res.status };
         } catch (e) {
-            if (i === 1) return { ok: false, why: "fetch_threw", msg: String(e) };
+            console.log("[alt-hook] err attempt " + i + ": " + String(e));
+            if (i === 1) return { ok: false, why: "fetch_failed" };
             await new Promise(r => setTimeout(r, 500));
         }
     }
-    return { ok: false, why: "exhausted_retries" };
+    return { ok: false, why: "exhausted" };
 }
 
 export async function POST(req) {
-    const raw = await req.text();
     let body;
-    try {
-        body = JSON.parse(raw);
-    } catch (e) {
-        return Response.json({
-            err: "bad_json",
-            got: raw.slice(0, 200),
-            why: String(e),
-        }, { status: 400 });
-    }
+    try { body = await req.json(); }
+    catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
 
     const hwid = body.hwid;
     if (!hwid || typeof hwid !== "string") {
@@ -179,43 +166,44 @@ export async function POST(req) {
         prev.displayName !== cur.displayName ||
         prev.userId !== cur.userId;
 
-    if (!diff) {
-        return Response.json({
-            ok: true,
-            changed: false,
-            alt_hook_set: !!ALT_HOOK,
+    let ghOk = true;
+    let ghErr = null;
+
+    if (diff) {
+        if (!Array.isArray(entry.attempts)) entry.attempts = [];
+        entry.attempts.push({
+            username: prev.username,
+            displayName: prev.displayName,
+            userId: prev.userId,
+            timestamp: cur.timestamp,
+            executor: cur.executor,
+            hwid,
         });
+        if (entry.attempts.length > MAX_ATTEMPTS) {
+            entry.attempts = entry.attempts.slice(-MAX_ATTEMPTS);
+        }
+
+        entry.username = cur.username;
+        entry.displayName = cur.displayName;
+        entry.userId = cur.userId;
+
+        try {
+            await writeRepoFile(data, repo.sha);
+        } catch (e) {
+            ghOk = false;
+            ghErr = String(e);
+        }
     }
 
-    if (!Array.isArray(entry.attempts)) entry.attempts = [];
-    entry.attempts.push({
-        username: prev.username,
-        displayName: prev.displayName,
-        userId: prev.userId,
-        timestamp: cur.timestamp,
-        executor: cur.executor,
-        hwid,
-    });
-    if (entry.attempts.length > MAX_ATTEMPTS) {
-        entry.attempts = entry.attempts.slice(-MAX_ATTEMPTS);
+    const hookResult = await sendAltHook(prev, cur, hwid, diff);
+
+    if (!ghOk) {
+        return Response.json({ err: "gh_write", msg: ghErr, hook: hookResult }, { status: 502 });
     }
-
-    entry.username = cur.username;
-    entry.displayName = cur.displayName;
-    entry.userId = cur.userId;
-
-    try {
-        await writeRepoFile(data, repo.sha);
-    } catch (e) {
-        return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
-    }
-
-    const hookRes = await sendAltHook(prev, cur, hwid);
 
     return Response.json({
         ok: true,
-        changed: true,
-        alt_hook_set: !!ALT_HOOK,
-        hook: hookRes,
+        changed: diff,
+        hook: hookResult,
     });
 }
