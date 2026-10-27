@@ -62,7 +62,9 @@ async function writeRepoFile(data, sha) {
 }
 
 async function sendAltHook(prev, cur, hwid) {
-    if (!ALT_HOOK) return;
+    if (!ALT_HOOK) {
+        return { ok: false, why: "no_alt_hook_env" };
+    }
     const embed = {
         username: "Alt Detector",
         embeds: [{
@@ -80,6 +82,7 @@ async function sendAltHook(prev, cur, hwid) {
             footer: { text: "GitHub entry updated automatically" },
         }],
     };
+
     for (let i = 0; i < 2; i++) {
         try {
             const ctrl = new AbortController();
@@ -91,24 +94,42 @@ async function sendAltHook(prev, cur, hwid) {
                 signal: ctrl.signal,
             });
             clearTimeout(timer);
+
             if (res.status === 429) {
                 let wait = 1;
-                try { const j = await res.json(); if (typeof j.retry_after === "number") wait = j.retry_after; } catch {}
+                try {
+                    const j = await res.json();
+                    if (typeof j.retry_after === "number") wait = j.retry_after;
+                } catch {}
                 await new Promise(r => setTimeout(r, Math.min(wait * 1000, 4000)));
                 continue;
             }
-            return;
-        } catch {
-            if (i === 1) return;
+
+            if (!res.ok) {
+                const t = await res.text().catch(() => "");
+                return { ok: false, why: `discord_${res.status}`, msg: t.slice(0, 200) };
+            }
+            return { ok: true, status: res.status };
+        } catch (e) {
+            if (i === 1) return { ok: false, why: "fetch_threw", msg: String(e) };
             await new Promise(r => setTimeout(r, 500));
         }
     }
+    return { ok: false, why: "exhausted_retries" };
 }
 
 export async function POST(req) {
+    const raw = await req.text();
     let body;
-    try { body = await req.json(); }
-    catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
+    try {
+        body = JSON.parse(raw);
+    } catch (e) {
+        return Response.json({
+            err: "bad_json",
+            got: raw.slice(0, 200),
+            why: String(e),
+        }, { status: 400 });
+    }
 
     const hwid = body.hwid;
     if (!hwid || typeof hwid !== "string") {
@@ -159,7 +180,11 @@ export async function POST(req) {
         prev.userId !== cur.userId;
 
     if (!diff) {
-        return Response.json({ ok: true, changed: false });
+        return Response.json({
+            ok: true,
+            changed: false,
+            alt_hook_set: !!ALT_HOOK,
+        });
     }
 
     if (!Array.isArray(entry.attempts)) entry.attempts = [];
@@ -185,7 +210,12 @@ export async function POST(req) {
         return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
     }
 
-    await sendAltHook(prev, cur, hwid);
+    const hookRes = await sendAltHook(prev, cur, hwid);
 
-    return Response.json({ ok: true, changed: true });
+    return Response.json({
+        ok: true,
+        changed: true,
+        alt_hook_set: !!ALT_HOOK,
+        hook: hookRes,
+    });
 }
