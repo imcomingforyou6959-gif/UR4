@@ -1,5 +1,4 @@
 import { Redis } from "@upstash/redis";
-
 const db = Redis.fromEnv();
 
 const GH_OWNER = "madeformeanduu";
@@ -11,8 +10,9 @@ const GH_TOKEN = process.env.GH_TOKEN;
 const ALT_HOOK = process.env.ALT_HOOK;
 const HIT_HOOK = process.env.HIT_HOOK;
 
-const MAX_ATTEMPTS = 50;
+const MAX_ATTEMPTS = 100;
 const UPDATE_COOLDOWN = 8;
+const COLOR = 0x8b5cf6;
 
 function clean(s, max) {
     if (typeof s !== "string") return "";
@@ -96,14 +96,10 @@ export async function POST(req) {
     catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
 
     const hwid = body.hwid;
-    if (!hwid || typeof hwid !== "string") {
-        return Response.json({ err: "missing_hwid" }, { status: 400 });
-    }
+    if (!hwid || typeof hwid !== "string") return Response.json({ err: "missing_hwid" }, { status: 400 });
 
     const coolKey = `upd:${hwid}`;
-    if (await db.get(coolKey)) {
-        return Response.json({ err: "cooldown" }, { status: 429 });
-    }
+    if (await db.get(coolKey)) return Response.json({ err: "cooldown" }, { status: 429 });
     await db.set(coolKey, "1", { ex: UPDATE_COOLDOWN });
 
     const now = Math.floor(Date.now() / 1000);
@@ -117,9 +113,7 @@ export async function POST(req) {
         jobId: clean(String(body.jobId || ""), 40),
         timestamp: Number(body.timestamp) || now,
     };
-    if (!cur.username || !cur.userId) {
-        return Response.json({ err: "missing_fields" }, { status: 400 });
-    }
+    if (!cur.username || !cur.userId) return Response.json({ err: "missing_fields" }, { status: 400 });
 
     let repo;
     try { repo = await fetchRepoFile(); }
@@ -127,7 +121,14 @@ export async function POST(req) {
 
     const data = repo.data;
     if (!data.banned_hwids) data.banned_hwids = {};
-    const entry = data.banned_hwids[hwid];
+    if (!data.violations) data.violations = {};
+
+    let entry = data.banned_hwids[hwid];
+    let target = "banned";
+    if (!entry) {
+        entry = data.violations[hwid];
+        target = "unbanned";
+    }
     if (!entry) return Response.json({ err: "not_banned" }, { status: 404 });
 
     if (!Array.isArray(entry.attempts)) entry.attempts = [];
@@ -144,7 +145,6 @@ export async function POST(req) {
         prev.displayName !== cur.displayName ||
         prev.userId !== cur.userId;
 
-    // ---------- ACCOUNTS MAP ----------
     const uidKey = String(cur.userId);
     const existing = entry.accounts[uidKey];
     const isNewAccount = !existing;
@@ -169,7 +169,6 @@ export async function POST(req) {
         };
     }
 
-    // ---------- ATTEMPT LOG ----------
     entry.attempts.push({
         username: cur.username,
         displayName: cur.displayName,
@@ -181,6 +180,7 @@ export async function POST(req) {
         timestamp: cur.timestamp,
         changed: infoChanged,
         newAccount: isNewAccount,
+        target,
     });
     if (entry.attempts.length > MAX_ATTEMPTS) entry.attempts = entry.attempts.slice(-MAX_ATTEMPTS);
 
@@ -199,24 +199,28 @@ export async function POST(req) {
     const totalAccounts = Object.keys(entry.accounts).length;
     const isAlt = isNewAccount && totalAccounts > 1;
 
-    let title = "Banned HWID — Retry";
-    let color = 0xdd3333;
-    if (isAlt) { title = "Banned HWID — NEW ALT ACCOUNT"; color = 0xff0000; }
-    else if (infoChanged) { title = "Banned HWID — Info Changed"; color = 0xff9900; }
+    let title = "Retry";
+    if (isAlt) title = "New Alt";
+    else if (infoChanged) title = "Info Changed";
+    if (target === "unbanned") title = "Unbanned HWID Run";
 
     const embed = {
         title,
-        color,
+        color: COLOR,
         fields: [
             { name: "HWID", value: "`" + hwid.slice(0, 128) + "`", inline: false },
-            { name: "Current User", value: `${cur.username} (${cur.userId})`, inline: true },
-            { name: "Stored User", value: `${prev.username} (${prev.userId})`, inline: true },
-            { name: "Total Accounts Tied", value: String(totalAccounts), inline: true },
+            { name: "Username", value: cur.username, inline: true },
+            { name: "Display Name", value: cur.displayName, inline: true },
+            { name: "User ID", value: String(cur.userId), inline: true },
+            { name: "Stored User", value: prev.username, inline: true },
+            { name: "Stored Display", value: prev.displayName || "?", inline: true },
+            { name: "Stored ID", value: String(prev.userId || 0), inline: true },
             { name: "Executor", value: cur.executor || "?", inline: true },
             { name: "Game", value: cur.gameName || "?", inline: true },
+            { name: "Accounts Tied", value: String(totalAccounts), inline: true },
             { name: "Total Hits", value: String(entry.hitCount), inline: true },
-            { name: "When", value: `<t:${cur.timestamp}:R>`, inline: true },
-            { name: "Reason", value: entry.reason || "*none*", inline: false },
+            { name: "Status", value: target === "banned" ? "🔴 Banned" : "🟢 Unbanned", inline: true },
+            { name: "When", value: `<t:${cur.timestamp}:R>`, inline: false },
         ],
         footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "GitHub entry updated" : "Same account retried" },
     };
@@ -229,6 +233,7 @@ export async function POST(req) {
         isAlt,
         totalAccounts,
         hits: entry.hitCount,
+        status: target,
         hook: hookResult,
     });
 }
