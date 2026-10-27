@@ -1,9 +1,9 @@
 import { Redis } from "@upstash/redis";
 
 const db = Redis.fromEnv();
-
 const BOT_SECRET = process.env.BOT_SECRET;
 const TTL = 60;
+const MIN_HEARTBEAT = 30;
 
 function clean(s, max) {
     if (typeof s !== "string") return "";
@@ -43,6 +43,17 @@ export async function POST(req) {
     const hwid = clean(String(body.hwid || ""), 128);
     if (!hwid) return Response.json({ err: "missing_hwid" }, { status: 400 });
 
+    const key = `client:${hwid}`;
+    const prev = await db.get(key).catch(() => null);
+    if (prev) {
+        try {
+            const p = typeof prev === "string" ? JSON.parse(prev) : prev;
+            if (p && p.seen && Date.now() - p.seen < MIN_HEARTBEAT * 1000) {
+                return Response.json({ ok: true, skipped: true });
+            }
+        } catch {}
+    }
+
     const payload = {
         hwid,
         username: clean(String(body.username || "?"), 64),
@@ -55,7 +66,7 @@ export async function POST(req) {
         seen: Date.now(),
     };
 
-    await db.set(`client:${hwid}`, JSON.stringify(payload), { ex: TTL });
+    await db.set(key, JSON.stringify(payload), { ex: TTL });
 
     return Response.json({ ok: true });
 }
