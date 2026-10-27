@@ -39,7 +39,9 @@ export async function POST(req) {
                 readFile("Storage/HWID.json"),
                 readFile("Storage/Attempts.json"),
             ]);
-        } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+        } catch (e) {
+            return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 });
+        }
 
         const bans = main.data.banned_hwids || {};
         const viol = main.data.violations || {};
@@ -52,9 +54,11 @@ export async function POST(req) {
         unbanned.sort((a, b) => (b.unbannedAt || b.lastSeen) - (a.unbannedAt || a.lastSeen));
 
         return Response.json({
-            ok: true, count: banned.length,
+            ok: true,
+            count: banned.length,
             totalHistory: banned.length + unbanned.length,
-            entries: banned, unbanned,
+            entries: banned,
+            unbanned,
         });
     }
 
@@ -67,7 +71,9 @@ export async function POST(req) {
                 readFile("Storage/HWID.json"),
                 readFile("Storage/history.json"),
             ]);
-        } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+        } catch (e) {
+            return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 });
+        }
 
         if (!main.data.banned_hwids) main.data.banned_hwids = {};
         if (!main.data.violations) main.data.violations = {};
@@ -87,11 +93,21 @@ export async function POST(req) {
         hist.data.unbans[hwid].push({ at: now, by: String(body.by || "admin") });
 
         try {
-            await Promise.all([
-                writeFile("Storage/HWID.json", main.data, main.sha, `blacklist: unban ${hwid.slice(0, 12)}… (history kept)`),
-                writeFile("Storage/history.json", hist.data, hist.sha, `history: unban ${hwid.slice(0, 12)}…`),
-            ]);
-        } catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
+            await writeFile(
+                "Storage/HWID.json",
+                main.data,
+                main.sha,
+                `blacklist: unban ${hwid.slice(0, 12)}… (history kept)`
+            );
+            await writeFile(
+                "Storage/history.json",
+                hist.data,
+                hist.sha,
+                `history: unban ${hwid.slice(0, 12)}…`
+            );
+        } catch (e) {
+            return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
+        }
 
         return Response.json({
             ok: true,
@@ -116,7 +132,9 @@ export async function POST(req) {
                 readFile("Storage/Attempts.json"),
                 readFile("Storage/history.json"),
             ]);
-        } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+        } catch (e) {
+            return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 });
+        }
 
         const bans = main.data.banned_hwids || {};
         const viol = main.data.violations || {};
@@ -125,7 +143,10 @@ export async function POST(req) {
 
         let raw = bans[hwid];
         let status = "banned";
-        if (!raw) { raw = viol[hwid]; status = "unbanned"; }
+        if (!raw) {
+            raw = viol[hwid];
+            status = "unbanned";
+        }
         if (!raw) return Response.json({ err: "not_found" }, { status: 404 });
 
         const full = summarize(raw, hwid, status, (att[hwid] || []).length);
