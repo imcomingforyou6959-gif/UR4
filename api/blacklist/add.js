@@ -6,7 +6,6 @@ const GH_OWNER = "madeformeanduu";
 const GH_REPO = "vaild";
 const GH_PATH = "Storage/HWID.json";
 const GH_BRANCH = "main";
-
 const GH_TOKEN = process.env.GH_TOKEN;
 const BOT_SECRET = process.env.BOT_SECRET;
 
@@ -18,11 +17,9 @@ async function fetchRepoFile() {
             "Accept": "application/vnd.github+json",
             "User-Agent": "ragebot-relay",
         },
+        cache: "no-store",
     });
-    if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`fetch failed: ${res.status} ${t.slice(0, 200)}`);
-    }
+    if (!res.ok) throw new Error(`fetch ${res.status} ${(await res.text()).slice(0, 200)}`);
     const json = await res.json();
     return { sha: json.sha, data: JSON.parse(Buffer.from(json.content, "base64").toString("utf8")) };
 }
@@ -44,10 +41,7 @@ async function writeRepoFile(data, sha, msg) {
             branch: GH_BRANCH,
         }),
     });
-    if (!res.ok) {
-        const t = await res.text();
-        throw new Error(`write failed: ${res.status} ${t.slice(0, 200)}`);
-    }
+    if (!res.ok) throw new Error(`write ${res.status} ${(await res.text()).slice(0, 200)}`);
     return await res.json();
 }
 
@@ -56,10 +50,7 @@ export async function POST(req) {
     if (!BOT_SECRET || secret !== BOT_SECRET) {
         return Response.json({ err: "unauthorized" }, { status: 401 });
     }
-
-    if (!GH_TOKEN) {
-        return Response.json({ err: "gh_read", msg: "GH_TOKEN not set in Vercel env" }, { status: 502 });
-    }
+    if (!GH_TOKEN) return Response.json({ err: "gh_read", msg: "GH_TOKEN missing" }, { status: 502 });
 
     let body;
     try { body = await req.json(); }
@@ -75,17 +66,35 @@ export async function POST(req) {
 
     const data = repo.data;
     if (!data.banned_hwids) data.banned_hwids = {};
-
     if (data.banned_hwids[hwid]) {
         return Response.json({ err: "already_banned" }, { status: 409 });
     }
 
+    const now = Math.floor(Date.now() / 1000);
+    const uid = Number(body.userId) || 0;
+    const username = String(body.username || "?").slice(0, 64);
+    const displayName = String(body.displayName || "?").slice(0, 64);
+
     data.banned_hwids[hwid] = {
-        username: String(body.username || "?").slice(0, 64),
-        displayName: String(body.displayName || "?").slice(0, 64),
-        userId: Number(body.userId) || 0,
-        bannedAt: Math.floor(Date.now() / 1000),
+        username,
+        displayName,
+        userId: uid,
+        bannedAt: now,
         reason,
+        hitCount: 0,
+        lastSeen: now,
+        accounts: uid ? {
+            [String(uid)]: {
+                username,
+                displayName,
+                userId: uid,
+                firstSeen: now,
+                lastSeen: now,
+                executors: [],
+                games: [],
+                hits: 0,
+            },
+        } : {},
         attempts: [],
     };
 
