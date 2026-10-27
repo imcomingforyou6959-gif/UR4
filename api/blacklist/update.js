@@ -8,6 +8,7 @@ const GH_PATH = "Storage/HWID.json";
 const GH_BRANCH = "main";
 
 const GH_TOKEN = process.env.GH_TOKEN;
+const ALT_HOOK = process.env.ALT_HOOK;
 
 const MAX_ATTEMPTS = 20;
 const UPDATE_COOLDOWN = 30;
@@ -60,6 +61,50 @@ async function writeRepoFile(data, sha) {
     return await res.json();
 }
 
+async function sendAltHook(prev, cur, hwid) {
+    if (!ALT_HOOK) return;
+    const embed = {
+        username: "Alt Detector",
+        embeds: [{
+            title: "Banned HWID — Info Changed",
+            color: 0xff9900,
+            fields: [
+                { name: "HWID", value: "`" + hwid.slice(0, 128) + "`", inline: false },
+                { name: "Old User", value: `${prev.username} (${prev.userId})`, inline: true },
+                { name: "New User", value: `${cur.username} (${cur.userId})`, inline: true },
+                { name: "Old Display", value: prev.displayName || "?", inline: true },
+                { name: "New Display", value: cur.displayName || "?", inline: true },
+                { name: "Executor", value: cur.executor || "?", inline: true },
+                { name: "When", value: `<t:${cur.timestamp}:R>`, inline: true },
+            ],
+            footer: { text: "GitHub entry updated automatically" },
+        }],
+    };
+    for (let i = 0; i < 2; i++) {
+        try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 6000);
+            const res = await fetch(ALT_HOOK, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(embed),
+                signal: ctrl.signal,
+            });
+            clearTimeout(timer);
+            if (res.status === 429) {
+                let wait = 1;
+                try { const j = await res.json(); if (typeof j.retry_after === "number") wait = j.retry_after; } catch {}
+                await new Promise(r => setTimeout(r, Math.min(wait * 1000, 4000)));
+                continue;
+            }
+            return;
+        } catch {
+            if (i === 1) return;
+            await new Promise(r => setTimeout(r, 500));
+        }
+    }
+}
+
 export async function POST(req) {
     let body;
     try { body = await req.json(); }
@@ -102,10 +147,16 @@ export async function POST(req) {
         return Response.json({ err: "not_banned" }, { status: 404 });
     }
 
+    const prev = {
+        username: entry.username,
+        displayName: entry.displayName,
+        userId: Number(entry.userId),
+    };
+
     const diff =
-        entry.username !== cur.username ||
-        entry.displayName !== cur.displayName ||
-        Number(entry.userId) !== cur.userId;
+        prev.username !== cur.username ||
+        prev.displayName !== cur.displayName ||
+        prev.userId !== cur.userId;
 
     if (!diff) {
         return Response.json({ ok: true, changed: false });
@@ -113,9 +164,9 @@ export async function POST(req) {
 
     if (!Array.isArray(entry.attempts)) entry.attempts = [];
     entry.attempts.push({
-        username: entry.username,
-        displayName: entry.displayName,
-        userId: entry.userId,
+        username: prev.username,
+        displayName: prev.displayName,
+        userId: prev.userId,
         timestamp: cur.timestamp,
         executor: cur.executor,
         hwid,
@@ -133,6 +184,8 @@ export async function POST(req) {
     } catch (e) {
         return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
     }
+
+    await sendAltHook(prev, cur, hwid);
 
     return Response.json({ ok: true, changed: true });
 }
