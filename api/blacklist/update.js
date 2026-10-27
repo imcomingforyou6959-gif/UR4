@@ -66,7 +66,7 @@ async function sendAltHook(prev, cur, hwid, changed) {
         console.log("[alt-hook] ALT_HOOK not set");
         return { ok: false, why: "no_env" };
     }
-    const title = changed ? "Banned HWID — Info Changed" : "Banned HWID — Retry";
+    const title = changed ? "HWID — Info Changed" : "HWID — Retry";
     const color = changed ? 0xff9900 : 0xdd3333;
     const embed = {
         username: "Alt Detector",
@@ -82,7 +82,7 @@ async function sendAltHook(prev, cur, hwid, changed) {
                 { name: "Executor", value: cur.executor || "?", inline: true },
                 { name: "When", value: `<t:${cur.timestamp}:R>`, inline: true },
             ],
-            footer: { text: changed ? "GitHub entry updated automatically" : "Same info — no update needed" },
+            footer: { text: changed ? "entry updated" : "Same info — no update needed" },
         }],
     };
     for (let i = 0; i < 2; i++) {
