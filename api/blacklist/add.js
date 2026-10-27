@@ -21,19 +21,23 @@ export async function POST(req) {
     const userId = Number(body.userId) || 0;
     const now = Math.floor(Date.now() / 1000);
 
-    let main, attempts, hist;
+    let main, hist;
     try {
-        [main, attempts, hist] = await Promise.all([
+        [main, hist] = await Promise.all([
             readFile("Storage/HWID.json"),
-            readFile("Storage/Attempts.json"),
             readFile("Storage/history.json"),
         ]);
-    } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+    } catch (e) {
+        return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 });
+    }
 
     if (!main.data.banned_hwids) main.data.banned_hwids = {};
     if (!main.data.violations) main.data.violations = {};
+    if (!hist.data.rebans) hist.data.rebans = {};
 
-    if (main.data.banned_hwids[hwid]) return Response.json({ err: "already_banned" }, { status: 409 });
+    if (main.data.banned_hwids[hwid]) {
+        return Response.json({ err: "already_banned" }, { status: 409 });
+    }
 
     const existingHistory = main.data.violations[hwid] || null;
 
@@ -43,12 +47,18 @@ export async function POST(req) {
         existingHistory.reason = reason;
         existingHistory.rebannedAt = now;
         main.data.banned_hwids[hwid] = existingHistory;
-        if (!hist.data.rebans) hist.data.rebans = {};
+
         if (!Array.isArray(hist.data.rebans[hwid])) hist.data.rebans[hwid] = [];
-        hist.data.rebans[hwid].push({ at: now, reason, by: String(body.by || "admin") });
+        hist.data.rebans[hwid].push({
+            at: now,
+            reason,
+            by: String(body.by || "admin"),
+        });
     } else {
         main.data.banned_hwids[hwid] = {
-            username, displayName, userId,
+            username,
+            displayName,
+            userId,
             bannedAt: now,
             reason,
             status: "banned",
@@ -56,20 +66,38 @@ export async function POST(req) {
             lastSeen: now,
             accounts: userId ? {
                 [String(userId)]: {
-                    username, displayName, userId,
-                    firstSeen: now, lastSeen: now,
-                    hits: 0, executors: [], games: [],
+                    username,
+                    displayName,
+                    userId,
+                    firstSeen: now,
+                    lastSeen: now,
+                    hits: 0,
+                    executors: [],
+                    games: [],
                 },
             } : {},
         };
     }
 
     try {
-        await writeFile("Storage/HWID.json", main.data, main.sha, `blacklist: ban ${hwid.slice(0, 12)}…`);
+        await writeFile(
+            "Storage/HWID.json",
+            main.data,
+            main.sha,
+            `blacklist: ban ${hwid.slice(0, 12)}…`
+        );
+
         if (existingHistory) {
-            await writeFile("Storage/history.json", hist.data, hist.sha, `history: reban ${hwid.slice(0, 12)}…`);
+            await writeFile(
+                "Storage/history.json",
+                hist.data,
+                hist.sha,
+                `history: reban ${hwid.slice(0, 12)}…`
+            );
         }
-    } catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
+    } catch (e) {
+        return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
+    }
 
     return Response.json({
         ok: true,
