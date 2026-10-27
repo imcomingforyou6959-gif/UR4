@@ -69,21 +69,37 @@ export async function POST(req) {
     const hwid = body.hwid;
 
     if (action === "list") {
-        let repo;
-        try { repo = await fetchRepoFile(); }
-        catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+    let repo;
+    try { repo = await fetchRepoFile(); }
+    catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
 
-        const bans = repo.data.banned_hwids || {};
-        const entries = Object.keys(bans).map(k => ({
+    const bans = repo.data.banned_hwids || {};
+    const entries = Object.keys(bans).map(k => {
+        const b = bans[k];
+        const attempts = Array.isArray(b.attempts) ? b.attempts : [];
+        return {
             hwid: k,
-            username: bans[k].username || "?",
-            displayName: bans[k].displayName || "?",
-            userId: bans[k].userId || 0,
-            reason: bans[k].reason || "",
-            bannedAt: bans[k].bannedAt || 0,
-            attempts: Array.isArray(bans[k].attempts) ? bans[k].attempts.length : 0,
-        }));
-        return Response.json({ ok: true, count: entries.length, entries });
+            username: b.username || "?",
+            displayName: b.displayName || "?",
+            userId: b.userId || 0,
+            reason: b.reason || "",
+            bannedAt: b.bannedAt || 0,
+            lastSeen: b.lastSeen || 0,
+            hitCount: b.hitCount || 0,
+            attemptCount: attempts.length,
+            attempts: attempts.slice(-5).map(a => ({
+                username: a.username || "?",
+                displayName: a.displayName || "?",
+                userId: a.userId || 0,
+                executor: a.executor || "?",
+                gameName: a.gameName || "?",
+                timestamp: a.timestamp || 0,
+                changed: !!a.changed,
+            })),
+        };
+    });
+    entries.sort((a, b) => (b.lastSeen || b.bannedAt) - (a.lastSeen || a.bannedAt));
+    return Response.json({ ok: true, count: entries.length, entries });
     }
 
     if (action === "remove") {
