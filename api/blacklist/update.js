@@ -1,15 +1,9 @@
 import { Redis } from "@upstash/redis";
+import { readFile, writeFile } from "../github.js";
+
 const db = Redis.fromEnv();
-
-const GH_OWNER = "madeformeanduu";
-const GH_REPO = "vaild";
-const GH_PATH = "Storage/HWID.json";
-const GH_BRANCH = "main";
-
-const GH_TOKEN = process.env.GH_TOKEN;
 const ALT_HOOK = process.env.ALT_HOOK;
 const HIT_HOOK = process.env.HIT_HOOK;
-
 const MAX_ATTEMPTS = 100;
 const UPDATE_COOLDOWN = 8;
 const COLOR = 0x8b5cf6;
@@ -19,40 +13,11 @@ function clean(s, max) {
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
 }
 
-async function fetchRepoFile() {
-    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}?ref=${GH_BRANCH}`;
-    const res = await fetch(url, {
-        headers: {
-            "Authorization": `Bearer ${GH_TOKEN}`,
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "ragebot-relay",
-        },
-        cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`fetch ${res.status}`);
-    const json = await res.json();
-    return { sha: json.sha, data: JSON.parse(Buffer.from(json.content, "base64").toString("utf8")) };
-}
-
-async function writeRepoFile(data, sha, msg) {
-    const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
-    const res = await fetch(url, {
-        method: "PUT",
-        headers: {
-            "Authorization": `Bearer ${GH_TOKEN}`,
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "ragebot-relay",
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            message: msg,
-            content: Buffer.from(JSON.stringify(data, null, 2)).toString("base64"),
-            sha,
-            branch: GH_BRANCH,
-        }),
-    });
-    if (!res.ok) throw new Error(`write ${res.status}`);
-    return await res.json();
+function pushUnique(arr, val, max) {
+    if (!Array.isArray(arr)) arr = [];
+    if (!arr.includes(val)) arr.push(val);
+    if (arr.length > max) arr = arr.slice(-max);
+    return arr;
 }
 
 async function post(hook, embed) {
@@ -83,13 +48,6 @@ async function post(hook, embed) {
     return { ok: false, why: "exhausted" };
 }
 
-function pushUnique(arr, val, max) {
-    if (!arr) arr = [];
-    if (!arr.includes(val)) arr.push(val);
-    if (arr.length > max) arr = arr.slice(-max);
-    return arr;
-}
-
 export async function POST(req) {
     let body;
     try { body = await req.json(); }
@@ -115,23 +73,23 @@ export async function POST(req) {
     };
     if (!cur.username || !cur.userId) return Response.json({ err: "missing_fields" }, { status: 400 });
 
-    let repo;
-    try { repo = await fetchRepoFile(); }
-    catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+    let main, attempts;
+    try {
+        [main, attempts] = await Promise.all([
+            readFile("Storage/HWID.json"),
+            readFile("Storage/Attempts.json"),
+        ]);
+    } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
 
-    const data = repo.data;
-    if (!data.banned_hwids) data.banned_hwids = {};
-    if (!data.violations) data.violations = {};
+    if (!main.data.banned_hwids) main.data.banned_hwids = {};
+    if (!main.data.violations) main.data.violations = {};
+    if (!attempts.data.attempts) attempts.data.attempts = {};
 
-    let entry = data.banned_hwids[hwid];
+    let entry = main.data.banned_hwids[hwid];
     let target = "banned";
-    if (!entry) {
-        entry = data.violations[hwid];
-        target = "unbanned";
-    }
+    if (!entry) { entry = main.data.violations[hwid]; target = "unbanned"; }
     if (!entry) return Response.json({ err: "not_banned" }, { status: 404 });
 
-    if (!Array.isArray(entry.attempts)) entry.attempts = [];
     if (!entry.accounts) entry.accounts = {};
 
     const prev = {
@@ -139,7 +97,6 @@ export async function POST(req) {
         displayName: entry.displayName,
         userId: Number(entry.userId),
     };
-
     const infoChanged =
         prev.username !== cur.username ||
         prev.displayName !== cur.displayName ||
@@ -169,7 +126,8 @@ export async function POST(req) {
         };
     }
 
-    entry.attempts.push({
+    if (!Array.isArray(attempts.data.attempts[hwid])) attempts.data.attempts[hwid] = [];
+    attempts.data.attempts[hwid].push({
         username: cur.username,
         displayName: cur.displayName,
         userId: cur.userId,
@@ -182,7 +140,9 @@ export async function POST(req) {
         newAccount: isNewAccount,
         target,
     });
-    if (entry.attempts.length > MAX_ATTEMPTS) entry.attempts = entry.attempts.slice(-MAX_ATTEMPTS);
+    if (attempts.data.attempts[hwid].length > MAX_ATTEMPTS) {
+        attempts.data.attempts[hwid] = attempts.data.attempts[hwid].slice(-MAX_ATTEMPTS);
+    }
 
     entry.lastSeen = cur.timestamp;
     entry.hitCount = (entry.hitCount || 0) + 1;
@@ -193,8 +153,12 @@ export async function POST(req) {
         entry.userId = cur.userId;
     }
 
-    try { await writeRepoFile(data, repo.sha, `blacklist: hit ${hwid.slice(0, 12)}…`); }
-    catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
+    try {
+        await Promise.all([
+            writeFile("Storage/HWID.json", main.data, main.sha, `blacklist: hit ${hwid.slice(0, 12)}…`),
+            writeFile("Storage/Attempts.json", attempts.data, attempts.sha, `attempts: log ${hwid.slice(0, 12)}…`),
+        ]);
+    } catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
 
     const totalAccounts = Object.keys(entry.accounts).length;
     const isAlt = isNewAccount && totalAccounts > 1;
@@ -219,10 +183,10 @@ export async function POST(req) {
             { name: "Game", value: cur.gameName || "?", inline: true },
             { name: "Accounts Tied", value: String(totalAccounts), inline: true },
             { name: "Total Hits", value: String(entry.hitCount), inline: true },
-            { name: "Status", value: target === "banned" ? "Banned" : "Not-Banned", inline: true },
+            { name: "Status", value: target === "banned" ? "🔴 Banned" : "🟢 Unbanned", inline: true },
             { name: "When", value: `<t:${cur.timestamp}:R>`, inline: false },
         ],
-        footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "entry updated" : "Same account retried" },
+        footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "GitHub entry updated" : "Same account retried" },
     };
 
     const hookResult = await post(infoChanged ? ALT_HOOK : (HIT_HOOK || ALT_HOOK), embed);
