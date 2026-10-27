@@ -54,10 +54,14 @@ export async function POST(req) {
     catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
 
     const hwid = body.hwid;
-    if (!hwid || typeof hwid !== "string") return Response.json({ err: "missing_hwid" }, { status: 400 });
+    if (!hwid || typeof hwid !== "string") {
+        return Response.json({ err: "missing_hwid" }, { status: 400 });
+    }
 
     const coolKey = `upd:${hwid}`;
-    if (await db.get(coolKey)) return Response.json({ err: "cooldown" }, { status: 429 });
+    if (await db.get(coolKey)) {
+        return Response.json({ err: "cooldown" }, { status: 429 });
+    }
     await db.set(coolKey, "1", { ex: UPDATE_COOLDOWN });
 
     const now = Math.floor(Date.now() / 1000);
@@ -71,7 +75,9 @@ export async function POST(req) {
         jobId: clean(String(body.jobId || ""), 40),
         timestamp: Number(body.timestamp) || now,
     };
-    if (!cur.username || !cur.userId) return Response.json({ err: "missing_fields" }, { status: 400 });
+    if (!cur.username || !cur.userId) {
+        return Response.json({ err: "missing_fields" }, { status: 400 });
+    }
 
     let main, attempts;
     try {
@@ -79,7 +85,9 @@ export async function POST(req) {
             readFile("Storage/HWID.json"),
             readFile("Storage/Attempts.json"),
         ]);
-    } catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
+    } catch (e) {
+        return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 });
+    }
 
     if (!main.data.banned_hwids) main.data.banned_hwids = {};
     if (!main.data.violations) main.data.violations = {};
@@ -87,7 +95,10 @@ export async function POST(req) {
 
     let entry = main.data.banned_hwids[hwid];
     let target = "banned";
-    if (!entry) { entry = main.data.violations[hwid]; target = "unbanned"; }
+    if (!entry) {
+        entry = main.data.violations[hwid];
+        target = "unbanned";
+    }
     if (!entry) return Response.json({ err: "not_banned" }, { status: 404 });
 
     if (!entry.accounts) entry.accounts = {};
@@ -154,11 +165,21 @@ export async function POST(req) {
     }
 
     try {
-        await Promise.all([
-            writeFile("Storage/HWID.json", main.data, main.sha, `blacklist: hit ${hwid.slice(0, 12)}…`),
-            writeFile("Storage/Attempts.json", attempts.data, attempts.sha, `attempts: log ${hwid.slice(0, 12)}…`),
-        ]);
-    } catch (e) { return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 }); }
+        await writeFile(
+            "Storage/HWID.json",
+            main.data,
+            main.sha,
+            `blacklist: hit ${hwid.slice(0, 12)}…`
+        );
+        await writeFile(
+            "Storage/Attempts.json",
+            attempts.data,
+            attempts.sha,
+            `attempts: log ${hwid.slice(0, 12)}…`
+        );
+    } catch (e) {
+        return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
+    }
 
     const totalAccounts = Object.keys(entry.accounts).length;
     const isAlt = isNewAccount && totalAccounts > 1;
