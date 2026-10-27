@@ -77,6 +77,7 @@ export async function POST(req) {
     const entries = Object.keys(bans).map(k => {
         const b = bans[k];
         const attempts = Array.isArray(b.attempts) ? b.attempts : [];
+        const accounts = b.accounts || {};
         return {
             hwid: k,
             username: b.username || "?",
@@ -87,6 +88,8 @@ export async function POST(req) {
             lastSeen: b.lastSeen || 0,
             hitCount: b.hitCount || 0,
             attemptCount: attempts.length,
+            accountCount: Object.keys(accounts).length,
+            accounts: accounts,
             attempts: attempts.slice(-5).map(a => ({
                 username: a.username || "?",
                 displayName: a.displayName || "?",
@@ -95,6 +98,7 @@ export async function POST(req) {
                 gameName: a.gameName || "?",
                 timestamp: a.timestamp || 0,
                 changed: !!a.changed,
+                newAccount: !!a.newAccount,
             })),
         };
     });
