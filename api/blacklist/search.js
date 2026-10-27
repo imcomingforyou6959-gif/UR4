@@ -22,9 +22,7 @@ async function fetchRepoFile() {
 
 export async function POST(req) {
     const secret = req.headers.get("x-bot-secret");
-    if (!BOT_SECRET || secret !== BOT_SECRET) {
-        return Response.json({ err: "unauthorized" }, { status: 401 });
-    }
+    if (!BOT_SECRET || secret !== BOT_SECRET) return Response.json({ err: "unauthorized" }, { status: 401 });
     if (!GH_TOKEN) return Response.json({ err: "no_token" }, { status: 500 });
 
     let body;
@@ -39,18 +37,27 @@ export async function POST(req) {
     catch (e) { return Response.json({ err: "gh_read", msg: String(e) }, { status: 502 }); }
 
     const bans = data.banned_hwids || {};
+    const viol = data.violations || {};
+    const all = {};
+    for (const [k, v] of Object.entries(bans)) all[k] = { entry: v, status: "banned" };
+    for (const [k, v] of Object.entries(viol)) all[k] = { entry: v, status: "unbanned" };
+
     const q = query.toLowerCase();
     const qNum = Number(query);
-
     const hwidMatches = [];
     const accountMatches = [];
 
-    for (const [hwid, entry] of Object.entries(bans)) {
+    for (const [hwid, { entry, status }] of Object.entries(all)) {
         if (hwid.toLowerCase().includes(q)) {
             hwidMatches.push({
                 hwid,
-                ...entry,
+                status,
+                username: entry.username || "?",
+                displayName: entry.displayName || "?",
+                userId: entry.userId || 0,
+                reason: entry.reason || "",
                 accountCount: Object.keys(entry.accounts || {}).length,
+                hitCount: entry.hitCount || 0,
             });
         }
         const accounts = entry.accounts || {};
@@ -63,11 +70,10 @@ export async function POST(req) {
             if (matches && !hwidMatches.find(m => m.hwid === hwid)) {
                 accountMatches.push({
                     hwid,
+                    status,
                     account: acc,
                     reason: entry.reason,
-                    bannedAt: entry.bannedAt,
                     hitCount: entry.hitCount || 0,
-                    hwidOwnerUsername: entry.username,
                 });
             }
         }
@@ -75,7 +81,7 @@ export async function POST(req) {
 
     const linkedByHwid = {};
     for (const m of accountMatches) {
-        if (!linkedByHwid[m.hwid]) linkedByHwid[m.hwid] = { hwid: m.hwid, accounts: [], reason: m.reason, hitCount: m.hitCount };
+        if (!linkedByHwid[m.hwid]) linkedByHwid[m.hwid] = { hwid: m.hwid, status: m.status, accounts: [], reason: m.reason, hitCount: m.hitCount };
         linkedByHwid[m.hwid].accounts.push(m.account);
     }
 
