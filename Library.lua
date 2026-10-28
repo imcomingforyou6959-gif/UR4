@@ -45,6 +45,21 @@ ProtectGui(ScreenGui);
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global;
 ScreenGui.Parent = CoreGui;
 
+-- [TOUCH] click = left mouse button OR a finger tap
+local function IsClick(Input)
+    return Input.UserInputType == Enum.UserInputType.MouseButton1
+        or Input.UserInputType == Enum.UserInputType.Touch
+end
+
+-- [TOUCH] true while the mouse button / finger is still down
+local function IsHeld(Input)
+    if Input.UserInputType == Enum.UserInputType.Touch then
+        return Input.UserInputState ~= Enum.UserInputState.End
+            and Input.UserInputState ~= Enum.UserInputState.Cancel
+    end
+    return InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
+end
+
 local Toggles = {};
 local Options = {};
 
@@ -194,7 +209,7 @@ function Library:MakeDraggable(Instance, Cutoff)
     Instance.Active = true;
 
     Instance.InputBegan:Connect(function(Input)
-        if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if IsClick(Input) then
             local ObjPos = Vector2.new(
                 Mouse.X - Instance.AbsolutePosition.X,
                 Mouse.Y - Instance.AbsolutePosition.Y
@@ -204,7 +219,7 @@ function Library:MakeDraggable(Instance, Cutoff)
                 return;
             end;
 
-            while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+            while IsHeld(Input) do
                 Instance.Position = UDim2.new(
                     0,
                     Mouse.X - ObjPos.X + (Instance.Size.X.Offset * Instance.AnchorPoint.X),
@@ -323,6 +338,24 @@ function Library:IsMouseOverFrame(Frame)
         return true;
     end;
 end;
+
+-- [TOUCH] long press = right click replacement
+function Library:OnLongPress(Inst, Callback, Time)
+    Inst.InputBegan:Connect(function(Input)
+        if Input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local Start = Input.Position
+
+        task.delay(Time or 0.4, function()
+            if IsHeld(Input) and (Input.Position - Start).Magnitude < 12 then
+                Library.LongPressActive = true
+                Callback()
+                while IsHeld(Input) do RenderStepped:Wait() end
+                task.wait(0.2)
+                Library.LongPressActive = false
+            end
+        end)
+    end)
+end
 
 function Library:UpdateDependencyBoxes()
     for _, Depbox in next, Library.DependencyBoxes do
@@ -936,7 +969,7 @@ do
                 );
 
                 Button.InputBegan:Connect(function(Input)
-                    if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                    if not IsClick(Input) then
                         return
                     end
 
@@ -1074,8 +1107,8 @@ do
         end;
 
         SatVibMap.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+            if IsClick(Input) then
+                while IsHeld(Input) do
                     local MinX = SatVibMap.AbsolutePosition.X;
                     local MaxX = MinX + SatVibMap.AbsoluteSize.X;
                     local MouseX = math.clamp(Mouse.X, MinX, MaxX);
@@ -1096,8 +1129,8 @@ do
         end);
 
         HueSelectorInner.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+            if IsClick(Input) then
+                while IsHeld(Input) do
                     local MinY = HueSelectorInner.AbsolutePosition.Y;
                     local MaxY = MinY + HueSelectorInner.AbsoluteSize.Y;
                     local MouseY = math.clamp(Mouse.Y, MinY, MaxY);
@@ -1113,7 +1146,7 @@ do
         end);
 
         DisplayFrame.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+            if IsClick(Input) and not Library:MouseIsOverOpenedFrame() then
                 if PickerFrameOuter.Visible then
                     ColorPicker:Hide()
                 else
@@ -1126,10 +1159,16 @@ do
             end
         end);
 
+        -- [TOUCH] long press opens the copy/paste menu (right click replacement)
+        Library:OnLongPress(DisplayFrame, function()
+            ContextMenu:Show()
+            ColorPicker:Hide()
+        end)
+
         if TransparencyBoxInner then
             TransparencyBoxInner.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
-                    while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                if IsClick(Input) then
+                    while IsHeld(Input) do
                         local MinX = TransparencyBoxInner.AbsolutePosition.X;
                         local MaxX = MinX + TransparencyBoxInner.AbsoluteSize.X;
                         local MouseX = math.clamp(Mouse.X, MinX, MaxX);
@@ -1147,7 +1186,7 @@ do
         end;
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if IsClick(Input) then
                 local AbsPos, AbsSize = PickerFrameOuter.AbsolutePosition, PickerFrameOuter.AbsoluteSize;
 
                 if Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
@@ -1308,7 +1347,7 @@ do
             end;
 
             Label.InputBegan:Connect(function(Input)
-                if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                if IsClick(Input) then
                     ModeButton:Select();
                     Library:AttemptSave();
                 end;
@@ -1405,6 +1444,14 @@ do
         local Picking = false;
 
         PickOuter.InputBegan:Connect(function(Input)
+            -- [TOUCH] no keyboard on touch: tapping the box toggles the mode menu
+            if Input.UserInputType == Enum.UserInputType.Touch then
+                if not Library:MouseIsOverOpenedFrame() then
+                    ModeSelectOuter.Visible = not ModeSelectOuter.Visible
+                end
+                return
+            end
+
             if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
                 Picking = true;
 
@@ -1491,11 +1538,13 @@ do
                 KeyPicker:Update();
             end;
 
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if IsClick(Input) then
                 local AbsPos, AbsSize = ModeSelectOuter.AbsolutePosition, ModeSelectOuter.AbsoluteSize;
 
-                if Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
-                    or Mouse.Y < (AbsPos.Y - 20 - 1) or Mouse.Y > AbsPos.Y + AbsSize.Y then
+                -- [TOUCH] don't instantly close the menu on the same tap that opened it
+                if (Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
+                    or Mouse.Y < (AbsPos.Y - 20 - 1) or Mouse.Y > AbsPos.Y + AbsSize.Y)
+                    and not Library:IsMouseOverFrame(PickOuter) then
 
                     ModeSelectOuter.Visible = false;
                 end;
@@ -1694,7 +1743,7 @@ do
                     return false
                 end
 
-                if Input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+                if not IsClick(Input) then
                     return false
                 end
 
@@ -2125,7 +2174,7 @@ do
         end;
 
         ToggleRegion.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+            if IsClick(Input) and not Library:MouseIsOverOpenedFrame() then
                 Toggle:SetValue(not Toggle.Value) -- Why was it not like this from the start?
                 Library:AttemptSave();
             end;
@@ -2314,12 +2363,16 @@ do
         end;
 
         SliderInner.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+            if IsClick(Input) and not Library:MouseIsOverOpenedFrame() then
                 local mPos = Mouse.X;
                 local gPos = Fill.Size.X.Offset;
                 local Diff = mPos - (Fill.AbsolutePosition.X + gPos);
 
-                while InputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) do
+                -- [TOUCH] stop the tab from scrolling while dragging the slider
+                local Scroll = SliderOuter:FindFirstAncestorWhichIsA('ScrollingFrame')
+                if Scroll then Scroll.ScrollingEnabled = false end
+
+                while IsHeld(Input) do
                     local nMPos = Mouse.X;
                     local nX = math.clamp(gPos + (nMPos - mPos) + Diff, 0, Slider.MaxSize);
 
@@ -2336,6 +2389,8 @@ do
 
                     RenderStepped:Wait();
                 end;
+
+                if Scroll then Scroll.ScrollingEnabled = true end
 
                 Library:AttemptSave();
             end;
@@ -2632,7 +2687,7 @@ do
                 end;
 
                 ButtonLabel.InputBegan:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    if IsClick(Input) then
                         local Try = not Selected;
 
                         if Dropdown:GetActiveValues() == 1 and (not Try) and (not Info.AllowNull) then
@@ -2733,7 +2788,7 @@ do
         end;
 
         DropdownOuter.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+            if IsClick(Input) and not Library:MouseIsOverOpenedFrame() then
                 if ListOuter.Visible then
                     Dropdown:CloseDropdown();
                 else
@@ -2743,7 +2798,7 @@ do
         end);
 
         InputService.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if IsClick(Input) then
                 local AbsPos, AbsSize = ListOuter.AbsolutePosition, ListOuter.AbsoluteSize;
 
                 if Mouse.X < AbsPos.X or Mouse.X > AbsPos.X + AbsSize.X
@@ -3463,7 +3518,7 @@ function Library:CreateWindow(...)
                 Library:OnHighlight(Row, Row, { BorderColor3 = 'AccentColor' }, { BorderColor3 = 'OutlineColor' });
 
                 Row.InputBegan:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    if IsClick(Input) then
                         CloseResults()
                         SearchBox:ReleaseFocus()
                         Library:GoToSearchable(E)
@@ -3491,7 +3546,7 @@ function Library:CreateWindow(...)
         end)
 
         Library:GiveSignal(InputService.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 and ResultsOuter.Visible then
+            if IsClick(Input) and ResultsOuter.Visible then
                 if not Library:IsMouseOverFrame(ResultsOuter) and not Library:IsMouseOverFrame(SearchOuter) then
                     CloseResults()
                 end
@@ -3901,7 +3956,7 @@ function Library:CreateWindow(...)
                 end;
 
                 Button.InputBegan:Connect(function(Input)
-                    if Input.UserInputType == Enum.UserInputType.MouseButton1 and not Library:MouseIsOverOpenedFrame() then
+                    if IsClick(Input) and not Library:MouseIsOverOpenedFrame() then
                         Tab:Show();
                         Tab:Resize();
                     end;
@@ -3937,7 +3992,7 @@ function Library:CreateWindow(...)
         end;
 
         TabButton.InputBegan:Connect(function(Input)
-            if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if IsClick(Input) then
                 Tab:ShowTab();
             end;
         end);
@@ -3978,7 +4033,10 @@ function Library:CreateWindow(...)
         if Toggled then
             -- A bit scuffed, but if we're going from not toggled -> toggled we want to show the frame immediately so that the fade is visible.
             Outer.Visible = true;
+        end;
 
+        -- [TOUCH] the fake triangle cursor is only for mouse devices
+        if Toggled and (InputService.MouseEnabled or not InputService.TouchEnabled) then
             task.spawn(function()
                 -- TODO: add cursor fade?
                 local State = InputService.MouseIconEnabled;
@@ -4069,6 +4127,34 @@ function Library:CreateWindow(...)
             task.spawn(Library.Toggle)
         end
     end))
+
+    -- [TOUCH] on-screen button to open/close the menu (no RightShift on mobile)
+    if InputService.TouchEnabled and Config.MobileButton ~= false then
+        local MenuBtn = Library:Create('TextButton', {
+            AnchorPoint = Vector2.new(1, 0);
+            BackgroundColor3 = Library.MainColor;
+            BorderColor3 = Library.AccentColor;
+            Position = UDim2.new(1, -10, 0, 10);
+            Size = UDim2.fromOffset(60, 30);
+            Font = Library.Font;
+            Text = 'Menu';
+            TextSize = 14;
+            TextColor3 = Library.FontColor;
+            AutoButtonColor = false;
+            ZIndex = 300;
+            Parent = ScreenGui;
+        });
+
+        Library:AddToRegistry(MenuBtn, {
+            BackgroundColor3 = 'MainColor';
+            BorderColor3 = 'AccentColor';
+            TextColor3 = 'FontColor';
+        });
+
+        MenuBtn.MouseButton1Click:Connect(function()
+            task.spawn(Library.Toggle)
+        end);
+    end
 
     if Config.AutoShow then task.spawn(Library.Toggle) end
 
@@ -5016,11 +5102,19 @@ function Library:CreateSpotifyPlayer()
             Tween(Row.Frame, { BackgroundTransparency = 1 }, TweenInfo.new(0.1))
         end)
         Connect(Row.Button.MouseButton1Click, function()
+            -- [TOUCH] releasing a long-press must not also play the track
+            if Library.LongPressActive then return end
             if not Row.Frame.Visible or not Row.Track then return end
             PlayUri(Row.Track.Uri)
             RefreshSoon()
         end)
         Connect(Row.Button.MouseButton2Click, function()
+            if not Row.Frame.Visible or not Row.Track then return end
+            local mouse = UserInputService:GetMouseLocation()
+            ShowContextMenu(Row.Track, mouse.X, mouse.Y)
+        end)
+        -- [TOUCH] long press = right click
+        Library:OnLongPress(Row.Button, function()
             if not Row.Frame.Visible or not Row.Track then return end
             local mouse = UserInputService:GetMouseLocation()
             ShowContextMenu(Row.Track, mouse.X, mouse.Y)
@@ -6166,6 +6260,8 @@ function Library:CreateSpotifyPlayer()
 
     for i, btn in ResultButtons do
         Connect(btn.Button.MouseButton1Click, function()
+            -- [TOUCH] releasing a long-press must not also trigger the click
+            if Library.LongPressActive then return end
             local r = SearchResults[i]
             if not r then return end
             if r.IsBack then
@@ -6217,6 +6313,14 @@ function Library:CreateSpotifyPlayer()
             local r = SearchResults[i]
             if not r then return end
             if r.IsBack then return end
+            local mouse = UserInputService:GetMouseLocation()
+            ShowContextMenu(r, mouse.X, mouse.Y)
+        end)
+
+        -- [TOUCH] long press = right click
+        Library:OnLongPress(btn.Button, function()
+            local r = SearchResults[i]
+            if not r or r.IsBack then return end
             local mouse = UserInputService:GetMouseLocation()
             ShowContextMenu(r, mouse.X, mouse.Y)
         end)
@@ -6334,21 +6438,23 @@ function Library:CreateSpotifyPlayer()
         end
     end
 
+    -- [TOUCH] volume slider: accept taps/drags from a finger too
     Connect(Items["VolumeHitbox"].InputBegan, function(input)
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        if not IsClick(input) then return end
         VolumeDragging = true
         ApplyVolumeFromMouse()
     end)
 
     Connect(InputService.InputChanged, function(input)
-        if VolumeDragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        if VolumeDragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch) then
             ApplyVolumeFromMouse()
         end
     end)
 
     Connect(InputService.InputEnded, function(input)
         if not VolumeDragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        if not IsClick(input) then return end
         VolumeDragging = false
         SendVolume(Volume)
     end)
