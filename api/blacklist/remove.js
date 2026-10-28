@@ -2,8 +2,17 @@ import { readFile, writeFile } from "../github.js";
 
 const BOT_SECRET = process.env.BOT_SECRET;
 
-function summarize(e, hwid, status, attemptCount) {
+function summarize(e, hwid, status, attemptCount, globalLinks) {
     const accounts = e.accounts || {};
+    const entryLinked = Array.isArray(e.linkedHwids) ? e.linkedHwids : [];
+
+    const linkedSet = new Set(entryLinked);
+    for (const uid of Object.keys(accounts)) {
+        const globalUserHwids = (globalLinks && globalLinks[uid]) || [];
+        for (const h of globalUserHwids) linkedSet.add(h);
+    }
+    if (!linkedSet.has(hwid)) linkedSet.add(hwid);
+
     return {
         hwid,
         status,
@@ -17,6 +26,8 @@ function summarize(e, hwid, status, attemptCount) {
         hitCount: e.hitCount || 0,
         attemptCount,
         accountCount: Object.keys(accounts).length,
+        linkedHwids: Array.from(linkedSet),
+        linkedCount: linkedSet.size,
         accounts,
     };
 }
@@ -46,9 +57,10 @@ export async function POST(req) {
         const bans = main.data.banned_hwids || {};
         const viol = main.data.violations || {};
         const att = attempts.data.attempts || {};
+        const globalLinks = main.data.linkedHwids || {};
 
-        const banned = Object.keys(bans).map(k => summarize(bans[k], k, "banned", (att[k] || []).length));
-        const unbanned = Object.keys(viol).map(k => summarize(viol[k], k, "unbanned", (att[k] || []).length));
+        const banned = Object.keys(bans).map(k => summarize(bans[k], k, "banned", (att[k] || []).length, globalLinks));
+        const unbanned = Object.keys(viol).map(k => summarize(viol[k], k, "unbanned", (att[k] || []).length, globalLinks));
 
         banned.sort((a, b) => (b.lastSeen || b.bannedAt) - (a.lastSeen || a.bannedAt));
         unbanned.sort((a, b) => (b.unbannedAt || b.lastSeen) - (a.unbannedAt || a.lastSeen));
@@ -117,6 +129,7 @@ export async function POST(req) {
                 userId: entry.userId,
                 reason: entry.reason || "",
                 accountCount: Object.keys(entry.accounts || {}).length,
+                linkedCount: Array.isArray(entry.linkedHwids) ? entry.linkedHwids.length : 0,
                 archived: true,
             },
         });
@@ -140,6 +153,7 @@ export async function POST(req) {
         const viol = main.data.violations || {};
         const att = attempts.data.attempts || {};
         const h = hist.data || {};
+        const globalLinks = main.data.linkedHwids || {};
 
         let raw = bans[hwid];
         let status = "banned";
@@ -149,11 +163,22 @@ export async function POST(req) {
         }
         if (!raw) return Response.json({ err: "not_found" }, { status: 404 });
 
-        const full = summarize(raw, hwid, status, (att[hwid] || []).length);
+        const full = summarize(raw, hwid, status, (att[hwid] || []).length, globalLinks);
         full.attempts = (att[hwid] || []).slice(-10).reverse();
         full.edits = (h.edits?.[hwid] || []).slice(-10).reverse();
         full.unbans = (h.unbans?.[hwid] || []).slice(-10).reverse();
         full.rebans = (h.rebans?.[hwid] || []).slice(-10).reverse();
+
+        const linkedAttempts = [];
+        for (const linked of full.linkedHwids) {
+            if (linked === hwid) continue;
+            const list = att[linked] || [];
+            for (const a of list.slice(-3)) {
+                linkedAttempts.push({ ...a, hwid: linked });
+            }
+        }
+        linkedAttempts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        full.linkedAttempts = linkedAttempts.slice(0, 20);
 
         return Response.json({ ok: true, entry: full });
     }
