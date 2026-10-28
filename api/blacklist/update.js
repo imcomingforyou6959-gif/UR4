@@ -29,7 +29,7 @@ async function post(hook, embed) {
             const res = await fetch(hook, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username: "Alt Detector", embeds: [embed] }),
+                body: JSON.stringify({ username: "Secuirty found rawr.xyz", embeds: [embed] }),
                 signal: ctrl.signal,
             });
             clearTimeout(t);
@@ -91,17 +91,76 @@ export async function POST(req) {
 
     if (!main.data.banned_hwids) main.data.banned_hwids = {};
     if (!main.data.violations) main.data.violations = {};
+    if (!main.data.linkedHwids) main.data.linkedHwids = {};
     if (!attempts.data.attempts) attempts.data.attempts = {};
 
     let entry = main.data.banned_hwids[hwid];
     let target = "banned";
+    let effectiveHwid = hwid;
+
     if (!entry) {
         entry = main.data.violations[hwid];
         target = "unbanned";
     }
-    if (!entry) return Response.json({ err: "not_banned" }, { status: 404 });
 
+    if (!entry) {
+        const uidStr = String(cur.userId);
+        const userHwids = main.data.linkedHwids[uidStr] || [];
+        for (const h of userHwids) {
+            if (main.data.banned_hwids[h]) {
+                entry = main.data.banned_hwids[h];
+                target = "banned";
+                effectiveHwid = h;
+                break;
+            }
+            if (main.data.violations[h]) {
+                entry = main.data.violations[h];
+                target = "unbanned";
+                effectiveHwid = h;
+                break;
+            }
+        }
+    }
+
+    if (!entry) return Response.json({ err: "not_banned" }, { status: 404 });
     if (!entry.accounts) entry.accounts = {};
+    if (!Array.isArray(entry.linkedHwids)) entry.linkedHwids = [];
+
+    const uidStr = String(cur.userId);
+
+    if (!Array.isArray(main.data.linkedHwids[uidStr])) {
+        main.data.linkedHwids[uidStr] = [];
+    }
+    if (!main.data.linkedHwids[uidStr].includes(hwid)) {
+        main.data.linkedHwids[uidStr].push(hwid);
+        if (main.data.linkedHwids[uidStr].length > 30) {
+            main.data.linkedHwids[uidStr] = main.data.linkedHwids[uidStr].slice(-30);
+        }
+    }
+
+    const accountBannedAnywhere =
+        main.data.banned_hwids[hwid] != null
+        || Object.keys(main.data.banned_hwids).some(h => {
+            const e = main.data.banned_hwids[h];
+            if (!e || !e.accounts) return false;
+            return !!e.accounts[uidStr];
+        })
+        || Object.keys(main.data.violations || {}).some(h => {
+            const e = main.data.violations[h];
+            if (!e || !e.accounts) return false;
+            return !!e.accounts[uidStr];
+        });
+
+    if (accountBannedAnywhere) {
+        for (const linked of main.data.linkedHwids[uidStr]) {
+            if (!entry.linkedHwids.includes(linked)) {
+                entry.linkedHwids.push(linked);
+            }
+        }
+        if (entry.linkedHwids.length > 30) {
+            entry.linkedHwids = entry.linkedHwids.slice(-30);
+        }
+    }
 
     const prev = {
         username: entry.username,
@@ -116,6 +175,7 @@ export async function POST(req) {
     const uidKey = String(cur.userId);
     const existing = entry.accounts[uidKey];
     const isNewAccount = !existing;
+    const isNewHwid = effectiveHwid !== hwid || !entry.linkedHwids.includes(hwid);
 
     if (existing) {
         existing.username = cur.username;
@@ -137,8 +197,8 @@ export async function POST(req) {
         };
     }
 
-    if (!Array.isArray(attempts.data.attempts[hwid])) attempts.data.attempts[hwid] = [];
-    attempts.data.attempts[hwid].push({
+    if (!Array.isArray(attempts.data.attempts[effectiveHwid])) attempts.data.attempts[effectiveHwid] = [];
+    attempts.data.attempts[effectiveHwid].push({
         username: cur.username,
         displayName: cur.displayName,
         userId: cur.userId,
@@ -149,10 +209,12 @@ export async function POST(req) {
         timestamp: cur.timestamp,
         changed: infoChanged,
         newAccount: isNewAccount,
+        hwid: hwid,
+        linkedVia: effectiveHwid !== hwid ? effectiveHwid : null,
         target,
     });
-    if (attempts.data.attempts[hwid].length > MAX_ATTEMPTS) {
-        attempts.data.attempts[hwid] = attempts.data.attempts[hwid].slice(-MAX_ATTEMPTS);
+    if (attempts.data.attempts[effectiveHwid].length > MAX_ATTEMPTS) {
+        attempts.data.attempts[effectiveHwid] = attempts.data.attempts[effectiveHwid].slice(-MAX_ATTEMPTS);
     }
 
     entry.lastSeen = cur.timestamp;
@@ -169,13 +231,13 @@ export async function POST(req) {
             "Storage/HWID.json",
             main.data,
             main.sha,
-            `blacklist: hit ${hwid.slice(0, 12)}…`
+            `blacklist: hit ${hwid.slice(0, 12)}… via ${effectiveHwid.slice(0, 12)}…`
         );
         await writeFile(
             "Storage/Attempts.json",
             attempts.data,
             attempts.sha,
-            `attempts: log ${hwid.slice(0, 12)}…`
+            `attempts: log ${effectiveHwid.slice(0, 12)}…`
         );
     } catch (e) {
         return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
@@ -187,6 +249,7 @@ export async function POST(req) {
     let title = "Retry";
     if (isAlt) title = "New Alt";
     else if (infoChanged) title = "Info Changed";
+    else if (isNewHwid) title = "New HWID";
     if (target === "unbanned") title = "Unbanned HWID Run";
 
     const embed = {
@@ -204,21 +267,33 @@ export async function POST(req) {
             { name: "Game", value: cur.gameName || "?", inline: true },
             { name: "Accounts Tied", value: String(totalAccounts), inline: true },
             { name: "Total Hits", value: String(entry.hitCount), inline: true },
+            { name: "Linked HWIDs", value: String(entry.linkedHwids.length), inline: true },
             { name: "Status", value: target === "banned" ? "🔴 Banned" : "🟢 Unbanned", inline: true },
             { name: "When", value: `<t:${cur.timestamp}:R>`, inline: false },
         ],
-        footer: { text: isAlt ? "New account tied to HWID" : infoChanged ? "GitHub entry updated" : "Same account retried" },
+        footer: {
+            text: isAlt
+                ? "New account tied to HWID"
+                : isNewHwid
+                    ? "New HWID linked to banned account"
+                    : infoChanged
+                        ? "GitHub entry updated"
+                        : "Same account retried",
+        },
     };
 
-    const hookResult = await post(infoChanged ? ALT_HOOK : (HIT_HOOK || ALT_HOOK), embed);
+    const hookResult = await post(infoChanged || isNewHwid ? ALT_HOOK : (HIT_HOOK || ALT_HOOK), embed);
 
     return Response.json({
         ok: true,
         changed: infoChanged,
         isAlt,
+        isNewHwid,
         totalAccounts,
+        linkedHwids: entry.linkedHwids.length,
         hits: entry.hitCount,
         status: target,
+        effectiveHwid,
         hook: hookResult,
     });
 }
