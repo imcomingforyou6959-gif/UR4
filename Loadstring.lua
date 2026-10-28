@@ -9950,7 +9950,18 @@ end
 
 function HitChams.DestroyFade(model)
     if not model then return end
-    local children = model:GetChildren()
+
+    local parts = {}
+    for _, d in ipairs(model:GetDescendants()) do
+        if d:IsA("BasePart") then
+            parts[#parts + 1] = d
+        end
+    end
+    if #parts == 0 then
+        if model.Parent then model:Destroy() end
+        return
+    end
+
     local elapsed = 0
     local startTrans = HitChams.Transparency
 
@@ -9964,12 +9975,11 @@ function HitChams.DestroyFade(model)
         local alpha = math.clamp(elapsed / 0.25, 0, 1)
         local eased = TweenService:GetValue(alpha, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
         local transparency = startTrans + (1 - startTrans) * eased
-        for i = 1, #children do
-            local child = children[i]
-            if child and child.Parent then
-                local ct = child.Transparency
-                if ct ~= transparency and ct ~= 1 then
-                    child.Transparency = transparency
+        for i = 1, #parts do
+            local p = parts[i]
+            if p and p.Parent then
+                if p.Transparency ~= transparency and p.Transparency ~= 1 then
+                    p.Transparency = transparency
                 end
             end
         end
@@ -11925,201 +11935,146 @@ do
     end
 end
 
--- Auto grab
-GrabToggle:OnChanged(function(value)
-    GrabEnabled = value
-    if not value and isGrabbing then
-        isGrabbing = false
-        grabbedTarget = nil
-        if grabReturnPos then
-            local char = _56.Character
-            if char then
-                local hrp = char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    pcall(function()
-                        hrp.CFrame = grabReturnPos
-                    end)
-                end
-            end
-            grabReturnPos = nil
-        end
-    end
-end)
+-- grab
 
-function fireGrabRemote()
-    for _, remoteConfig in ipairs(GRAB_REMOTES) do
-        local success = pcall(function()
-            local current = game
-            for _, segment in ipairs(remoteConfig.Path) do
-                current = current[segment]
-                if not current then
-                    error("Path not found: " .. segment)
-                end
-            end
-            
-            if current and current[remoteConfig.Method] then
-                current[remoteConfig.Method](current, unpack(remoteConfig.Args))
-                return true
-            end
-        end)
-        
-        if success then
-            return true
+do
+    GrabbingEnabled = false
+    grabbing = grabbing or false
+    GrabConnection = nil
+    GrabRemote = nil
+    GrabStartTime = 0
+
+    GrabToggle:OnChanged(function(value)
+        GrabbingEnabled = value
+        if not value and GrabConnection then
+            GrabConnection:Disconnect()
+            GrabConnection = nil
+            grabbing = false
+            GrabStartTime = 0
         end
-    end
-    
-    pcall(function()
-        keypress(0x47)
-        task.wait(0.01)
-        keyrelease(0x47)
     end)
-    
-    return true
-end
 
-function isGrabbed(target)
-    if not target then return false end
-    local targetChar = target.Character
-    if not targetChar then return false end
-    
-    if targetChar:FindFirstChild("GRABBING_CONSTRAINT") then
-        return true
-    end
-    
-    local playerFolder = workspace.Players:FindFirstChild(target.Name)
-    if playerFolder then
-        if playerFolder:FindFirstChild("GRABBING_CONSTRAINT") then
-            return true
+    function getGrabRemote()
+        if GrabRemote and GrabRemote.Parent then
+            return GrabRemote
         end
-        local bodyEffects = playerFolder:FindFirstChild("BodyEffects")
-        if bodyEffects then
-            local grabbed = bodyEffects:FindFirstChild("Grabbed")
-            if grabbed and grabbed.Value == true then
-                return true
-            end
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local gameRemotes = replicatedStorage:FindFirstChild("GameRemotes")
+        if gameRemotes then
+            local m = gameRemotes:FindFirstChild("MainGameEvent")
+            if m then GrabRemote = m; return m end
         end
+        local mainRemotes = replicatedStorage:FindFirstChild("MainRemotes")
+        if mainRemotes then
+            local m = mainRemotes:FindFirstChild("MainRemoteEvent")
+            if m then GrabRemote = m; return m end
+        end
+        local remotes = replicatedStorage:FindFirstChild("Remotes")
+        if remotes then
+            local m = remotes:FindFirstChild("MainRemoteEvent")
+            if m then GrabRemote = m; return m end
+        end
+        local mainEvent = replicatedStorage:FindFirstChild("MainEvent")
+        if mainEvent then GrabRemote = mainEvent; return mainEvent end
+        return nil
     end
-    
-    return false
-end
 
-function autoGrabTarget()
-    if not GrabEnabled then return end
-    if isGrabbing then return end
-    if _118 then return end
-    if stomping then return end
-    if _AA_busy then return end
-    
-    if tick() - lastGrabAttempt < GRAB_CONFIG.GRAB_COOLDOWN then return end
-    
-    local target = _104.targetplayer
-    if not target then return end
-    
-    if isGrabbed(target) then return end
-    
-    local targetChar = target.Character
-    if not targetChar or not targetChar.Parent then return end
-    
-    local BodyEffects = targetChar:FindFirstChild("BodyEffects")
-    if not BodyEffects then return end
-    
-    local KOCheck = BodyEffects:FindFirstChild("K.O")
-    if not KOCheck or KOCheck.Value ~= true then return end
-    
-    local deadCheck = BodyEffects:FindFirstChild("Dead")
-    if deadCheck and deadCheck.Value == true then return end
-    
-    local localChar = _56.Character
-    if not localChar then return end
-    
-    local localHRP = localChar:FindFirstChild("HumanoidRootPart")
-    if not localHRP then return end
-    
-    local targetPart = targetChar:FindFirstChild("UpperTorso") 
-        or targetChar:FindFirstChild("Torso") 
-        or targetChar:FindFirstChild("HumanoidRootPart")
-        or targetChar:FindFirstChild("LowerTorso")
-    
-    if not targetPart then return end
-    
-    pcall(function() 
-        localHRP:SetNetworkOwner(_56) 
-        targetPart:SetNetworkOwner(_56)
-    end)
-    
-    lastGrabAttempt = tick()
-    
-    grabReturnPos = localHRP.CFrame
-    grabbedTarget = target
-    isGrabbing = true
-    
-    local grabPos = targetPart.Position + Vector3.new(0, GRAB_CONFIG.HEIGHT_ABOVE_TARGET, 0)
-    localHRP.CFrame = CFrame.new(grabPos)
-    
-    fireGrabRemote()
-    task.wait(0.05)
-    fireGrabRemote()
-    task.wait(0.05)
-    
-    local startTime = tick()
-    local lastFire = tick()
-    local fireCount = 0
-    local grabbedSuccess = false
-    
-    while isGrabbing and tick() - startTime < GRAB_CONFIG.GRAB_DURATION do
-        if isGrabbed(target) then 
-            grabbedSuccess = true
-            break
-        end
-        
-        local now = tick()
-        
-        targetChar = target.Character
-        if targetChar and targetChar.Parent then
-            targetPart = targetChar:FindFirstChild("UpperTorso") 
-                or targetChar:FindFirstChild("Torso") 
-                or targetChar:FindFirstChild("HumanoidRootPart")
-                or targetChar:FindFirstChild("LowerTorso")
-            
-            if targetPart then
-                pcall(function() 
-                    targetPart:SetNetworkOwner(_56)
-                end)
-                
-                grabPos = targetPart.Position + Vector3.new(0, GRAB_CONFIG.HEIGHT_ABOVE_TARGET, 0)
-                localHRP.CFrame = CFrame.new(grabPos)
-            end
-        else
-            break
-        end
-        
-        if now - lastFire >= GRAB_CONFIG.KEY_PRESS_INTERVAL then
-            fireGrabRemote()
-            lastFire = now
-            fireCount = fireCount + 1
-        end
-        
-        task.wait(0.01)
+    function fireGrab(action)
+        local remote = getGrabRemote()
+        if not remote then return end
+        pcall(function() remote:FireServer(action) end)
     end
-    
-    task.wait(0.1)
-    
-    if isGrabbed(target) then
-        grabbedSuccess = true
-    end
-    
-    if grabReturnPos then
+
+    function autoGrabTarget()
+        if not GrabbingEnabled then return end
+        if _118 then return end
+        if grabbing then return end
+        if stomping then return end
+        if _AA_busy then return end
+        if IdleState ~= "none" then return end
+        if Restoring then return end
+
+        local target = _104.targetplayer
+        if not target then return end
+        local targetChar = target.Character
+        if not targetChar then return end
+        if Grabbed(target) then return end
+
+        local BodyEffects = targetChar:FindFirstChild("BodyEffects")
+        if not BodyEffects then return end
+        local KOCheck = BodyEffects:FindFirstChild("K.O")
+        if not KOCheck or KOCheck.Value ~= true then return end
+
+        local localChar = _56.Character
+        if not localChar then return end
+        local localHRP = localChar:FindFirstChild("HumanoidRootPart")
+        if not localHRP then return end
+
+        local targetPart = getBestStompPosition(targetChar)
+        if not targetPart then return end
+
+        grabbing = true
+        GrabStartTime = tick()
+        local lastpos = localHRP.CFrame
+
+        localHRP.Anchored = false
         pcall(function()
-            localHRP.CFrame = grabReturnPos
+            localHRP:SetNetworkOwner(_56)
+            targetPart:SetNetworkOwner(_56)
         end)
-    end
-    
-    isGrabbing = false
-    grabbedTarget = nil
-    grabReturnPos = nil
-    
-    if grabbedSuccess then
-        lastGrabAttempt = tick()
+
+        localHRP.CFrame = targetPart.CFrame
+        localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+        for i = 1, 20 do fireGrab("Grab") end
+
+        if GrabConnection then GrabConnection:Disconnect() end
+        GrabConnection = _52.RenderStepped:Connect(function()
+            if not grabbing then
+                if GrabConnection then GrabConnection:Disconnect(); GrabConnection = nil end
+                return
+            end
+
+            local beNow = targetChar and targetChar.Parent and targetChar:FindFirstChild("BodyEffects")
+            local koNow = beNow and beNow:FindFirstChild("K.O")
+            if not koNow or koNow.Value ~= true then
+                grabbing = false
+                GrabStartTime = 0
+                if GrabConnection then GrabConnection:Disconnect(); GrabConnection = nil end
+                if not StompReturnLocked and not Restoring and IdleState == "none" and localHRP and localHRP.Parent then
+                    local safeReturn = findSafeReturnPosition(lastpos.Position)
+                    pcall(function() localHRP.CFrame = safeReturn end)
+                end
+                return
+            end
+
+            local currentTargetPart = getBestStompPosition(targetChar)
+            if not currentTargetPart then
+                grabbing = false
+                GrabStartTime = 0
+                if GrabConnection then GrabConnection:Disconnect(); GrabConnection = nil end
+                return
+            end
+
+            localHRP.CFrame = currentTargetPart.CFrame
+            localHRP.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            localHRP.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+            for i = 1, 4 do fireGrab("Grab") end
+        end)
+
+        task.delay(0.5, function()
+            if grabbing then
+                grabbing = false
+                GrabStartTime = 0
+                if GrabConnection then GrabConnection:Disconnect(); GrabConnection = nil end
+                if not StompReturnLocked and not Restoring and IdleState == "none" and localHRP and localHRP.Parent then
+                    local safeReturn = findSafeReturnPosition(lastpos.Position)
+                    pcall(function() localHRP.CFrame = safeReturn end)
+                end
+            end
+        end)
     end
 end
 
@@ -12173,6 +12128,9 @@ Disengaging = false
 OrbitNetworkClaimed = false
 Restoring = false
 _restoringSince = nil
+_enterIdleLock = false
+_exitIdleLock = false
+_respawnVersion = 0
 
 _G.OrbitBehavior = 'Orbit'
 lastValidTargetPos = nil
@@ -12201,14 +12159,12 @@ disengageAt = 0
 ReloadingActive = false
 ReloadHoldUntil = 0
 RELOAD_HOLD_TIME = 1.2
-
-VOID_THRESHOLD = math.huge
-VOID_SELF_THRESHOLD = 5e6
+VOID_THRESHOLD = 500000000
 VoidBasePos = nil
 
 VoidCycleTime = 0
 VoidCycleInterval = 0.05
-VoidDistance = 1e7
+VoidDistance = 50000000
 VoidJitterStrength = 4
 VoidJitterRate = 60
 VoidRandomCornerChance = 0.1
@@ -12224,52 +12180,37 @@ PingPredictionEnabled = false
 PingPredictionScale = 0.5
 DirectCFramePrediction = false
 
-ResolverRate = 0.02
+ResolverRate = 0.015
 predictionLastPos = nil
 predictionLastTime = 0
 predictionVelocity = Vector3.new(0, 0, 0)
 resolverLastRun = 0
 resolvedPredictedPos = nil
 
-SnapEnabled     = false
-SnapHoldTime    = 0.5
-SnapOrbitTime   = 2.0
-SnapPhase       = "off"
-SnapPhaseUntil  = 0
-_lastPhysicsRepApply = 0
+SnapEnabled    = false
+SnapHoldTime   = 0.5
+SnapOrbitTime  = 2.0
+SnapPhase      = "off"
+SnapPhaseUntil = 0
 
 PositionResolverSources = {
-    "HumanoidRootPart",
-    "UpperTorso",
-    "LowerTorso",
-    "Torso",
-    "Head",
-    "LeftFoot",
-    "RightFoot",
-    "LeftHand",
-    "RightHand",
+    "HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso", "Head",
+    "LeftFoot", "RightFoot", "LeftHand", "RightHand",
 }
 
 PositionSourceWeights = {
-    HumanoidRootPart = 1.00,
-    UpperTorso       = 0.95,
-    LowerTorso       = 0.90,
-    Torso            = 0.85,
-    Head             = 0.80,
-    LeftUpperArm     = 0.50,
-    RightUpperArm    = 0.50,
-    LeftHand         = 0.35,
-    RightHand        = 0.35,
-    LeftUpperLeg     = 0.45,
-    RightUpperLeg    = 0.45,
-    LeftFoot         = 0.25,
-    RightFoot        = 0.25,
+    HumanoidRootPart = 1.00, UpperTorso = 0.95, LowerTorso = 0.90,
+    Torso = 0.85, Head = 0.80, LeftUpperArm = 0.50, RightUpperArm = 0.50,
+    LeftHand = 0.35, RightHand = 0.35, LeftUpperLeg = 0.45, RightUpperLeg = 0.45,
+    LeftFoot = 0.25, RightFoot = 0.25,
 }
 
-OUTLIER_THRESHOLD  = math.huge
-AnchorSmoothRate   = 0.35
-LastAnchorPos      = nil
-LastAnchorLook     = nil
+OUTLIER_THRESHOLD    = 15
+AnchorSmoothRate     = 0.42
+AnchorSmoothRateFast = 0.65
+AnchorFastMoveDist   = 25
+LastAnchorPos        = nil
+LastAnchorLook       = nil
 
 ResolverEnabled        = false
 ResolverSmoothing      = 0.4
@@ -12284,30 +12225,22 @@ function ResolverUpdate(target, pos)
     local st = ResolverStates[target]
     if not st then
         ResolverStates[target] = {
-            lastPos = pos,
-            lastTime = now,
-            velocity = Vector3.new(),
-            prevVelocity = Vector3.new(),
-            accel = Vector3.new(),
+            lastPos = pos, lastTime = now, velocity = Vector3.new(),
+            prevVelocity = Vector3.new(), accel = Vector3.new(),
         }
         return pos
     end
     local dt = now - st.lastTime
     if dt > 0.001 and dt < 0.5 then
         local instVel = (pos - st.lastPos) / dt
-        if instVel.Magnitude > ResolverMaxSpeed then
-            instVel = instVel.Unit * ResolverMaxSpeed
-        end
+        if instVel.Magnitude > ResolverMaxSpeed then instVel = instVel.Unit * ResolverMaxSpeed end
         st.velocity = st.velocity:Lerp(instVel, ResolverSmoothing)
-
         local instAccel = (st.velocity - st.prevVelocity) / dt
-        if instAccel.Magnitude > ResolverMaxAccel then
-            instAccel = instAccel.Unit * ResolverMaxAccel
-        end
+        if instAccel.Magnitude > ResolverMaxAccel then instAccel = instAccel.Unit * ResolverMaxAccel end
         st.accel = st.accel:Lerp(instAccel, ResolverAccelSmoothing)
         st.prevVelocity = st.velocity
     end
-    st.lastPos  = pos
+    st.lastPos = pos
     st.lastTime = now
     return pos
 end
@@ -12362,14 +12295,14 @@ function AntiAimApply(baseCF, dt)
     return baseCF * CFrame.Angles(pitch, yaw, 0)
 end
 
-OrbitRadiusJitter    = 1.5
-OrbitHeightJitter    = 1.0
-OrbitNoiseSeedX      = math.random() * 1000
-OrbitNoiseSeedY      = math.random() * 1000
-OrbitNoiseSeedZ      = math.random() * 1000
-OrbitLastRadius      = nil
-OrbitLastHeight      = nil
-orbit_smoothrate    = 0.15
+OrbitRadiusJitter = 1.5
+OrbitHeightJitter = 1.0
+OrbitNoiseSeedX   = math.random() * 1000
+OrbitNoiseSeedY   = math.random() * 1000
+OrbitNoiseSeedZ   = math.random() * 1000
+OrbitLastRadius   = nil
+OrbitLastHeight   = nil
+orbit_smoothrate  = 0.15
 
 function ComputeJitteredOrbit(anchorPos, now)
     local phase = math.noise(now * 0.3, OrbitNoiseSeedX) * math.pi * 2
@@ -12379,7 +12312,6 @@ function ComputeJitteredOrbit(anchorPos, now)
     local hNoise1 = math.noise(0, now * 0.9 + OrbitNoiseSeedZ)
     local hNoise2 = math.noise(0, now * 2.3 + OrbitNoiseSeedZ + 31) * 0.25
     local rawHeight = OrbitHeight + (hNoise1 + hNoise2) * OrbitHeightJitter
-
     if OrbitLastRadius then
         OrbitLastRadius = OrbitLastRadius + (rawRadius - OrbitLastRadius) * orbit_smoothrate
         OrbitLastHeight = OrbitLastHeight + (rawHeight - OrbitLastHeight) * orbit_smoothrate
@@ -12387,7 +12319,6 @@ function ComputeJitteredOrbit(anchorPos, now)
         OrbitLastRadius = rawRadius
         OrbitLastHeight = rawHeight
     end
-
     local angle = OrbitAngle + phase
     local x = math.cos(angle) * OrbitLastRadius
     local z = math.sin(angle) * OrbitLastRadius
@@ -12402,9 +12333,7 @@ function UpdateReloadingState()
         ReloadingActive = true
         ReloadHoldUntil = tick() + RELOAD_HOLD_TIME
     elseif ReloadingActive then
-        if tick() >= ReloadHoldUntil then
-            ReloadingActive = false
-        end
+        if tick() >= ReloadHoldUntil then ReloadingActive = false end
     end
     return ReloadingActive
 end
@@ -12412,67 +12341,29 @@ end
 function IsVoidPosition(pos)
     if typeof(pos) ~= "Vector3" then return true end
     if pos.X ~= pos.X or pos.Y ~= pos.Y or pos.Z ~= pos.Z then return true end
-    if pos.X == math.huge or pos.X == -math.huge then return true end
-    if pos.Y == math.huge or pos.Y == -math.huge then return true end
-    if pos.Z == math.huge or pos.Z == -math.huge then return true end
-    return false
+    return math.abs(pos.X) > VOID_THRESHOLD
+        or math.abs(pos.Y) > VOID_THRESHOLD
+        or math.abs(pos.Z) > VOID_THRESHOLD
 end
 
-function IsSelfInVoid()
-    local hrp = GetSelfHRP()
-    if not hrp then return false end
-    local p = hrp.Position
-    return math.abs(p.X) > VOID_SELF_THRESHOLD
-        or math.abs(p.Y) > VOID_SELF_THRESHOLD
-        or math.abs(p.Z) > VOID_SELF_THRESHOLD
-end
-
--- FIXED: handle anchored HRP before claiming ownership
 function SafeSetOwner(hrp, owner)
     if not hrp then return end
     if not hrp:IsA("BasePart") then return end
-    local wasAnchored = hrp.Anchored
-    if wasAnchored then
-        pcall(function() hrp.Anchored = false end)
-    end
-    for _ = 1, 3 do
-        local ok, current = pcall(function() return hrp:GetNetworkOwner() end)
-        if ok and current == owner then break end
-        pcall(function() hrp:SetNetworkOwner(owner) end)
-        local ok2, current2 = pcall(function() return hrp:GetNetworkOwner() end)
-        if ok2 and current2 == owner then break end
-    end
-    if wasAnchored then
-        pcall(function() hrp.Anchored = true end)
-    end
-end
-
-function ApplyPhysicsRepRootPart(force)
-    if not sethiddenproperty then return end
-    local now = tick()
-    if not force and now - _lastPhysicsRepApply < 0.25 then return end
-    _lastPhysicsRepApply = now
-    local char = _56 and _56.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = hum and hum.RootPart
-    if root then
-        pcall(function() sethiddenproperty(root, "PhysicsRepRootPart", nil) end)
-    end
+    if hrp.Anchored then return end
+    local ok, current = pcall(function() return hrp:GetNetworkOwner() end)
+    if ok and current == owner then return end
+    pcall(function() hrp:SetNetworkOwner(owner) end)
 end
 
 function IsGrounded(hrp)
-    if not hrp then return false end
-    if not hrp.Parent then return false end
+    if not hrp or not hrp.Parent then return false end
     local hum = hrp.Parent:FindFirstChildOfClass("Humanoid")
     if not hum then return false end
     local st = hum:GetState()
     if st == Enum.HumanoidStateType.Freefall
         or st == Enum.HumanoidStateType.Jumping
         or st == Enum.HumanoidStateType.FallingDown
-        or st == Enum.HumanoidStateType.Swimming then
-        return false
-    end
+        or st == Enum.HumanoidStateType.Swimming then return false end
     if hum.FloorMaterial == Enum.Material.Air then return false end
     local v = hrp.AssemblyLinearVelocity
     if math.abs(v.Y) > 2 then return false end
@@ -12483,14 +12374,11 @@ function ProjectToGround(cf)
     if not cf then return nil end
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Exclude
-    local char = _56 and _56.Character
-    if char then
-        rp.FilterDescendantsInstances = { char }
-    end
-    local origin = cf.Position + Vector3.new(0, 100, 0)
-    local result = workspace:Raycast(origin, Vector3.new(0, -1000, 0), rp)
+    rp.FilterDescendantsInstances = { _56.Character }
+    local origin = cf.Position + Vector3.new(0, 5, 0)
+    local result = workspace:Raycast(origin, Vector3.new(0, -200, 0), rp)
     if result then
-        local pos = Vector3.new(cf.Position.X, result.Position.Y + 5, cf.Position.Z)
+        local pos = Vector3.new(cf.Position.X, result.Position.Y + 3, cf.Position.Z)
         return CFrame.new(pos, pos + cf.LookVector)
     end
     return cf
@@ -12514,17 +12402,17 @@ end
 function CanSaveAnchor()
     if Restoring then return false end
     if IdleState ~= "none" then return false end
+    if stomping then return false end
     if tick() - LastIdleExitTime < AnchorSaveDelay then return false end
     return true
 end
 
 function UpdateSelfAnchor()
-    if Restoring then return end
-    if IdleState ~= "none" then return end
+    if Restoring or IdleState ~= "none" or stomping then return end
     if OrbitEnabled and OrbitTarget then return end
     local hrp = GetSelfHRP()
     if not hrp then return end
-    if IsSelfInVoid() then return end
+    if IsVoidPosition(hrp.Position) then return end
     if not IsGrounded(hrp) then return end
     LastRealSelfCFrame = hrp.CFrame
 end
@@ -12534,7 +12422,7 @@ function CaptureReturnPoint()
     if not CanSaveAnchor() then return end
     local hrp = GetSelfHRP()
     if not hrp then return end
-    if IsSelfInVoid() then
+    if IsVoidPosition(hrp.Position) then
         if LastRealSelfCFrame then
             ReturnCFrame = ProjectToGround(LastRealSelfCFrame) or LastRealSelfCFrame
             ReturnSet = true
@@ -12554,7 +12442,7 @@ function ForceReturnPoint()
     end
     local hrp = GetSelfHRP()
     if not hrp then return end
-    if IsSelfInVoid() then return end
+    if IsVoidPosition(hrp.Position) then return end
     ReturnCFrame = ProjectToGround(hrp.CFrame) or hrp.CFrame
     ReturnSet = true
 end
@@ -12568,53 +12456,69 @@ function ClaimLocal()
     local hrp = GetSelfHRP()
     if not hrp then return end
     SafeSetOwner(hrp, _56)
-    ApplyPhysicsRepRootPart()
     OrbitNetworkClaimed = true
 end
 
 function ReleaseLocal()
     local hrp = GetSelfHRP()
-    if hrp then
-        SafeSetOwner(hrp, nil)
-        local char = _56 and _56.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local root = hum and hum.RootPart
-        if root and sethiddenproperty then
-            pcall(function()
-                if Enum.PhysRepRootPart then
-                    sethiddenproperty(root, "PhysicsRepRootPart", Enum.PhysRepRootPart.HumanoidRootPart)
-                end
-            end)
-        end
-    end
+    if hrp then SafeSetOwner(hrp, nil) end
     OrbitNetworkClaimed = false
 end
 
 function IsTargetKO(target)
-    if not target or not target.Character then return false end
-    if not target.Character.Parent then return false end
+    if not target or not target.Character or not target.Character.Parent then return false end
     local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
     if not be then return false end
     local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked")
     return ko ~= nil and ko.Value == true
 end
 
-function _orbitTargetValid(target)
+function IsTargetDeadFlag(target)
+    if not target or not target.Character or not target.Character.Parent then return false end
+    local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
+    if not be then return false end
+    local d = be:FindFirstChild("Dead")
+    return d ~= nil and d.Value == true
+end
+
+function IsTargetCharacterGone(target)
     if not target then return false end
     if not target.Parent then return false end
-    if not target.Character then return false end
-    if not target.Character.Parent then return false end
+    if not target.Character then return true end
+    if not target.Character.Parent then return true end
+    return false
+end
+
+function IsTargetIncapacitated(target)
+    if not target then return false end
+    if not target.Parent then return false end
+    if not target.Character then return true end
+    if not target.Character.Parent then return true end
+    return IsTargetKO(target) or IsTargetDeadFlag(target) or isDead(target)
+end
+
+function _orbitTargetValid(target)
+    if not target or not target.Parent or not target.Character or not target.Character.Parent then return false end
     local be = target.Character:FindFirstChild("BodyEffects") or target.Character:FindFirstChild("Character")
     if not be then return false end
     local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked")
     if ko and ko.Value == true then return false end
+    local d = be:FindFirstChild("Dead")
+    if d and d.Value == true then return false end
     if Grabbed(target) then return false end
     if isDead(target) then return false end
     return true
 end
 
 function IsWaitingForRespawn(target)
-    if not target or not target.Character then return false end
+    if not target then return false end
+
+    -- Character destroyed but still targeted: DO NOT treat as waiting.
+    -- Idle branches in Orbit() handle this via the "gone" path.
+    if not target.Character or not target.Character.Parent then
+        return false
+    end
+
     if lastTargetCharacter == nil then
         lastTargetCharacter = target.Character
         respawnPending = false
@@ -12630,27 +12534,17 @@ function IsWaitingForRespawn(target)
     lastTargetCharacter = target.Character
     targetRespawnTime = tick()
     respawnPending = true
-
     IdleSpamFirst = false
     IdleSpamSwitchAt = tick() + IdleSpamStrafeTime
-
     return true
 end
 
-local _StatsService = nil
 function GetPingSeconds()
     if not _56 then return 0 end
-    if not _StatsService then
-        local ok, s = pcall(function() return game:GetService("Stats") end)
-        if not ok or not s then return 0 end
-        _StatsService = s
-    end
     local ok, ping = pcall(function()
-        return _StatsService.Network.ServerStatsItem["Data Ping"]:GetValue()
+        return game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
     end)
-    if ok and ping then
-        return (ping / 1000) * PingPredictionScale
-    end
+    if ok and ping then return (ping / 1000) * PingPredictionScale end
     return 0
 end
 
@@ -12661,12 +12555,9 @@ function UpdatePrediction(target, resolvedPos)
         predictionLastTime = 0
         return resolvedPos
     end
-
     if ResolverEnabled and target then
         local rvel = ResolverGetVelocity(target)
-        if rvel.Magnitude > 0.01 then
-            predictionVelocity = rvel
-        end
+        if rvel.Magnitude > 0.01 then predictionVelocity = rvel end
     else
         local now2 = tick()
         if predictionLastPos and predictionLastTime > 0 then
@@ -12679,92 +12570,73 @@ function UpdatePrediction(target, resolvedPos)
         predictionLastPos  = resolvedPos
         predictionLastTime = now2
     end
-
     local t = PredictionMultiplier
     local ahead = predictionVelocity * t
     if ResolverEnabled and target then
         local raccel = ResolverGetAcceleration(target)
         ahead = ahead + raccel * (0.5 * t * t)
     end
-    if PingPredictionEnabled then
-        ahead = ahead * (1 + GetPingSeconds())
-    end
+    if PingPredictionEnabled then ahead = ahead * (1 + GetPingSeconds()) end
     return resolvedPos + ahead
 end
 
 function ResolveTargetPosition(target)
     if not target or not target.Character then return nil, nil end
     local char = target.Character
-
-    local samples = {}
+    local sumX, sumY, sumZ = 0, 0, 0
     local totalWeight = 0
+    local samples = {}
+    local sampleCount = 0
     for name, weight in pairs(PositionSourceWeights) do
         local part = char:FindFirstChild(name)
         if part and part:IsA("BasePart") then
             local pos = part.Position
             if not IsVoidPosition(pos) then
-                samples[#samples + 1] = { pos = pos, weight = weight, cf = part.CFrame }
+                sampleCount = sampleCount + 1
+                samples[sampleCount] = { pos = pos, weight = weight, cf = part.CFrame }
+                sumX = sumX + pos.X * weight
+                sumY = sumY + pos.Y * weight
+                sumZ = sumZ + pos.Z * weight
                 totalWeight = totalWeight + weight
             end
         end
     end
-
-    if #samples == 0 then
-        if lastValidTargetCFrame then
-            return lastValidTargetCFrame, lastValidTargetCFrame.Position
-        end
+    if sampleCount == 0 then
+        if lastValidTargetCFrame then return lastValidTargetCFrame, lastValidTargetCFrame.Position end
         return nil, nil
     end
-
-    local sumX, sumY, sumZ = 0, 0, 0
-    for _, s in ipairs(samples) do
-        sumX = sumX + s.pos.X * s.weight
-        sumY = sumY + s.pos.Y * s.weight
-        sumZ = sumZ + s.pos.Z * s.weight
-    end
     local centroid = Vector3.new(sumX / totalWeight, sumY / totalWeight, sumZ / totalWeight)
-
     local keptX, keptY, keptZ, keptWeight = 0, 0, 0, 0
     local bestCF, bestWeight = nil, 0
-    for _, s in ipairs(samples) do
+    for i = 1, sampleCount do
+        local s = samples[i]
         if (s.pos - centroid).Magnitude <= OUTLIER_THRESHOLD then
             keptX = keptX + s.pos.X * s.weight
             keptY = keptY + s.pos.Y * s.weight
             keptZ = keptZ + s.pos.Z * s.weight
             keptWeight = keptWeight + s.weight
-            if s.weight > bestWeight then
-                bestWeight = s.weight
-                bestCF = s.cf
-            end
+            if s.weight > bestWeight then bestWeight = s.weight; bestCF = s.cf end
         end
     end
-
     if keptWeight <= 0 then
         keptX, keptY, keptZ, keptWeight = sumX, sumY, sumZ, totalWeight
         bestCF = samples[1].cf
     end
-
     local finalPos = Vector3.new(keptX / keptWeight, keptY / keptWeight, keptZ / keptWeight)
-
     if LastAnchorPos then
-        finalPos = LastAnchorPos:Lerp(finalPos, AnchorSmoothRate)
+        local dist = (finalPos - LastAnchorPos).Magnitude
+        local rate = (dist > AnchorFastMoveDist) and AnchorSmoothRateFast or AnchorSmoothRate
+        finalPos = LastAnchorPos:Lerp(finalPos, rate)
     end
     LastAnchorPos = finalPos
-
     local newLook = bestCF and bestCF.LookVector or Vector3.new(0, 0, 1)
-    if LastAnchorLook then
-        newLook = LastAnchorLook:Lerp(newLook, 0.4)
-    end
+    if LastAnchorLook then newLook = LastAnchorLook:Lerp(newLook, 0.4) end
     LastAnchorLook = newLook
-
     local finalCF = CFrame.new(finalPos, finalPos + newLook)
-
     lastValidTargetCFrame = finalCF
     lastValidTargetPos = finalPos
     lastValidTargetPosTime = tick()
-
     ResolverUpdate(target, finalPos)
-
     return finalCF, finalPos
 end
 
@@ -12776,9 +12648,7 @@ function GetOrbitAnchorCFrame(target)
     end
     resolverLastRun = now
     local cf, pos = ResolveTargetPosition(target)
-    if not cf then
-        return nil, resolvedPredictedPos or lastValidTargetPos
-    end
+    if not cf then return nil, resolvedPredictedPos or lastValidTargetPos end
     local predicted = UpdatePrediction(target, pos)
     resolvedPredictedPos = predicted
     if DirectCFramePrediction then
@@ -12791,69 +12661,26 @@ end
 VoidCycleInterval = 0.01
 VoidJitterRate     = 24000
 VoidJitterStrength = 10
+VoidDistance       = 50000000
 
 function PickVoidBase()
-    local sx = (math.random() < 0.5) and 1 or -1
-    local sz = (math.random() < 0.5) and 1 or -1
-    local x = sx * VoidDistance
-    local z = sz * VoidDistance
-    local y = 1e11 * (0.9 + math.random() * 0.1)
+    local x = (math.random() < 0.5) and VoidDistance or -VoidDistance
+    local z = (math.random() < 0.5) and VoidDistance or -VoidDistance
+    local y = VoidDistance * (0.5 + math.random() * 0.5)
     return Vector3.new(x, y, z)
-end
-
-function KeepVoidAnchor()
-    if IdleState ~= "hiding" then return end
-    if not IsSelfAlive() then return end
-    local hrp = GetSelfHRP()
-    if not hrp then return end
-
-    -- Always retry ownership; SafeSetOwner now handles anchored HRP
-    SafeSetOwner(hrp, _56)
-
-    if not VoidBasePos then
-        VoidBasePos = PickVoidBase()
-        VoidCycleTime = tick()
-    end
-
-    local pos = hrp.Position
-    local inVoid = math.abs(pos.X) > VOID_SELF_THRESHOLD
-        or math.abs(pos.Y) > VOID_SELF_THRESHOLD
-        or math.abs(pos.Z) > VOID_SELF_THRESHOLD
-    local drifted = (not inVoid) or (pos - VoidBasePos).Magnitude > 500
-
-    local t = tick() * VoidJitterRate
-    local jitter = Vector3.new(
-        math.sin(t)       * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength,
-        math.abs(math.cos(t * 1.3) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength),
-        math.sin(t * 0.7) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength
-    )
-
-    pcall(function()
-        hrp.Anchored = true
-        if drifted then
-            hrp.CFrame = CFrame.new(VoidBasePos + jitter)
-        end
-        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    end)
 end
 
 function EnterVoid()
     local hrp = GetSelfHRP()
-    if not hrp then
-        IdleState = "hiding"
-        return
-    end
+    if not hrp then return false end
     ForceReturnPoint()
     SafeSetOwner(hrp, _56)
-    ApplyPhysicsRepRootPart(true)
-
     local now = tick()
     if not VoidBasePos or (now - VoidCycleTime) > VoidCycleInterval then
         if math.random() < VoidRandomCornerChance then
             VoidBasePos = Vector3.new(
                 (math.random() * 2 - 1) * VoidDistance,
-                1e11 * (0.5 + math.random() * 0.5),
+                math.random() * VoidDistance,
                 (math.random() * 2 - 1) * VoidDistance
             )
         else
@@ -12861,89 +12688,92 @@ function EnterVoid()
         end
         VoidCycleTime = now
     end
-
     local t = now * VoidJitterRate
     local jitter = Vector3.new(
         math.sin(t)       * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength,
         math.abs(math.cos(t * 1.3) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength),
         math.sin(t * 0.7) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength
     )
-
+    IdleState = "hiding"
     pcall(function()
         hrp.Anchored = true
         hrp.CFrame = CFrame.new(VoidBasePos + jitter)
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
     end)
+    return true
+end
+
+function KeepVoidAnchor()
+    if IdleState ~= "hiding" then return end
+    if not IsSelfAlive() then return end
+    local hrp = GetSelfHRP()
+    if not hrp then return end
+    if not VoidBasePos then
+        VoidBasePos = PickVoidBase()
+        VoidCycleTime = tick()
+    end
+    local pos = hrp.Position
+    local inVoid = math.abs(pos.X) > VOID_THRESHOLD
+        or math.abs(pos.Y) > VOID_THRESHOLD
+        or math.abs(pos.Z) > VOID_THRESHOLD
+    local drifted = (not inVoid) or (pos - VoidBasePos).Magnitude > 500
+    if drifted or not hrp.Anchored then
+        local t = tick() * VoidJitterRate
+        local jitter = Vector3.new(
+            math.sin(t)       * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength,
+            math.abs(math.cos(t * 1.3) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength),
+            math.sin(t * 0.7) * VoidJitterStrength + (math.random() - 0.5) * VoidJitterStrength
+        )
+        pcall(function()
+            hrp.Anchored = true
+            hrp.CFrame = CFrame.new(VoidBasePos + jitter)
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end)
+    end
 end
 
 function ReturnToRealWorld()
     if Restoring then return end
+    if IdleState == "hiding" then return end
     if not IsSelfAlive() then return end
     local hrp = GetSelfHRP()
     if not hrp then return end
-
     ForceReturnPoint()
     local target = ReturnCFrame or LastRealSelfCFrame
-    if target then
-        target = ProjectToGround(target) or target
-    end
-
+    if target then target = ProjectToGround(target) or target end
     EngagementActive = false
     Disengaging = false
     disengageAt = 0
-
     if not target then
-        target = CFrame.new(0, 50, 0)
-    end
-
-    Restoring = true
-    _restoringSince = tick()
-    StompReturnLocked = true
-    SafeSetOwner(hrp, _56)
-
-    hrp.Anchored = true
-    hrp.CFrame = target
-    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-    task.wait(0.05)
-    if not IsSelfAlive() then
-        Restoring = false
-        _restoringSince = nil
-        StompReturnLocked = false
-        ReleaseLocal()
+        hrp.Anchored = false
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
         ClearReturnPoint()
+        ReleaseLocal()
         return
     end
-    if hrp.Parent and _56.Character == hrp.Parent then
+    Restoring = true
+    StompReturnLocked = true
+    SafeSetOwner(hrp, _56)
+    pcall(function()
+        hrp.Anchored = true
         hrp.CFrame = target
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        task.wait(0.05)
-        if not IsSelfAlive() then
-            Restoring = false
-            _restoringSince = nil
-            StompReturnLocked = false
-            ReleaseLocal()
-            ClearReturnPoint()
-            return
-        end
-        if hrp.Parent and _56.Character == hrp.Parent then
+    end)
+    task.wait(0.03)
+    if IsSelfAlive() and hrp.Parent and _56.Character == hrp.Parent then
+        pcall(function()
             hrp.CFrame = target
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
             hrp.Anchored = false
-        end
+        end)
     end
-
-    task.wait(0.15)
     Restoring = false
-    _restoringSince = nil
     StompReturnLocked = false
     ReleaseLocal()
     ClearReturnPoint()
-
     predictionLastPos = nil
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
@@ -12970,19 +12800,13 @@ function PerformSnap(hrp, targetHRP, anchorPos)
     if not targetHRP or not targetHRP.Parent then return end
     local basePos = resolvedPredictedPos or anchorPos or lastValidTargetPos
     if not basePos or IsVoidPosition(basePos) then return end
-
     local look = LastAnchorLook or targetHRP.CFrame.LookVector
     local baseCF = CFrame.new(basePos, basePos + look * 0.001)
     baseCF = AntiAimApply(baseCF, 0.05)
-
     hrp.CFrame = baseCF
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-    if not targetHRP.Anchored then
-        SafeSetOwner(targetHRP, _56)
-        ApplyPhysicsRepRootPart()
-    end
+    if not targetHRP.Anchored then SafeSetOwner(targetHRP, _56) end
 end
 
 function OrbitAroundTarget(target)
@@ -12991,7 +12815,6 @@ function OrbitAroundTarget(target)
     local targetChar = target.Character
     local targetHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
     if not targetHRP then return end
-
     local anchorCF, anchorPos = GetOrbitAnchorCFrame(target)
     if not anchorPos then return end
 
@@ -13002,45 +12825,33 @@ function OrbitAroundTarget(target)
             SnapPhaseUntil = now + SnapHoldTime
             local selfHRP = GetSelfHRP()
             if selfHRP then SafeSetOwner(selfHRP, _56) end
-            ApplyPhysicsRepRootPart(true)
         elseif SnapPhase == "snap" and now >= SnapPhaseUntil then
             SnapPhase = "orbit"
             SnapPhaseUntil = now + SnapOrbitTime
         end
-
-        if SnapPhase == "snap" then
-            PerformSnap(hrp, targetHRP, anchorPos)
-            return
-        end
+        if SnapPhase == "snap" then PerformSnap(hrp, targetHRP, anchorPos); return end
     end
 
     local behavior = _G.OrbitBehavior or 'Orbit'
     local now = tick()
     local targetPos
-
     if behavior == 'Orbit' then
         OrbitAngle = OrbitAngle + (OrbitSpeed * 0.05)
         targetPos = ComputeJitteredOrbit(anchorPos, now)
     elseif behavior == 'Above' then
         targetPos = anchorPos + Vector3.new(0, OrbitHeight + 5, 0)
     elseif behavior == 'Hide' then
-        targetPos = anchorPos + Vector3.new(0, OrbitHeight + 5, 0)
+        targetPos = anchorPos + Vector3.new(0, -7, 0)
     elseif behavior == 'Random' then
         targetPos = anchorPos + ComputeRandomOffset(now)
     else
         targetPos = anchorPos + Vector3.new(0, OrbitHeight, 0)
     end
-
     if IsVoidPosition(targetPos) then return end
-
     local lookAt = anchorPos
-    if anchorCF then
-        lookAt = anchorCF.Position + anchorCF.LookVector * 0.001
-    end
-
+    if anchorCF then lookAt = anchorCF.Position + anchorCF.LookVector * 0.001 end
     local baseCF = CFrame.new(targetPos, lookAt)
     baseCF = AntiAimApply(baseCF, 0.05)
-
     if behavior == 'Random' then
         if now - lastSnapTime >= SNAP_INTERVAL then
             lastSnapTime = now
@@ -13059,52 +12870,62 @@ function OrbitAroundTarget(target)
             end
         end
     end
-
     hrp.CFrame = baseCF
     hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 end
 
 function EnterIdle(reason)
+    if _enterIdleLock then return false end
+    if Restoring then return false end
     local hrp = GetSelfHRP()
     if not hrp then return false end
-    ForceReturnPoint()
-    IdleState = "hiding"
-    IdleReason = reason or "idle"
-    VoidBasePos = nil
-    EnterVoid()
-    return true
+    _enterIdleLock = true
+    local ok = false
+    pcall(function()
+        ForceReturnPoint()
+        VoidBasePos = nil
+        ok = EnterVoid()
+        if ok then
+            IdleReason = reason or "idle"
+            if not IdleConnection then StartIdle() end
+        end
+    end)
+    _enterIdleLock = false
+    return ok
 end
 
 function ExitIdle(restore)
-    if IdleState ~= "hiding" then
-        IdleState = "none"
-        IdleReason = nil
-        LastIdleExitTime = tick()
-        return
-    end
-    if restore then
-        ReturnToRealWorld()
+    if _exitIdleLock then return end
+    _exitIdleLock = true
+    local wasHiding = IdleState == "hiding"
+    if restore and wasHiding then
+        pcall(function() ReturnToRealWorld() end)
     else
         local hrp = GetSelfHRP()
         if hrp then
-            hrp.Anchored = false
-            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            pcall(function()
+                hrp.Anchored = false
+                hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+            end)
         end
     end
     IdleState = "none"
     IdleReason = nil
     LastIdleExitTime = tick()
     VoidBasePos = nil
+    _exitIdleLock = false
 end
 
-function EnterHide()
-    EnterIdle("hide")
-end
+function EnterHide() EnterIdle("hide") end
 
-function IdleKOStep()
-    if IdleState ~= "hiding" then EnterIdle("ko") else KeepVoidAnchor() end
+function IdleKOStep(reason)
+    if IdleState ~= "hiding" then
+        EnterIdle(reason or "ko")
+    else
+        EnterVoid()
+    end
 end
 
 function StartDisengage()
@@ -13117,13 +12938,11 @@ end
 
 function HandleTargetLost()
     if IdleState ~= "none" then ExitIdle(true) end
-
     if EngagementActive and not Disengaging then
         Disengaging = true
         disengageAt = tick() + DisengageDelay
         ForceReturnPoint()
     end
-
     OrbitTarget = nil
     OrbitNetworkClaimed = false
     lastValidTargetPos = nil
@@ -13145,8 +12964,6 @@ function HandleTargetLost()
     OrbitLastHeight = nil
     SnapPhase = "off"
     SnapPhaseUntil = 0
-    _lastPhysicsRepApply = 0
-
     if ResolverStates then ResolverClear() end
 end
 
@@ -13158,64 +12975,60 @@ function IdleLoop()
         return
     end
     if not IsSelfAlive() then
-        if IdleState ~= "none" then ExitIdle(false) end
+        -- Do not exit idle on self-death; CharacterAdded resets cleanly
         return
     end
-
-    if IdleState == "hiding" then
-        KeepVoidAnchor()
-    end
+    if IdleState == "hiding" then KeepVoidAnchor() end
 
     local reloading = UpdateReloadingState()
     local target = _104.targetplayer
 
     if not target or not target.Parent then
-        if IdleState ~= "none" then HandleTargetLost() end
+        -- If already hiding, KEEP hiding — don't break the void anchor
+        if IdleState == "hiding" then return end
         return
     end
 
-    if not target.Character then
-        if IdleState == "hiding" then KeepVoidAnchor() end
+    -- Character destroyed but still targeted: stay in idle
+    if not target.Character or not target.Character.Parent then
+        if IdleKOEnabled then
+            if IdleState ~= "hiding" then
+                IdleKOStep("gone")
+            else
+                EnterVoid()
+            end
+        elseif IdleState == "hiding" then
+            EnterVoid()
+        end
         return
     end
 
     local isIdling   = (IdleState == "hiding")
     local spamIdling = IdleSpamEnabled and IdleSpamState == "idling"
-
     if IdleReloadEnabled and reloading then
-        if IdleState ~= "hiding" then
-            EnterIdle("reload")
-        else
-            KeepVoidAnchor()
-        end
+        if IdleState ~= "hiding" then EnterIdle("reload") else EnterVoid() end
         return
     end
-
-    if IsTargetKO(target) then
+    local targetKO   = IsTargetKO(target)
+    local targetDead = isDead(target) or IsTargetDeadFlag(target)
+    if targetKO or targetDead then
         if IdleKOEnabled or spamIdling then
-            IdleKOStep()
-        elseif isIdling and IdleReason == "ko" then
-            KeepVoidAnchor()
+            IdleKOStep(targetKO and "ko" or "dead")
+        elseif isIdling and (IdleReason == "ko" or IdleReason == "dead" or IdleReason == "gone") then
+            EnterVoid()
         else
             if IdleState ~= "none" then ExitIdle(false) end
         end
         return
     end
-
-    if isDead(target) or not _orbitTargetValid(target) then
-        if isIdling then
-            KeepVoidAnchor()
-            return
-        end
+    if not _orbitTargetValid(target) then
+        if isIdling then EnterVoid(); return end
         if IdleState ~= "none" then ExitIdle(false) end
         return
     end
-
     if isIdling then
-        if IdleReason == "ko" or IdleReason == "reload" then
+        if IdleReason == "ko" or IdleReason == "dead" or IdleReason == "gone" or IdleReason == "reload" then
             ExitIdle(false)
-        else
-            KeepVoidAnchor()
         end
         return
     end
@@ -13234,12 +13047,9 @@ end
 
 function StompPauseIdles()
     StompWasIdleActive = (IdleConnection ~= nil)
-    if IdleConnection then
-        IdleConnection:Disconnect()
-        IdleConnection = nil
-    end
+    if IdleConnection then IdleConnection:Disconnect(); IdleConnection = nil end
     if IdleState ~= "none" then
-        ExitIdle(true)
+        pcall(function() ExitIdle(false) end)
     end
 end
 
@@ -13249,25 +13059,11 @@ function StompResumeIdles()
     if not OrbitEnabled then return end
     if not (IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled) then return end
     if IdleConnection then return end
-
     IdleConnection = RunService.Heartbeat:Connect(IdleLoop)
 end
 
 function Orbit()
-    -- Restoring watchdog
-    if Restoring then
-        if _restoringSince == nil then _restoringSince = tick() end
-        if tick() - _restoringSince > 3 then
-            Restoring = false
-            StompReturnLocked = false
-            _restoringSince = nil
-        else
-            return
-        end
-    else
-        _restoringSince = nil
-    end
-
+    if Restoring then return end
     if not OrbitEnabled then return end
     if _118 then return end
     if _AA_busy then return end
@@ -13275,32 +13071,31 @@ function Orbit()
     if grabbing then return end
     if not IsSelfAlive() then return end
 
-    if IdleState == "hiding" then
-        KeepVoidAnchor()
-    end
-
     local reloading = UpdateReloadingState()
 
     if Disengaging then
         if disengageAt > 0 and tick() >= disengageAt then
             disengageAt = 0
             Disengaging = false
-            ReturnToRealWorld()
-            return
+            EngagementActive = false
+            if not IdleKOEnabled and not IdleReloadEnabled and not IdleSpamEnabled then
+                task.spawn(function()
+                    pcall(function() ReturnToRealWorld() end)
+                end)
+            end
         elseif disengageAt == 0 then
             Disengaging = false
+            EngagementActive = false
         else
             return
         end
     end
 
-    if IdleState == "none" then
-        UpdateSelfAnchor()
-    end
+    if IdleState == "none" then UpdateSelfAnchor() end
 
     local target = _104.targetplayer
-
     if not target or not target.Parent then
+        if IdleState == "hiding" then KeepVoidAnchor(); return end
         if IdleState ~= "none" then ExitIdle(true) end
         OrbitTarget = nil
         OrbitNetworkClaimed = false
@@ -13310,8 +13105,18 @@ function Orbit()
         return
     end
 
-    if not target.Character then
-        if IdleState == "hiding" then KeepVoidAnchor() end
+    -- Character destroyed but still targeted: idle like KO/dead
+    if not target.Character or not target.Character.Parent then
+        if IdleKOEnabled then
+            if IdleState ~= "hiding" then
+                EnterIdle("gone")
+            else
+                EnterVoid()
+            end
+            disengageAt = 0
+        elseif IdleState == "hiding" then
+            EnterVoid()
+        end
         return
     end
 
@@ -13321,10 +13126,10 @@ function Orbit()
             or isDead(target)
             or Grabbed(target)
             or IsTargetKO(target)
+            or IsTargetDeadFlag(target)
             or not _orbitTargetValid(target)
-
         if badTarget then
-            KeepVoidAnchor()
+            EnterVoid()
             if IdleSpamEnabled and IdleSpamState == "idling" then
                 IdleSpamSwitchAt = tick() + IdleSpamIdleTime
             end
@@ -13334,37 +13139,26 @@ function Orbit()
     end
 
     if IdleReloadEnabled and reloading then
-        if IdleState ~= "hiding" then
-            EnterIdle("reload")
-        else
-            KeepVoidAnchor()
-        end
+        if IdleState ~= "hiding" then EnterIdle("reload") else EnterVoid() end
         disengageAt = 0
         return
     end
 
-    if IdleKOEnabled and IsTargetKO(target) then
-        if IdleState ~= "hiding" then
-            EnterIdle("ko")
-        else
-            KeepVoidAnchor()
-        end
+    local targetKO   = IsTargetKO(target)
+    local targetDead = isDead(target) or IsTargetDeadFlag(target)
+
+    if IdleKOEnabled and (targetKO or targetDead) then
+        if IdleState ~= "hiding" then EnterIdle(targetKO and "ko" or "dead") else EnterVoid() end
         disengageAt = 0
         return
     end
 
-    if IsTargetKO(target) and not IdleKOEnabled then
-        StartDisengage()
-        return
-    end
-
-    if isDead(target) then
+    if (targetKO or targetDead) and not IdleKOEnabled then
         StartDisengage()
         return
     end
 
     if not _orbitTargetValid(target) then return end
-
     disengageAt = 0
 
     if IdleSpamEnabled then
@@ -13395,14 +13189,15 @@ function Orbit()
             elseif now >= IdleSpamSwitchAt then
                 if isDead(target) or not _orbitTargetValid(target) or IsWaitingForRespawn(target) then
                     IdleSpamSwitchAt = now + 0.25
-                    KeepVoidAnchor()
+                    EnterVoid()
                     return
                 end
                 IdleSpamState = "strafing"
                 IdleSpamSwitchAt = now + IdleSpamStrafeTime
                 ExitIdle(false)
+                return
             else
-                KeepVoidAnchor()
+                EnterVoid()
                 return
             end
         end
@@ -13410,13 +13205,11 @@ function Orbit()
 
     local hrp = GetSelfHRP()
     if not hrp then return end
-    local targetChar = target.Character
-    local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
     if not targetHRP then return end
 
     if OrbitTarget ~= target then
-        if IdleState ~= "none" then ExitIdle(true) end
-        if Restoring then return end
+        if IdleState ~= "none" then ExitIdle(false) end
         OrbitTarget = target
         OrbitNetworkClaimed = false
         lastValidTargetPos = nil
@@ -13440,37 +13233,25 @@ function Orbit()
         SnapPhaseUntil = 0
     end
 
-    if IsWaitingForRespawn(target) then
-        if IdleState == "hiding" then KeepVoidAnchor() end
-        return
-    end
-    if IdleState ~= "none" then
-        KeepVoidAnchor()
-        return
-    end
+    if IsWaitingForRespawn(target) then return end
+    if IdleState ~= "none" then return end
 
     CaptureReturnPoint()
     ClaimLocal()
-
-    if not IsVoidPosition(targetHRP.Position) then
-        SafeSetOwner(targetHRP, _56)
-        ApplyPhysicsRepRootPart()
-    end
-
+    if not IsVoidPosition(targetHRP.Position) then SafeSetOwner(targetHRP, _56) end
     EngagementActive = true
     OrbitAroundTarget(target)
 end
 
 function StartOrbit()
     if Restoring then Restoring = false end
-    _restoringSince = nil
     if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     if not OrbitEnabled then return end
-
     OrbitAngle = 0
     OrbitNetworkClaimed = false
     EngagementActive = false
     Disengaging = false
+    disengageAt = 0
     IdleState = "none"
     IdleReason = nil
     OrbitTarget = nil
@@ -13480,7 +13261,6 @@ function StartOrbit()
     lastTargetCharacter = nil
     respawnPending = false
     lastSnapTime = 0
-    disengageAt = 0
     predictionLastPos = nil
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
@@ -13498,9 +13278,6 @@ function StartOrbit()
     SnapPhase = "off"
     SnapPhaseUntil = 0
     UpdateSelfAnchor()
-
-    ApplyPhysicsRepRootPart(true)
-
     OrbitConnection = RunService.Heartbeat:Connect(Orbit)
     if IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled then StartIdle() end
 end
@@ -13508,14 +13285,11 @@ end
 function StopOrbit()
     if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
     if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
-
+    Disengaging = false
+    disengageAt = 0
+    EngagementActive = false
     if IdleState ~= "none" then ExitIdle(true) end
     if ReturnSet and IsSelfAlive() then ReturnToRealWorld() end
-
-    EngagementActive = false
-    Disengaging = false
-    Restoring = false
-    _restoringSince = nil
     OrbitTarget = nil
     OrbitAngle = 0
     OrbitNetworkClaimed = false
@@ -13527,7 +13301,6 @@ function StopOrbit()
     lastTargetCharacter = nil
     respawnPending = false
     lastSnapTime = 0
-    disengageAt = 0
     IdleSpamState = "none"
     IdleSpamSwitchAt = 0
     IdleSpamFirst = false
@@ -13545,8 +13318,6 @@ function StopOrbit()
     StompWasIdleActive = false
     SnapPhase = "off"
     SnapPhaseUntil = 0
-    _lastPhysicsRepApply = 0
-
     if ResolverStates then ResolverClear() end
 end
 
@@ -13554,8 +13325,6 @@ Options.OBS:OnChanged(function(value)
     _G.OrbitBehavior = value
     orbitRandomOffset = nil
     lastSnapTime = 0
-    OrbitLastRadius = nil
-    OrbitLastHeight = nil
 end)
 
 Toggles.OrbitToggle:OnChanged(function(value)
@@ -13572,36 +13341,13 @@ Options.OrbitKeybind:OnClick(function()
     Toggles.OrbitToggle:SetValue(not Toggles.OrbitToggle.Value)
 end)
 
-Options.OrbitRadius:OnChanged(function(value)
-    OrbitRadius = value
-    orbitRandomOffset = nil
-end)
-
-Options.OrbitRadiusJitter:OnChanged(function(value)
-    OrbitRadiusJitter = value
-    orbitRandomOffset = nil
-end)
-
+Options.OrbitRadius:OnChanged(function(value) OrbitRadius = value; orbitRandomOffset = nil end)
+Options.OrbitRadiusJitter:OnChanged(function(value) OrbitRadiusJitter = value; orbitRandomOffset = nil end)
 Options.OrbitSpeed:OnChanged(function(value) OrbitSpeed = value end)
-
-Options.OrbitHeight:OnChanged(function(value)
-    OrbitHeight = value
-    orbitRandomOffset = nil
-end)
-
-Options.OrbitHeightJitter:OnChanged(function(value)
-    OrbitHeightJitter = value
-    orbitRandomOffset = nil
-end)
-
-if Options.RespawnWait then
-    Options.RespawnWait:OnChanged(function(value) RespawnWaitTime = value end)
-end
-
-if Options.ResolverRate then
-    Options.ResolverRate:OnChanged(function(value) ResolverRate = value end)
-end
-
+Options.OrbitHeight:OnChanged(function(value) OrbitHeight = value; orbitRandomOffset = nil end)
+Options.OrbitHeightJitter:OnChanged(function(value) OrbitHeightJitter = value; orbitRandomOffset = nil end)
+if Options.RespawnWait then Options.RespawnWait:OnChanged(function(value) RespawnWaitTime = value end) end
+if Options.ResolverRate then Options.ResolverRate:OnChanged(function(value) ResolverRate = value end) end
 if Toggles.PredictionToggle then
     Toggles.PredictionToggle:OnChanged(function(value)
         PredictionEnabled = value
@@ -13610,22 +13356,10 @@ if Toggles.PredictionToggle then
         predictionVelocity = Vector3.new(0, 0, 0)
     end)
 end
-
-if Options.PredictionMultiplier then
-    Options.PredictionMultiplier:OnChanged(function(value) PredictionMultiplier = value end)
-end
-
-if Toggles.PingPredictionToggle then
-    Toggles.PingPredictionToggle:OnChanged(function(value) PingPredictionEnabled = value end)
-end
-
-if Options.PingPredictionScale then
-    Options.PingPredictionScale:OnChanged(function(value) PingPredictionScale = value end)
-end
-
-if Toggles.DirectCFramePredictionToggle then
-    Toggles.DirectCFramePredictionToggle:OnChanged(function(value) DirectCFramePrediction = value end)
-end
+if Options.PredictionMultiplier then Options.PredictionMultiplier:OnChanged(function(value) PredictionMultiplier = value end) end
+if Toggles.PingPredictionToggle then Toggles.PingPredictionToggle:OnChanged(function(value) PingPredictionEnabled = value end) end
+if Options.PingPredictionScale then Options.PingPredictionScale:OnChanged(function(value) PingPredictionScale = value end) end
+if Toggles.DirectCFramePredictionToggle then Toggles.DirectCFramePredictionToggle:OnChanged(function(value) DirectCFramePrediction = value end) end
 
 Toggles.IdleOnKO:OnChanged(function(value)
     IdleKOEnabled = value
@@ -13633,6 +13367,9 @@ Toggles.IdleOnKO:OnChanged(function(value)
         StartIdle()
     elseif not IdleReloadEnabled and not IdleSpamEnabled then
         StopIdle()
+        if OrbitEnabled and IsSelfAlive() and ReturnSet then
+            pcall(function() ReturnToRealWorld() end)
+        end
     end
 end)
 
@@ -13642,6 +13379,9 @@ Toggles.IdleOnReload:OnChanged(function(value)
         StartIdle()
     elseif not IdleKOEnabled and not IdleSpamEnabled then
         StopIdle()
+        if OrbitEnabled and IsSelfAlive() and ReturnSet then
+            pcall(function() ReturnToRealWorld() end)
+        end
     end
 end)
 
@@ -13657,43 +13397,24 @@ Toggles.IdleSpam:OnChanged(function(v)
     IdleSpamState = "none"
     IdleSpamSwitchAt = 0
     IdleSpamFirst = false
-    if v then
-        IdleSpamKnown = setmetatable({}, { __mode = "k" })
-    end
+    if v then IdleSpamKnown = setmetatable({}, { __mode = "k" }) end
     if v and OrbitEnabled then
         StartIdle()
     elseif not v and not IdleKOEnabled and not IdleReloadEnabled then
         StopIdle()
+        if OrbitEnabled and IsSelfAlive() and ReturnSet then
+            pcall(function() ReturnToRealWorld() end)
+        end
     end
 end)
 
-if Options.ResolverSmoothing then
-    Options.ResolverSmoothing:OnChanged(function(v) ResolverSmoothing = v end)
-end
-
-if Toggles.AntiAim then
-    Toggles.AntiAim:OnChanged(function(v) AntiAimEnabled = v end)
-end
-
-if Options.AntiAimMode then
-    Options.AntiAimMode:OnChanged(function(v) AntiAimMode = v end)
-end
-
-if Options.AntiAimSpeed then
-    Options.AntiAimSpeed:OnChanged(function(v) AntiAimSpeed = v end)
-end
-
-if Options.AntiAimJitterInterval then
-    Options.AntiAimJitterInterval:OnChanged(function(v) AntiAimJitterInterval = v end)
-end
-
-if Options.AntiAimPitch then
-    Options.AntiAimPitch:OnChanged(function(v) AntiAimPitch = v end)
-end
-
-if Options.AntiAimStaticYaw then
-    Options.AntiAimStaticYaw:OnChanged(function(v) AntiAimStaticYaw = v end)
-end
+if Options.ResolverSmoothing then Options.ResolverSmoothing:OnChanged(function(v) ResolverSmoothing = v end) end
+if Toggles.AntiAim then Toggles.AntiAim:OnChanged(function(v) AntiAimEnabled = v end) end
+if Options.AntiAimMode then Options.AntiAimMode:OnChanged(function(v) AntiAimMode = v end) end
+if Options.AntiAimSpeed then Options.AntiAimSpeed:OnChanged(function(v) AntiAimSpeed = v end) end
+if Options.AntiAimJitterInterval then Options.AntiAimJitterInterval:OnChanged(function(v) AntiAimJitterInterval = v end) end
+if Options.AntiAimPitch then Options.AntiAimPitch:OnChanged(function(v) AntiAimPitch = v end) end
+if Options.AntiAimStaticYaw then Options.AntiAimStaticYaw:OnChanged(function(v) AntiAimStaticYaw = v end) end
 
 Options.IdleSpamStrafeTime:OnChanged(function(v) IdleSpamStrafeTime = v end)
 Options.IdleSpamIdleTime:OnChanged(function(v) IdleSpamIdleTime = v end)
@@ -13705,25 +13426,16 @@ Toggles.SnapToggle:OnChanged(function(v)
     if v then
         local hrp = GetSelfHRP()
         if hrp then SafeSetOwner(hrp, _56) end
-        ApplyPhysicsRepRootPart(true)
     else
         resolvedPredictedPos = nil
-        _lastPhysicsRepApply = 0
     end
 end)
 
-Options.SnapHoldTime:OnChanged(function(v)
-    SnapHoldTime = v
-end)
-
-Options.SnapOrbitTime:OnChanged(function(v)
-    SnapOrbitTime = v
-end)
+Options.SnapHoldTime:OnChanged(function(v) SnapHoldTime = v end)
+Options.SnapOrbitTime:OnChanged(function(v) SnapOrbitTime = v end)
 
 _51.PlayerRemoving:Connect(function(player)
-    if OrbitTarget == player or _104.targetplayer == player then
-        HandleTargetLost()
-    end
+    if OrbitTarget == player or _104.targetplayer == player then HandleTargetLost() end
     ResolverClear(player)
     IdleSpamKnown[player] = nil
 end)
@@ -13733,9 +13445,9 @@ _56.CharacterAdded:Connect(function()
     if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
     if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     Restoring = false
-    _restoringSince = nil
     EngagementActive = false
     Disengaging = false
+    disengageAt = 0
     IdleState = "none"
     IdleReason = nil
     OrbitNetworkClaimed = false
@@ -13747,7 +13459,6 @@ _56.CharacterAdded:Connect(function()
     lastTargetCharacter = nil
     respawnPending = false
     lastSnapTime = 0
-    disengageAt = 0
     predictionLastPos = nil
     predictionLastTime = 0
     predictionVelocity = Vector3.new(0, 0, 0)
@@ -13766,11 +13477,10 @@ _56.CharacterAdded:Connect(function()
     IdleSpamSwitchAt = 0
     IdleSpamFirst = false
     StompWasIdleActive = false
+    StompReturnLocked = false
     SnapPhase = "off"
     SnapPhaseUntil = 0
-    _lastPhysicsRepApply = 0
     if ResolverStates then ResolverClear() end
-    ApplyPhysicsRepRootPart(true)
     if OrbitEnabled then StartOrbit() end
 end)
 
