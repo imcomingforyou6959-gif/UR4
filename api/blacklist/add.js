@@ -33,6 +33,7 @@ export async function POST(req) {
 
     if (!main.data.banned_hwids) main.data.banned_hwids = {};
     if (!main.data.violations) main.data.violations = {};
+    if (!main.data.linkedHwids) main.data.linkedHwids = {};
     if (!hist.data.rebans) hist.data.rebans = {};
 
     if (main.data.banned_hwids[hwid]) {
@@ -41,11 +42,52 @@ export async function POST(req) {
 
     const existingHistory = main.data.violations[hwid] || null;
 
+    const uidStr = userId ? String(userId) : null;
+    const linkedHwids = [];
+
+    if (uidStr) {
+        if (!Array.isArray(main.data.linkedHwids[uidStr])) {
+            main.data.linkedHwids[uidStr] = [];
+        }
+        if (!main.data.linkedHwids[uidStr].includes(hwid)) {
+            main.data.linkedHwids[uidStr].push(hwid);
+            if (main.data.linkedHwids[uidStr].length > 30) {
+                main.data.linkedHwids[uidStr] = main.data.linkedHwids[uidStr].slice(-30);
+            }
+        }
+
+        for (const h of main.data.linkedHwids[uidStr]) {
+            if (!linkedHwids.includes(h)) linkedHwids.push(h);
+        }
+
+        for (const [h, e] of Object.entries(main.data.banned_hwids)) {
+            if (e && e.accounts && e.accounts[uidStr] && !linkedHwids.includes(h)) {
+                linkedHwids.push(h);
+            }
+        }
+        for (const [h, e] of Object.entries(main.data.violations || {})) {
+            if (e && e.accounts && e.accounts[uidStr] && !linkedHwids.includes(h)) {
+                linkedHwids.push(h);
+            }
+        }
+    }
+
     if (existingHistory) {
         delete main.data.violations[hwid];
         existingHistory.status = "banned";
         existingHistory.reason = reason;
         existingHistory.rebannedAt = now;
+
+        if (!Array.isArray(existingHistory.linkedHwids)) existingHistory.linkedHwids = [];
+        for (const h of linkedHwids) {
+            if (!existingHistory.linkedHwids.includes(h)) {
+                existingHistory.linkedHwids.push(h);
+            }
+        }
+        if (existingHistory.linkedHwids.length > 30) {
+            existingHistory.linkedHwids = existingHistory.linkedHwids.slice(-30);
+        }
+
         main.data.banned_hwids[hwid] = existingHistory;
 
         if (!Array.isArray(hist.data.rebans[hwid])) hist.data.rebans[hwid] = [];
@@ -64,6 +106,7 @@ export async function POST(req) {
             status: "banned",
             hitCount: 0,
             lastSeen: now,
+            linkedHwids: linkedHwids.slice(0, 30),
             accounts: userId ? {
                 [String(userId)]: {
                     username,
@@ -79,12 +122,43 @@ export async function POST(req) {
         };
     }
 
+    if (uidStr && linkedHwids.length > 0) {
+        for (const [otherHwid, otherEntry] of Object.entries(main.data.banned_hwids)) {
+            if (otherHwid === hwid) continue;
+            if (!otherEntry || !otherEntry.accounts) continue;
+            if (!otherEntry.accounts[uidStr]) continue;
+            if (!Array.isArray(otherEntry.linkedHwids)) otherEntry.linkedHwids = [];
+            for (const h of linkedHwids) {
+                if (!otherEntry.linkedHwids.includes(h)) {
+                    otherEntry.linkedHwids.push(h);
+                }
+            }
+            if (otherEntry.linkedHwids.length > 30) {
+                otherEntry.linkedHwids = otherEntry.linkedHwids.slice(-30);
+            }
+        }
+        for (const [otherHwid, otherEntry] of Object.entries(main.data.violations || {})) {
+            if (otherHwid === hwid) continue;
+            if (!otherEntry || !otherEntry.accounts) continue;
+            if (!otherEntry.accounts[uidStr]) continue;
+            if (!Array.isArray(otherEntry.linkedHwids)) otherEntry.linkedHwids = [];
+            for (const h of linkedHwids) {
+                if (!otherEntry.linkedHwids.includes(h)) {
+                    otherEntry.linkedHwids.push(h);
+                }
+            }
+            if (otherEntry.linkedHwids.length > 30) {
+                otherEntry.linkedHwids = otherEntry.linkedHwids.slice(-30);
+            }
+        }
+    }
+
     try {
         await writeFile(
             "Storage/HWID.json",
             main.data,
             main.sha,
-            `blacklist: ban ${hwid.slice(0, 12)}…`
+            `blacklist: ban ${hwid.slice(0, 12)}… (${linkedHwids.length} linked)`
         );
 
         if (existingHistory) {
@@ -103,5 +177,6 @@ export async function POST(req) {
         ok: true,
         entry: main.data.banned_hwids[hwid],
         hadHistory: !!existingHistory,
+        linkedHwids: linkedHwids.length,
     });
 }
