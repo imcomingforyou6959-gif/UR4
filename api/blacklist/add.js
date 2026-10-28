@@ -15,7 +15,7 @@ export async function POST(req) {
     const hwid = String(body.hwid || "").trim();
     if (!hwid) return Response.json({ err: "missing_hwid" }, { status: 400 });
 
-    const reason = String(body.reason || "Banned by admin").slice(0, 256);
+    const reason = String(body.reason || "Banned for a Violation").slice(0, 256);
     const username = String(body.username || "?").slice(0, 64);
     const displayName = String(body.displayName || "?").slice(0, 64);
     const userId = Number(body.userId) || 0;
