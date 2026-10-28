@@ -4599,10 +4599,6 @@ function Library:CreateSpotifyPlayer()
         })
     end
 
-    if Library.ScreenGui and Library.ScreenGui.ZIndexBehavior == Enum.ZIndexBehavior.Global then
-        Library.ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    end
-
     Items["SpotifyPlayer"] = New("Frame", {
         Name="\0", Parent=Library.ScreenGui,
         Position=UDim2.new(0, 30, 0, 250),
@@ -5200,6 +5196,7 @@ function Library:CreateSpotifyPlayer()
             TextColor3=isDestructive and Color3.fromRGB(230,90,90) or Library.FontColor,
             TextXAlignment=Enum.TextXAlignment.Left,
             Text=text,
+            ZIndex=201,
         })
         New("UIPadding", { Name="\0", Parent=btn, PaddingLeft=UDim.new(0,10) })
 
@@ -6796,6 +6793,13 @@ function Library:CreateSpotifyPlayer()
 
     if typeof(game.BindToClose) == "function" then
         pcall(function() game:BindToClose(Cleanup) end)
+    end
+
+    -- ScreenGui uses ZIndexBehavior.Global, so lift every child above the player frame (ZIndex 50)
+    for _, d in ipairs(Items["SpotifyPlayer"]:GetDescendants()) do
+        if d:IsA("GuiObject") then
+            d.ZIndex = d.ZIndex + 50
+        end
     end
 
     UpdateResults()
