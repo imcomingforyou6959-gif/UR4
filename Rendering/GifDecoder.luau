@@ -381,6 +381,7 @@ local function decodeGif(data, options)
     end
 
     local canvas = acquireBuf(canvasWidth * canvasHeight * 4)
+    bufferFill(canvas, 0, 0, canvasWidth * canvasHeight * 4)
     local tables = getTables()
     local indexBuffer = nil
 
@@ -765,6 +766,10 @@ local function inflateRaw(src, startPos, srcEnd, expected, canYield)
         if bfinal == 1 then break end
     end
 
+    if outPos < expected then
+        bufferFill(out, outPos, 0, expected - outPos)
+    end
+
     return out
 end
 
@@ -1088,6 +1093,7 @@ local function decodePng(data, options)
     local totalDuration = 0
     local usedBytes = 0
     local canvas = acquireBuf(width * height * 4)
+    bufferFill(canvas, 0, 0, width * height * 4)
 
     local pendingX0, pendingY0, pendingX1, pendingY1 = 0, 0, 0, 0
     local hasPending = false
