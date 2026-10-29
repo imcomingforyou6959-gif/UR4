@@ -72,6 +72,7 @@ function SpeedKit.acquire(size)
         if bufferLen(buf) >= class then
             table.remove(pool, i)
             poolBytes -= bufferLen(buf)
+            bufferFill(buf, 0, 0, class)
             return buf
         end
     end
