@@ -15,8 +15,8 @@ GifRenderer.CacheBudgetBytes = 256 * 1024 * 1024
 GifRenderer.Adaptive = true
 GifRenderer.DefaultYield = 8
 
-local MAX_TILE = 1024              -- hard limit for a single EditableImage side
-local MAX_CANVAS = 8192            -- overall canvas limit
+local MAX_TILE = 1024
+local MAX_CANVAS = 8192
 
 export type Frame = {
 	Pixels: buffer,
@@ -295,6 +295,8 @@ function GifRenderer.new(options: Options)
 		_scratch = {},
 		_transparency = 0,
 		_single = true,
+		_skipDuplicates = options.SkipDuplicates == true,
+		_lastWritten = 0,
 	}, GifRenderer)
 
 	local providedLabel = options.ImageLabel
@@ -377,6 +379,7 @@ function GifRenderer.new(options: Options)
 	end
 
 	self:_writeFrame(1)
+	self._lastWritten = 1
 
 	if options.AutoPlay then self:Play() end
 	return self
@@ -395,6 +398,7 @@ function GifRenderer.fromGif(gif, options)
 		OnFinished = options.OnFinished,
 		LowPower = options.LowPower,
 		UpdateRate = options.UpdateRate,
+		SkipDuplicates = options.SkipDuplicates,
 	})
 end
 
@@ -510,13 +514,43 @@ function GifRenderer:_writeFrame(index)
 	end
 end
 
+local function frameEquals(a, b)
+	if a == b then return true end
+	if a.X ~= b.X or a.Y ~= b.Y or a.Width ~= b.Width or a.Height ~= b.Height then
+		return false
+	end
+	local pa = a.Pixels
+	local pb = b.Pixels
+	local len = buffer.len(pa)
+	if len ~= buffer.len(pb) then return false end
+	-- compare in 4-byte strides for speed
+	local i = 0
+	local lastBlock = len - (len % 4)
+	while i < lastBlock do
+		if buffer.readu32(pa, i) ~= buffer.readu32(pb, i) then return false end
+		i += 4
+	end
+	while i < len do
+		if buffer.readu8(pa, i) ~= buffer.readu8(pb, i) then return false end
+		i += 1
+	end
+	return true
+end
+
 function GifRenderer:_showFrame(from: number, target: number)
 	if target == from then return end
 	local start = if target > from then from + 1 else 1
 	local fullStart = self._fullAt[target]
 	if fullStart > start then start = fullStart end
 	for index = start, target do
-		self:_writeFrame(index)
+		if self._skipDuplicates and index > 1
+			and self._lastWritten == index - 1
+			and frameEquals(self.Frames[index], self.Frames[self._lastWritten]) then
+			-- identical composite; skip the EditableImage write entirely
+		else
+			self:_writeFrame(index)
+			self._lastWritten = index
+		end
 	end
 end
 
