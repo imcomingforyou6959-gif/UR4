@@ -1,3 +1,7 @@
+--[[                                  Property of Rawr.xyz
+                        Copyright (c) 2026 rawr.xyz. All Rights Reserved.                                                          ]]--
+
+
 
 
 local Players = game:GetService('Players')
@@ -12,7 +16,6 @@ local _40, _ = pcall(function()
 end)
 
 local repo = 'https://raw.githubusercontent.com/LionTheGreatRealFrFr/MobileLinoriaLib/main/'
-
 local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
 local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(repo .. 'addons/SaveManager.lua'))()
@@ -32,7 +35,6 @@ local Tabs = {
     ['UI Settings'] = Window:AddTab('UI Settings'),
 }
 
--- Monster ESP logic
 local ESP = {
     Enabled = false,
     ShowName = true,
@@ -251,7 +253,6 @@ MonsterGroup:AddLabel('Text Color'):AddColorPicker('MonsterESPText', {
     end,
 })
 
--- Automation logic
 local Custard = {
     Enabled = false,
     Delay = 0.15,
@@ -346,7 +347,6 @@ local function stopCustard()
     end
 end
 
--- Automation UI
 local AutomationGroup = Tabs.Automation:AddLeftGroupbox('Auto Custard')
 
 local AutoCustardToggle = AutomationGroup:AddToggle('AutoCustard', {
@@ -455,7 +455,6 @@ SaveManager:BuildConfigSection(Tabs['UI Settings'])
 ThemeManager:ApplyToTab(Tabs['UI Settings'])
 SaveManager:LoadAutoloadConfig()
 
--- Wiring
 MonsterESPToggle:OnChanged(function()
     ESP.Enabled = MonsterESPToggle.Value
     refreshAllESP()
