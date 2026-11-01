@@ -2,9 +2,18 @@ import { Redis } from "@upstash/redis";
 
 const db = Redis.fromEnv();
 
+function getHeader(req, name) {
+    if (!req || !req.headers) return null;
+    if (typeof req.headers.get !== "function") {
+        return req.headers[name] ?? req.headers[name.toLowerCase()] ?? null;
+    }
+    return req.headers.get(name);
+}
+
 export async function requireSession(req) {
-    const token = req.headers["x-session"];
-    const hwid = req.headers["x-hwid"];
+    const token = getHeader(req, "x-session");
+    const hwid = getHeader(req, "x-hwid");
+
     if (!token || !hwid) {
         return {
             denied: new Response(
@@ -17,6 +26,9 @@ export async function requireSession(req) {
     let session;
     try {
         session = await db.get(`sess:${token}`);
+        if (typeof session === "string") {
+            try { session = JSON.parse(session); } catch {}
+        }
     } catch (e) {
         return {
             denied: new Response(
