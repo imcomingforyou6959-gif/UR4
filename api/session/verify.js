@@ -1,25 +1,27 @@
-const sessions = globalThis.__sessions || (globalThis.__sessions = new Map());
+import { Redis } from "@upstash/redis";
 
-module.exports = function requireSession(req, res) {
-  const token = req.headers['x-session'];
-  const hwid  = req.headers['x-hwid'];
+const db = Redis.fromEnv();
+
+export async function requireSession(req) {
+  const token = req.headers.get("x-session");
+  const hwid = req.headers.get("x-hwid");
   if (!token || !hwid) {
-    res.status(401).json({ error: 'no session' });
-    return null;
+    return new Response(JSON.stringify({ err: "no session" }), { status: 401 });
   }
-  const s = sessions.get(token);
-  if (!s) {
-    res.status(401).json({ error: 'unknown session' });
-    return null;
+
+  let session;
+  try {
+    session = await db.get(`sess:${token}`);
+  } catch {
+    return new Response(JSON.stringify({ err: "session store error" }), { status: 503 });
   }
-  if (s.hwid !== hwid) {
-    res.status(401).json({ error: 'hwid mismatch' });
-    return null;
+
+  if (!session || session.hwid !== hwid) {
+    return new Response(JSON.stringify({ err: "invalid session" }), { status: 401 });
   }
-  if (Math.floor(Date.now() / 1000) > s.expiresAt) {
-    sessions.delete(token);
-    res.status(401).json({ error: 'session expired' });
-    return null;
+  if (Math.floor(Date.now() / 1000) > session.expiresAt) {
+    await db.del(`sess:${token}`).catch(() => {});
+    return new Response(JSON.stringify({ err: "session expired" }), { status: 401 });
   }
-  return s;
-};
+  return null;
+}
