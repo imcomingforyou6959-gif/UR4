@@ -7,6 +7,16 @@ const SESSION_TTL = 300;
 const PAYLOAD_RAW_URL =
     "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Loadstring.lua";
 
+function getHeader(req, name) {
+    if (!req || !req.headers) return null;
+    if (typeof req.headers.get === "function") return req.headers.get(name);
+    const lower = name.toLowerCase();
+    for (const k of Object.keys(req.headers)) {
+        if (k.toLowerCase() === lower) return req.headers[k];
+    }
+    return null;
+}
+
 async function createSession(body) {
     const { hwid, executor, placeId, jobId, userId, userName } = body || {};
 
@@ -15,22 +25,16 @@ async function createSession(body) {
     }
 
     try {
-        const url =
-            "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Storage/HWID.json";
+        const url = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Storage/HWID.json";
         const res = await fetch(url, { cache: "no-store" });
         if (res.ok) {
             const data = await res.json();
             const bans = (data && data.banned_hwids) || {};
             if (bans[hwid]) {
-                return {
-                    status: 403,
-                    body: { err: "banned", reason: bans[hwid].reason || "banned" },
-                };
+                return { status: 403, body: { err: "banned", reason: bans[hwid].reason || "banned" } };
             }
         }
-    } catch {
-        //
-    }
+    } catch {}
 
     const token = crypto.randomBytes(32).toString("hex");
     const nonce = crypto.randomBytes(12).toString("hex");
@@ -40,9 +44,7 @@ async function createSession(body) {
         await db.set(
             `sess:${token}`,
             {
-                hwid,
-                nonce,
-                expiresAt,
+                hwid, nonce, expiresAt,
                 executor: String(executor || ""),
                 placeId: Number(placeId) || 0,
                 jobId: String(jobId || ""),
@@ -51,6 +53,7 @@ async function createSession(body) {
             },
             { ex: SESSION_TTL }
         );
+        console.log(`[secure] STORED sess:${token.slice(0, 8)} hwid:${hwid.slice(0, 12)} nonce:${nonce.slice(0, 8)}`);
     } catch (e) {
         return { status: 503, body: { err: "session_store", msg: String(e) } };
     }
@@ -63,7 +66,12 @@ async function getSession(token, hwid) {
     let s;
     try {
         s = await db.get(`sess:${token}`);
-    } catch {
+        if (typeof s === "string") {
+            try { s = JSON.parse(s); } catch {}
+        }
+        console.log(`[secure] READ sess:${token.slice(0, 8)} value:${JSON.stringify(s)}`);
+    } catch (e) {
+        console.log(`[secure] redis get error: ${String(e)}`);
         return null;
     }
     if (!s || s.hwid !== hwid) return null;
@@ -87,7 +95,7 @@ async function buildEncryptedPayload(session, token, hwid) {
     if (!plaintext || plaintext.length < 10) {
         return { status: 500, body: { err: "payload_empty" } };
     }
-  
+
     const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
     const nonce = Buffer.from(session.nonce, "hex");
     const iv = Buffer.concat([Buffer.alloc(4, 0), nonce]);
@@ -105,11 +113,19 @@ export default async function handler(req, res) {
     const url = new URL(req.url, `https://${req.headers.host || "localhost"}`);
     const path = url.pathname;
     const route = url.searchParams.get("__route");
-  
-    if (
-        (path === "/api/session/init" || path === "/api/secure" && route === "session_init") &&
-        req.method === "POST"
-    ) {
+
+    // Resolve which action to run
+    let action = null;
+    if (route === "session_init") action = "session_init";
+    else if (route === "session_verify") action = "session_verify";
+    else if (route === "payload_enc") action = "payload_enc";
+    else if (path === "/api/session/init") action = "session_init";
+    else if (path === "/api/session/verify") action = "session_verify";
+    else if (path === "/api/payload.enc") action = "payload_enc";
+
+    console.log(`[secure] path=${path} route=${route} action=${action} method=${req.method}`);
+
+    if (action === "session_init" && req.method === "POST") {
         let body = req.body;
         if (typeof body === "string") {
             try { body = JSON.parse(body); } catch { body = null; }
@@ -121,12 +137,9 @@ export default async function handler(req, res) {
         return res.status(result.status).json(result.body);
     }
 
-    if (
-        (path === "/api/payload.enc" || path === "/api/secure" && route === "payload_enc") &&
-        req.method === "GET"
-    ) {
+    if (action === "payload_enc" && req.method === "GET") {
         const token = url.searchParams.get("s");
-        const hwid = req.headers["x-hwid"];
+        const hwid = getHeader(req, "x-hwid");
 
         if (!token || !hwid) {
             return res.status(403).json({ err: "no_session" });
@@ -146,12 +159,9 @@ export default async function handler(req, res) {
         return res.status(result.status).json(result.body);
     }
 
-    if (
-        (path === "/api/session/verify" || path === "/api/secure" && route === "session_verify") &&
-        req.method === "GET"
-    ) {
-        const token = req.headers["x-session"];
-        const hwid = req.headers["x-hwid"];
+    if (action === "session_verify" && req.method === "GET") {
+        const token = getHeader(req, "x-session");
+        const hwid = getHeader(req, "x-hwid");
         const session = await getSession(token, hwid);
         if (!session) {
             return res.status(401).json({ err: "invalid_session" });
@@ -165,5 +175,5 @@ export default async function handler(req, res) {
         });
     }
 
-    return res.status(404).json({ err: "not_found", path });
+    return res.status(404).json({ err: "not_found", path, route, method: req.method });
 }
