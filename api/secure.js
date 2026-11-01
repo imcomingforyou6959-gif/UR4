@@ -7,16 +7,6 @@ const SESSION_TTL = 300;
 const PAYLOAD_RAW_URL =
     "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Loadstring.lua";
 
-function getHeader(req, name) {
-    if (!req || !req.headers) return null;
-    if (typeof req.headers.get === "function") return req.headers.get(name);
-    const lower = name.toLowerCase();
-    for (const k of Object.keys(req.headers)) {
-        if (k.toLowerCase() === lower) return req.headers[k];
-    }
-    return null;
-}
-
 async function createSession(body) {
     const { hwid, executor, placeId, jobId, userId, userName } = body || {};
 
@@ -53,7 +43,6 @@ async function createSession(body) {
             },
             { ex: SESSION_TTL }
         );
-        console.log(`[secure] STORED sess:${token.slice(0, 8)} hwid:${hwid.slice(0, 12)} nonce:${nonce.slice(0, 8)}`);
     } catch (e) {
         return { status: 503, body: { err: "session_store", msg: String(e) } };
     }
@@ -69,9 +58,7 @@ async function getSession(token, hwid) {
         if (typeof s === "string") {
             try { s = JSON.parse(s); } catch {}
         }
-        console.log(`[secure] READ sess:${token.slice(0, 8)} value:${JSON.stringify(s)}`);
-    } catch (e) {
-        console.log(`[secure] redis get error: ${String(e)}`);
+    } catch {
         return null;
     }
     if (!s || s.hwid !== hwid) return null;
@@ -82,6 +69,7 @@ async function getSession(token, hwid) {
     return s;
 }
 
+// XOR with session-derived key. Fast, adequate for network-level protection.
 async function buildEncryptedPayload(session, token, hwid) {
     let plaintext;
     try {
@@ -96,17 +84,15 @@ async function buildEncryptedPayload(session, token, hwid) {
         return { status: 500, body: { err: "payload_empty" } };
     }
 
+    // 32-byte key from sha256(token + "|" + hwid)
     const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
-    const nonce = Buffer.from(session.nonce, "hex");
-    const iv = Buffer.concat([Buffer.alloc(4, 0), nonce]);
+    const plainBuf = Buffer.from(plaintext, "utf8");
+    const out = Buffer.alloc(plainBuf.length);
+    for (let i = 0; i < plainBuf.length; i++) {
+        out[i] = plainBuf[i] ^ key[i % key.length];
+    }
 
-    const cipher = crypto.createCipheriv("chacha20", key, iv);
-    const encrypted = Buffer.concat([
-        cipher.update(Buffer.from(plaintext, "utf8")),
-        cipher.final(),
-    ]);
-
-    return { status: 200, body: encrypted, isBinary: true };
+    return { status: 200, body: out, isBinary: true };
 }
 
 export default async function handler(req, res) {
@@ -114,18 +100,10 @@ export default async function handler(req, res) {
     const path = url.pathname;
     const route = url.searchParams.get("__route");
 
-    // Resolve which action to run
-    let action = null;
-    if (route === "session_init") action = "session_init";
-    else if (route === "session_verify") action = "session_verify";
-    else if (route === "payload_enc") action = "payload_enc";
-    else if (path === "/api/session/init") action = "session_init";
-    else if (path === "/api/session/verify") action = "session_verify";
-    else if (path === "/api/payload.enc") action = "payload_enc";
-
-    console.log(`[secure] path=${path} route=${route} action=${action} method=${req.method}`);
-
-    if (action === "session_init" && req.method === "POST") {
+    if (
+        (path === "/api/session/init" || (path === "/api/secure" && route === "session_init")) &&
+        req.method === "POST"
+    ) {
         let body = req.body;
         if (typeof body === "string") {
             try { body = JSON.parse(body); } catch { body = null; }
@@ -137,9 +115,12 @@ export default async function handler(req, res) {
         return res.status(result.status).json(result.body);
     }
 
-    if (action === "payload_enc" && req.method === "GET") {
+    if (
+        (path === "/api/payload.enc" || (path === "/api/secure" && route === "payload_enc")) &&
+        req.method === "GET"
+    ) {
         const token = url.searchParams.get("s");
-        const hwid = getHeader(req, "x-hwid");
+        const hwid = req.headers["x-hwid"];
 
         if (!token || !hwid) {
             return res.status(403).json({ err: "no_session" });
@@ -159,21 +140,5 @@ export default async function handler(req, res) {
         return res.status(result.status).json(result.body);
     }
 
-    if (action === "session_verify" && req.method === "GET") {
-        const token = getHeader(req, "x-session");
-        const hwid = getHeader(req, "x-hwid");
-        const session = await getSession(token, hwid);
-        if (!session) {
-            return res.status(401).json({ err: "invalid_session" });
-        }
-        return res.status(200).json({
-            ok: true,
-            hwid: session.hwid,
-            expiresAt: session.expiresAt,
-            userId: session.userId,
-            userName: session.userName,
-        });
-    }
-
-    return res.status(404).json({ err: "not_found", path, route, method: req.method });
+    return res.status(404).json({ err: "not_found", path });
 }
