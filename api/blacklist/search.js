@@ -1,4 +1,5 @@
 import { readFile } from "../github.js";
+import { requireSession } from "../_session_verify.js";
 
 const BOT_SECRET = process.env.BOT_SECRET;
 
