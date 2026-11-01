@@ -25,7 +25,7 @@ async function createSession(body) {
     }
 
     try {
-        const url = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Storage/HWID.json";
+        const url = "https://raw.githubusercontent.com/madeformeanduu/UR4/refs/heads/main/Storage/HWID.json";
         const res = await fetch(url, { cache: "no-store" });
         if (res.ok) {
             const data = await res.json();
