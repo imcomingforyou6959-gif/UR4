@@ -7,5 +7,10 @@
         { "key": "Access-Control-Allow-Origin", "value": "*" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/session/init",   "destination": "/api/secure?__route=session_init" },
+    { "source": "/api/session/verify", "destination": "/api/secure?__route=session_verify" },
+    { "source": "/api/payload.enc",    "destination": "/api/secure?__route=payload_enc" }
   ]
 }
