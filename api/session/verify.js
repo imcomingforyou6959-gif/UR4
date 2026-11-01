@@ -4,15 +4,24 @@ const db = Redis.fromEnv();
 
 function getHeader(req, name) {
     if (!req || !req.headers) return null;
-    if (typeof req.headers.get !== "function") {
-        return req.headers[name] ?? req.headers[name.toLowerCase()] ?? null;
+    // Web Request / Headers object
+    if (typeof req.headers.get === "function") {
+        return req.headers.get(name);
     }
-    return req.headers.get(name);
+    // Node req: plain object
+    const lower = name.toLowerCase();
+    for (const k of Object.keys(req.headers)) {
+        if (k.toLowerCase() === lower) return req.headers[k];
+    }
+    return null;
 }
 
 export async function requireSession(req) {
     const token = getHeader(req, "x-session");
     const hwid = getHeader(req, "x-hwid");
+
+    console.log("[verify] token=" + (token ? token.slice(0, 8) : "nil")
+        + " hwid=" + (hwid ? hwid.slice(0, 12) : "nil"));
 
     if (!token || !hwid) {
         return {
@@ -29,7 +38,9 @@ export async function requireSession(req) {
         if (typeof session === "string") {
             try { session = JSON.parse(session); } catch {}
         }
+        console.log("[verify] session=" + JSON.stringify(session));
     } catch (e) {
+        console.log("[verify] redis error: " + String(e));
         return {
             denied: new Response(
                 JSON.stringify({ err: "session_store", msg: String(e) }),
@@ -38,7 +49,18 @@ export async function requireSession(req) {
         };
     }
 
-    if (!session || session.hwid !== hwid) {
+    if (!session) {
+        console.log("[verify] DENIED: session nil in redis");
+        return {
+            denied: new Response(
+                JSON.stringify({ err: "invalid_session" }),
+                { status: 401, headers: { "Content-Type": "application/json" } }
+            ),
+        };
+    }
+
+    if (session.hwid !== hwid) {
+        console.log("[verify] DENIED: hwid mismatch stored=" + session.hwid + " sent=" + hwid);
         return {
             denied: new Response(
                 JSON.stringify({ err: "invalid_session" }),
@@ -48,6 +70,7 @@ export async function requireSession(req) {
     }
 
     if (Math.floor(Date.now() / 1000) > session.expiresAt) {
+        console.log("[verify] DENIED: session expired");
         await db.del(`sess:${token}`).catch(() => {});
         return {
             denied: new Response(
@@ -57,5 +80,6 @@ export async function requireSession(req) {
         };
     }
 
+    console.log("[verify] OK for user=" + session.userName);
     return { session, denied: null };
 }
