@@ -8347,21 +8347,29 @@ oldNewIndex = mt.__newindex
 
 setreadonly(mt, false)
 mt.__newindex = newcclosure(function(self, key, value)
-    if not checkcaller() and Toggles.AntiSlowdown and Toggles.AntiSlowdown.Value then
-        if self:IsA("Humanoid") and key == "WalkSpeed" and value < 25 then
-            value = 25
+    local ok, result = pcall(function()
+        if not checkcaller() and Toggles and Toggles.AntiSlowdown and Toggles.AntiSlowdown.Value then
+            if typeof(self) == "Instance" and self:IsA("Humanoid") and key == "WalkSpeed" and type(value) == "number" and value < 25 then
+                value = 25
+            end
         end
-    end
+        return oldNewIndex(self, key, value)
+    end)
+    if ok then return result end
     return oldNewIndex(self, key, value)
 end)
 setreadonly(mt, true)
 
 oldNewIndex2 = hookmetamethod(game, "__newindex", function(self, Index, Value)
-    if not checkcaller() and Toggles.AntiJumpCooldown and Toggles.AntiJumpCooldown.Value then
-        if self:IsA("Humanoid") and Index == "JumpPower" then
-            return
+    local ok, result = pcall(function()
+        if not checkcaller() and Toggles and Toggles.AntiJumpCooldown and Toggles.AntiJumpCooldown.Value then
+            if typeof(self) == "Instance" and self:IsA("Humanoid") and Index == "JumpPower" then
+                return nil
+            end
         end
-    end
+        return oldNewIndex2(self, Index, Value)
+    end)
+    if ok then return result end
     return oldNewIndex2(self, Index, Value)
 end)
 
@@ -12192,6 +12200,8 @@ SnapHoldTime   = 0.5
 SnapOrbitTime  = 2.0
 SnapPhase      = "off"
 SnapPhaseUntil = 0
+SnapWelded     = false
+SnapPushSpeed  = 75
 
 PositionResolverSources = {
     "HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso", "Head",
@@ -12512,13 +12522,9 @@ end
 
 function IsWaitingForRespawn(target)
     if not target then return false end
-
-    -- Character destroyed but still targeted: DO NOT treat as waiting.
-    -- Idle branches in Orbit() handle this via the "gone" path.
     if not target.Character or not target.Character.Parent then
         return false
     end
-
     if lastTargetCharacter == nil then
         lastTargetCharacter = target.Character
         respawnPending = false
@@ -12796,17 +12802,59 @@ function ComputeRandomOffset(now)
     return orbitRandomOffset
 end
 
+-- ============================================================
+-- SNAP: PhysicsRepRootPart weld exploit
+-- ============================================================
+function ReleaseSnapWeld()
+    if not SnapWelded then return end
+    SnapWelded = false
+    local hrp = GetSelfHRP()
+    if hrp and sethiddenproperty then
+        pcall(function()
+            sethiddenproperty(hrp, "PhysicsRepRootPart", nil)
+        end)
+    end
+end
+
 function PerformSnap(hrp, targetHRP, anchorPos)
     if not targetHRP or not targetHRP.Parent then return end
+    if not hrp or not hrp.Parent then return end
+
     local basePos = resolvedPredictedPos or anchorPos or lastValidTargetPos
     if not basePos or IsVoidPosition(basePos) then return end
+    if IsVoidPosition(targetHRP.Position) then return end
+
+    -- Claim network ownership of both roots (needed for the proxy)
+    SafeSetOwner(hrp, _56)
+    SafeSetOwner(targetHRP, _56)
+
+    -- Weld ourselves to the target via PhysicsRepRootPart (once per snap phase)
+    if sethiddenproperty and not SnapWelded then
+        pcall(function()
+            sethiddenproperty(hrp, "PhysicsRepRootPart", targetHRP)
+        end)
+        SnapWelded = true
+    end
+
+    -- Position ourselves on the target (CFrame locked to their CFrame)
     local look = LastAnchorLook or targetHRP.CFrame.LookVector
     local baseCF = CFrame.new(basePos, basePos + look * 0.001)
     baseCF = AntiAimApply(baseCF, 0.05)
     hrp.CFrame = baseCF
-    hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+
+    -- Velocity is what moves the target via the proxy
+    if SnapWelded then
+        local targetVel = targetHRP.AssemblyLinearVelocity
+        local push = Vector3.new(
+            (math.random() - 0.5) * 2 * SnapPushSpeed,
+            math.random() * SnapPushSpeed * 0.3,
+            (math.random() - 0.5) * 2 * SnapPushSpeed
+        )
+        hrp.AssemblyLinearVelocity = targetVel + push
+    else
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    end
     hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-    if not targetHRP.Anchored then SafeSetOwner(targetHRP, _56) end
 end
 
 function OrbitAroundTarget(target)
@@ -12828,6 +12876,7 @@ function OrbitAroundTarget(target)
         elseif SnapPhase == "snap" and now >= SnapPhaseUntil then
             SnapPhase = "orbit"
             SnapPhaseUntil = now + SnapOrbitTime
+            ReleaseSnapWeld()
         end
         if SnapPhase == "snap" then PerformSnap(hrp, targetHRP, anchorPos); return end
     end
@@ -12943,6 +12992,7 @@ function HandleTargetLost()
         disengageAt = tick() + DisengageDelay
         ForceReturnPoint()
     end
+    ReleaseSnapWeld()
     OrbitTarget = nil
     OrbitNetworkClaimed = false
     lastValidTargetPos = nil
@@ -12975,7 +13025,6 @@ function IdleLoop()
         return
     end
     if not IsSelfAlive() then
-        -- Do not exit idle on self-death; CharacterAdded resets cleanly
         return
     end
     if IdleState == "hiding" then KeepVoidAnchor() end
@@ -12984,12 +13033,10 @@ function IdleLoop()
     local target = _104.targetplayer
 
     if not target or not target.Parent then
-        -- If already hiding, KEEP hiding — don't break the void anchor
         if IdleState == "hiding" then return end
         return
     end
 
-    -- Character destroyed but still targeted: stay in idle
     if not target.Character or not target.Character.Parent then
         if IdleKOEnabled then
             if IdleState ~= "hiding" then
@@ -13097,6 +13144,7 @@ function Orbit()
     if not target or not target.Parent then
         if IdleState == "hiding" then KeepVoidAnchor(); return end
         if IdleState ~= "none" then ExitIdle(true) end
+        ReleaseSnapWeld()
         OrbitTarget = nil
         OrbitNetworkClaimed = false
         lastTargetCharacter = nil
@@ -13105,7 +13153,6 @@ function Orbit()
         return
     end
 
-    -- Character destroyed but still targeted: idle like KO/dead
     if not target.Character or not target.Character.Parent then
         if IdleKOEnabled then
             if IdleState ~= "hiding" then
@@ -13210,6 +13257,7 @@ function Orbit()
 
     if OrbitTarget ~= target then
         if IdleState ~= "none" then ExitIdle(false) end
+        ReleaseSnapWeld()
         OrbitTarget = target
         OrbitNetworkClaimed = false
         lastValidTargetPos = nil
@@ -13277,12 +13325,14 @@ function StartOrbit()
     IdleSpamFirst = false
     SnapPhase = "off"
     SnapPhaseUntil = 0
+    SnapWelded = false
     UpdateSelfAnchor()
     OrbitConnection = RunService.Heartbeat:Connect(Orbit)
     if IdleKOEnabled or IdleReloadEnabled or IdleSpamEnabled then StartIdle() end
 end
 
 function StopOrbit()
+    ReleaseSnapWeld()
     if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
     if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     Disengaging = false
@@ -13318,6 +13368,7 @@ function StopOrbit()
     StompWasIdleActive = false
     SnapPhase = "off"
     SnapPhaseUntil = 0
+    SnapWelded = false
     if ResolverStates then ResolverClear() end
 end
 
@@ -13424,15 +13475,26 @@ Toggles.SnapToggle:OnChanged(function(v)
     SnapPhase = "off"
     SnapPhaseUntil = 0
     if v then
+        if not sethiddenproperty then
+            pcall(function()
+                _48:Notify("Snap: sethiddenproperty unavailable on this executor", 4)
+            end)
+            SnapEnabled = false
+            return
+        end
         local hrp = GetSelfHRP()
         if hrp then SafeSetOwner(hrp, _56) end
     else
+        ReleaseSnapWeld()
         resolvedPredictedPos = nil
     end
 end)
 
 Options.SnapHoldTime:OnChanged(function(v) SnapHoldTime = v end)
 Options.SnapOrbitTime:OnChanged(function(v) SnapOrbitTime = v end)
+if Options.SnapPushSpeed then
+    Options.SnapPushSpeed:OnChanged(function(v) SnapPushSpeed = v end)
+end
 
 _51.PlayerRemoving:Connect(function(player)
     if OrbitTarget == player or _104.targetplayer == player then HandleTargetLost() end
@@ -13442,6 +13504,7 @@ end)
 
 _56.CharacterAdded:Connect(function()
     task.wait(0.5)
+    ReleaseSnapWeld()
     if IdleConnection then IdleConnection:Disconnect() IdleConnection = nil end
     if OrbitConnection then OrbitConnection:Disconnect() OrbitConnection = nil end
     Restoring = false
@@ -13480,11 +13543,15 @@ _56.CharacterAdded:Connect(function()
     StompReturnLocked = false
     SnapPhase = "off"
     SnapPhaseUntil = 0
+    SnapWelded = false
     if ResolverStates then ResolverClear() end
     if OrbitEnabled then StartOrbit() end
 end)
 
-_48:OnUnload(function() StopOrbit() end)
+_48:OnUnload(function()
+    ReleaseSnapWeld()
+    StopOrbit()
+end)
 
 -- >> ( sender rate value )
 
@@ -18269,6 +18336,22 @@ _48:OnUnload(function()
     if ORIGINAL_FPDH ~= nil then
         pcall(function() workspace.FallenPartsDestroyHeight = ORIGINAL_FPDH end)
     end
+
+    pcall(function()
+    local mt = getrawmetatable(game)
+    if not mt then return end
+    setreadonly(mt, false)
+        if oldNewIndex then
+            mt.__newindex = oldNewIndex
+        end
+        setreadonly(mt, true)
+    end)
+    
+    pcall(function()
+        if oldNewIndex2 then
+            hookmetamethod(game, "__newindex", oldNewIndex2)
+        end
+    end)
 
     _118 = false
     _119 = nil
