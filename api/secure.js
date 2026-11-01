@@ -69,8 +69,8 @@ async function getSession(token, hwid) {
     return s;
 }
 
-// XOR with session-derived key. Fast, adequate for network-level protection.
-async function buildEncryptedPayload(session, token, hwid) {
+// No encryption — just fetch the plaintext payload
+async function buildPayload(session, token, hwid) {
     let plaintext;
     try {
         const res = await fetch(PAYLOAD_RAW_URL, { cache: "no-store" });
@@ -84,15 +84,7 @@ async function buildEncryptedPayload(session, token, hwid) {
         return { status: 500, body: { err: "payload_empty" } };
     }
 
-    // 32-byte key from sha256(token + "|" + hwid)
-    const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
-    const plainBuf = Buffer.from(plaintext, "utf8");
-    const out = Buffer.alloc(plainBuf.length);
-    for (let i = 0; i < plainBuf.length; i++) {
-        out[i] = plainBuf[i] ^ key[i % key.length];
-    }
-
-    return { status: 200, body: out, isBinary: true };
+    return { status: 200, body: plaintext, isText: true };
 }
 
 export default async function handler(req, res) {
@@ -131,9 +123,9 @@ export default async function handler(req, res) {
             return res.status(403).json({ err: "invalid_session" });
         }
 
-        const result = await buildEncryptedPayload(session, token, hwid);
-        if (result.isBinary) {
-            res.setHeader("Content-Type", "application/octet-stream");
+        const result = await buildPayload(session, token, hwid);
+        if (result.isText) {
+            res.setHeader("Content-Type", "text/plain; charset=utf-8");
             res.setHeader("Cache-Control", "no-store");
             return res.status(200).send(result.body);
         }
