@@ -1,40 +1,52 @@
-const crypto = require('crypto');
+import { Redis } from "@upstash/redis";
+import { readFile } from "../github.js";
 
-const sessions = globalThis.__sessions || (globalThis.__sessions = new Map());
+const db = Redis.fromEnv();
 
-module.exports = async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
+export async function POST(req) {
+  if (req.method !== "POST") {
+    return Response.json({ err: "method" }, { status: 405 });
+  }
 
   let body;
-  try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  } catch {
-    return res.status(400).json({ error: 'bad json' });
-  }
+  try { body = await req.json(); }
+  catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
+
   const { hwid, executor, placeId, jobId, userId, userName } = body || {};
-  if (!hwid || typeof hwid !== 'string' || hwid.length < 8) {
-    return res.status(400).json({ error: 'missing hwid' });
+  if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
+    return Response.json({ err: "missing_hwid" }, { status: 400 });
   }
 
+  let banned = null;
   try {
-    const base = process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : `http://localhost:${process.env.PORT || 3000}`;
-    const r = await fetch(`${base}/api/blacklist/search?hwid=${encodeURIComponent(hwid)}`);
-    if (r.ok) {
-      const data = await r.json();
-      if (data && data.banned) {
-        return res.status(403).json({ error: 'banned', reason: data.reason || 'banned' });
-      }
+    const main = await readFile("Storage/HWID.json");
+    const data = main.data || {};
+    if (data.banned_hwids && data.banned_hwids[hwid]) {
+      banned = data.banned_hwids[hwid];
     }
-  } catch {
+  } catch (e) {
+    //
+  }
+  if (banned) {
+    return Response.json(
+      { err: "banned", reason: banned.reason || "banned" },
+      { status: 403 }
+    );
+  }
 
-  const token = crypto.randomBytes(32).toString('hex');
-  const nonce = crypto.randomBytes(12).toString('hex');
+  const crypto = await import("node:crypto");
+  const token = crypto.randomBytes(32).toString("hex");
+  const nonce = crypto.randomBytes(12).toString("hex");
   const expiresAt = Math.floor(Date.now() / 1000) + 300;
+  
+  await db.set(`sess:${token}`, {
+    hwid, nonce, expiresAt,
+    executor: String(executor || ""),
+    placeId: Number(placeId) || 0,
+    jobId: String(jobId || ""),
+    userId: Number(userId) || 0,
+    userName: String(userName || ""),
+  }, { ex: 300 });
 
-  sessions.set(token, { hwid, nonce, expiresAt, executor, placeId, jobId, userId, userName });
-  setTimeout(() => sessions.delete(token), 300 * 1000).unref?.();
-
-  return res.status(200).json({ token, nonce, expiresAt });
-};
+  return Response.json({ token, nonce, expiresAt });
+}
