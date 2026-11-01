@@ -1,9 +1,18 @@
 import { readFile } from "../github.js";
+import requireSession from "../session/verify.js";
 
 let cache = { data: null, at: 0 };
 const TTL = 3000;
 
-export async function GET() {
+export async function GET(request) {
+    const session = requireSession(request);
+    if (!session) {
+        return new Response(JSON.stringify({ err: "unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+        });
+    }
+
     try {
         const now = Date.now();
         if (cache.data && now - cache.at < TTL) {
