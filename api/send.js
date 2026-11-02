@@ -109,24 +109,43 @@ async function reportBan(req) {
 
     const hwid = b.hwid, un = b.username, dn = b.displayName, uid = b.userId;
     const pid = b.placeId, jid = b.jobId, ts = b.timestamp, ex = b.executor;
+    const reason = b.reason;
+    const ua = b.ua;
+    const claimed = b.claimedExecutor;
 
     if (!hwid || !uid) return Response.json({ err: "missing" }, { status: 400 });
+
+    const fields = [
+        { name: "HWID",     value: clean(String(hwid), 128), inline: false },
+        { name: "User",     value: clean(String(un || "?"), 64), inline: true },
+        { name: "Display",  value: clean(String(dn || "?"), 64), inline: true },
+        { name: "UID",      value: String(uid),                  inline: true },
+        { name: "Exec",     value: clean(String(ex || "?"), 64), inline: true },
+        { name: "Place",    value: String(pid || 0),             inline: true },
+        { name: "Job",      value: clean(String(jid || "?"), 40), inline: true },
+        { name: "When",     value: `<t:${ts || Math.floor(Date.now()/1000)}:R>`, inline: false },
+    ];
+
+    if (ua || reason) {
+        if (reason) {
+            fields.push({ name: "Reason", value: clean(String(reason), 128), inline: false });
+        }
+        if (ua) {
+            fields.push({ name: "User-Agent", value: "`" + clean(String(ua), 200) + "`", inline: false });
+        }
+        if (claimed) {
+            fields.push({ name: "Claimed Executor", value: clean(String(claimed), 64), inline: true });
+        }
+    }
+
+    const title = reason ? "UA Violation" : "HWID Retry";
 
     const embed = {
         username: "a soft spot for love",
         embeds: [{
-            title: "HWID Retry",
+            title,
             color: BAN_COL,
-            fields: [
-                { name: "HWID",     value: clean(String(hwid), 128), inline: false },
-                { name: "User",     value: clean(String(un || "?"), 64), inline: true },
-                { name: "Display",  value: clean(String(dn || "?"), 64), inline: true },
-                { name: "UID",      value: String(uid),                  inline: true },
-                { name: "Exec",     value: clean(String(ex || "?"), 64), inline: true },
-                { name: "Place",    value: String(pid || 0),             inline: true },
-                { name: "Job",      value: clean(String(jid || "?"), 40), inline: true },
-                { name: "When",     value: `<t:${ts || Math.floor(Date.now()/1000)}:R>`, inline: false },
-            ],
+            fields,
             footer: { text: "i hope im secure" },
         }],
     };
