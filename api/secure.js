@@ -28,6 +28,20 @@ const scriptCache = new Map();
 let banCache = { data: null, at: 0 };
 const BAN_CACHE_TTL_MS = 3000;
 
+const HARD_BLOCK_UAS = [
+    "curl/", "wget/", "python-requests/", "python-urllib/",
+    "aiohttp/", "httpx/", "postmanruntime/", "insomnia/",
+    "node-fetch/", "axios/", "got/", "go-http-client/",
+    "okhttp/", "java/", "libwww-perl/", "httpie/",
+];
+
+const KNOWN_EXECUTORS = [
+    "delta", "solara", "awp", "krnl", "wave", "synapse", "sirhurt",
+    "fluxus", "hydrogen", "argon", "nihon", "xeno", "electron",
+    "codex", "trigon", "valyse", "swift", "void", "jjsploit",
+    "oxygen", "celery", "rce", "vexon", "sirius",
+];
+
 async function getBanList() {
     const now = Date.now();
     if (banCache.data && now - banCache.at < BAN_CACHE_TTL_MS) {
@@ -47,13 +61,59 @@ async function getBanList() {
 async function checkBanned(hwid) {
     if (!hwid || typeof hwid !== "string") return null;
     const data = await getBanList();
-    if (!data) return null;
-    const bans = (data && data.banned_hwids) || {};
-    return bans[hwid] || null;
+    if (data) {
+        const bans = (data && data.banned_hwids) || {};
+        if (bans[hwid]) return bans[hwid];
+    }
+    try {
+        const flag = await db.get(`banflag:${hwid}`);
+        if (flag) {
+            const reason = typeof flag === "string" ? JSON.parse(flag).reason : flag.reason;
+            return { reason: reason || "flagged" };
+        }
+    } catch {}
+    return null;
 }
 
-async function createSession(body) {
-    const { hwid, executor, placeId, jobId, userId, userName } = body || {};
+function classifyUA(ua, claimedExecutor) {
+    const uaLower = String(ua || "").toLowerCase();
+    const claimedLower = String(claimedExecutor || "").toLowerCase();
+
+    if (!uaLower) return { action: "none", reason: "no_ua" };
+
+    for (const block of HARD_BLOCK_UAS) {
+        if (uaLower.startsWith(block) || uaLower.includes(block)) {
+            return { action: "block", reason: "hard_block_ua:" + block };
+        }
+    }
+
+    const looksLikeExecutor = KNOWN_EXECUTORS.some((e) => uaLower.includes(e));
+    if (!looksLikeExecutor) {
+        return { action: "report", reason: "unknown_ua", ua };
+    }
+
+    if (claimedLower && !uaLower.includes(claimedLower)) {
+        const claimedIsKnown = KNOWN_EXECUTORS.some((e) => claimedLower.includes(e));
+        if (claimedIsKnown) {
+            return { action: "report", reason: "ua_mismatch", ua, claimed: claimedExecutor };
+        }
+    }
+
+    return { action: "none", reason: "ok" };
+}
+
+async function forwardBanReport(baseUrl, payload) {
+    try {
+        await fetch(baseUrl + "/blacklist/report", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+    } catch {}
+}
+
+async function createSession(body, req, baseUrl) {
+    const { hwid, executor, placeId, jobId, userId, userName, displayName } = body || {};
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
         return { status: 400, body: { err: "missing_hwid" } };
     }
@@ -64,6 +124,55 @@ async function createSession(body) {
             status: 403,
             body: { err: "banned", reason: banEntry.reason || "banned" },
         };
+    }
+
+    const ua = String(req?.headers?.["user-agent"] || "");
+    const uaClass = classifyUA(ua, executor);
+
+    if (uaClass.action === "block") {
+        forwardBanReport(baseUrl, {
+            hwid,
+            username: String(userName || "?"),
+            displayName: String(displayName || userName || "?"),
+            userId: Number(userId) || 0,
+            placeId: Number(placeId) || 0,
+            jobId: String(jobId || ""),
+            executor: String(executor || ""),
+            timestamp: Math.floor(Date.now() / 1000),
+            reason: uaClass.reason,
+            ua,
+            claimedExecutor: String(executor || ""),
+        });
+        return { status: 403, body: { err: "blocked_ua" } };
+    }
+
+    if (uaClass.action === "report") {
+        forwardBanReport(baseUrl, {
+            hwid,
+            username: String(userName || "?"),
+            displayName: String(displayName || userName || "?"),
+            userId: Number(userId) || 0,
+            placeId: Number(placeId) || 0,
+            jobId: String(jobId || ""),
+            executor: String(executor || ""),
+            timestamp: Math.floor(Date.now() / 1000),
+            reason: uaClass.reason,
+            ua,
+            claimedExecutor: uaClass.claimed || String(executor || ""),
+        });
+
+        if (uaClass.reason === "ua_mismatch") {
+            try {
+                await db.set(
+                    `banflag:${hwid}`,
+                    {
+                        reason: "ua_mismatch:claimed=" + String(uaClass.claimed || "?") + " ua=" + ua.substring(0, 100),
+                        at: Date.now(),
+                    },
+                    { ex: 86400 }
+                );
+            } catch {}
+        }
     }
 
     const token = crypto.randomBytes(32).toString("hex");
@@ -78,6 +187,7 @@ async function createSession(body) {
                 nonce,
                 expiresAt,
                 executor: String(executor || ""),
+                ua: ua.substring(0, 256),
                 placeId: Number(placeId) || 0,
                 jobId: String(jobId || ""),
                 userId: Number(userId) || 0,
@@ -255,7 +365,8 @@ export default async function handler(req, res) {
         if (!body || typeof body !== "object") {
             return res.status(400).json({ err: "bad_json" });
         }
-        const result = await createSession(body);
+        const baseUrl = `https://${req.headers.host || "localhost"}`;
+        const result = await createSession(body, req, baseUrl);
         return res.status(result.status).json(result.body);
     }
 
