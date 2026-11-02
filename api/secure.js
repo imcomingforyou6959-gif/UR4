@@ -10,6 +10,11 @@ const PAYLOAD_PATH = process.env.PAYLOAD_PATH || "constructs/Loadstring.lua";
 const HWID_JSON_URL =
     "https://raw.githubusercontent.com/madeformeanduu/vaild/refs/heads/main/Storage/HWID.json";
 
+const ASSET_URL =
+    "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/images/kitagawa.webp";
+const ASSET_CACHE_TTL_MS = 3600 * 1000;
+let assetCache = { data: null, at: 0, contentType: "image/webp" };
+
 async function createSession(body) {
     const { hwid, executor, placeId, jobId, userId, userName } = body || {};
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
@@ -112,6 +117,37 @@ async function buildPayload(session, token, hwid) {
     return { status: 200, body: out, isBinary: true };
 }
 
+async function buildAsset() {
+    const now = Date.now();
+    if (assetCache.data && now - assetCache.at < ASSET_CACHE_TTL_MS) {
+        return {
+            status: 200,
+            body: assetCache.data,
+            contentType: assetCache.contentType,
+            isBinary: true,
+        };
+    }
+
+    try {
+        const res = await fetch(ASSET_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error(`raw ${res.status}`);
+        const buf = Buffer.from(await res.arrayBuffer());
+        assetCache = {
+            data: buf,
+            at: now,
+            contentType: res.headers.get("content-type") || "image/webp",
+        };
+        return {
+            status: 200,
+            body: buf,
+            contentType: assetCache.contentType,
+            isBinary: true,
+        };
+    } catch (e) {
+        return { status: 500, body: { err: "asset_fetch", msg: String(e) } };
+    }
+}
+
 export default async function handler(req, res) {
     const url = new URL(req.url, `https://${req.headers.host || "localhost"}`);
     const path = url.pathname;
@@ -152,6 +188,19 @@ export default async function handler(req, res) {
         if (result.isBinary) {
             res.setHeader("Content-Type", "application/octet-stream");
             res.setHeader("Cache-Control", "no-store");
+            return res.status(200).send(result.body);
+        }
+        return res.status(result.status).json(result.body);
+    }
+
+    if (
+        (path === "/api/asset/kitagawa" || (path === "/api/secure" && route === "asset_kitagawa")) &&
+        req.method === "GET"
+    ) {
+        const result = await buildAsset();
+        if (result.isBinary) {
+            res.setHeader("Content-Type", result.contentType);
+            res.setHeader("Cache-Control", "public, max-age=3600");
             return res.status(200).send(result.body);
         }
         return res.status(result.status).json(result.body);
