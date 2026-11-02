@@ -20,7 +20,7 @@ const SCRIPT_REPO = "UR4";
 const SCRIPT_BRANCH = "main";
 const SCRIPT_ALLOWED_PREFIXES = [
     "Adonis.lua", "Library.lua",
-    "addons/", "Rendering/", "Supporting/",
+    "addons/", "Rendering/", "Supporting/", "assets/",
 ];
 const SCRIPT_CACHE_TTL_MS = 5 * 60 * 1000;
 const scriptCache = new Map();
@@ -193,10 +193,13 @@ async function buildScript(scriptPath, token, hwid) {
 
     const now = Date.now();
     const cached = scriptCache.get(norm);
+    const isAsset = norm.startsWith("assets/");
     let plaintext;
+    let isBinaryContent = false;
 
     if (cached && now - cached.at < SCRIPT_CACHE_TTL_MS) {
         plaintext = cached.data;
+        isBinaryContent = cached.isBinaryContent || false;
     } else {
         const url =
             `https://raw.githubusercontent.com/${SCRIPT_OWNER}/${SCRIPT_REPO}/` +
@@ -205,16 +208,23 @@ async function buildScript(scriptPath, token, hwid) {
         try {
             const res = await fetch(url, { cache: "no-store" });
             if (!res.ok) throw new Error(`raw ${res.status}`);
-            plaintext = await res.text();
-            if (!plaintext || plaintext.length < 5) throw new Error("empty");
-            scriptCache.set(norm, { data: plaintext, at: now });
+            if (isAsset) {
+                plaintext = Buffer.from(await res.arrayBuffer());
+                isBinaryContent = true;
+            } else {
+                plaintext = await res.text();
+                if (!plaintext || plaintext.length < 5) throw new Error("empty");
+            }
+            scriptCache.set(norm, { data: plaintext, at: now, isBinaryContent });
         } catch (e) {
             return { status: 500, body: { err: "script_fetch", msg: String(e) } };
         }
     }
 
     const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
-    const buf = Buffer.from(plaintext, "utf8");
+    const buf = isBinaryContent
+        ? Buffer.from(plaintext)
+        : Buffer.from(plaintext, "utf8");
     const out = Buffer.alloc(buf.length);
     for (let i = 0; i < buf.length; i++) {
         out[i] = buf[i] ^ key[i % key.length];
