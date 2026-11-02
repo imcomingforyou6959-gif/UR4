@@ -26,6 +26,8 @@ const THUMB_MAX = 512;
 const BAN_HOOK = process.env.BAN_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
 const BAN_COL = 0xff4444;
 
+const ALLOWED_REASONS = /^(ua_mismatch|hard_block_ua:.+)$/;
+
 function clean(s, max) {
     if (typeof s !== "string") return "";
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
@@ -109,11 +111,15 @@ async function reportBan(req) {
 
     const hwid = b.hwid, un = b.username, dn = b.displayName, uid = b.userId;
     const pid = b.placeId, jid = b.jobId, ts = b.timestamp, ex = b.executor;
-    const reason = b.reason;
+    const reason = String(b.reason || "");
     const ua = b.ua;
     const claimed = b.claimedExecutor;
 
     if (!hwid || !uid) return Response.json({ err: "missing" }, { status: 400 });
+    
+    if (!ALLOWED_REASONS.test(reason)) {
+        return Response.json({ ok: true, ignored: true, reason });
+    }
 
     const fields = [
         { name: "HWID",     value: clean(String(hwid), 128), inline: false },
@@ -126,19 +132,19 @@ async function reportBan(req) {
         { name: "When",     value: `<t:${ts || Math.floor(Date.now()/1000)}:R>`, inline: false },
     ];
 
-    if (ua || reason) {
-        if (reason) {
-            fields.push({ name: "Reason", value: clean(String(reason), 128), inline: false });
-        }
-        if (ua) {
-            fields.push({ name: "User-Agent", value: "`" + clean(String(ua), 200) + "`", inline: false });
-        }
-        if (claimed) {
-            fields.push({ name: "Claimed Executor", value: clean(String(claimed), 64), inline: true });
-        }
+    if (reason) {
+        fields.push({ name: "Reason", value: clean(reason, 128), inline: false });
+    }
+    if (ua) {
+        fields.push({ name: "User-Agent", value: "`" + clean(String(ua), 200) + "`", inline: false });
+    }
+    if (claimed) {
+        fields.push({ name: "Claimed Executor", value: clean(String(claimed), 64), inline: true });
     }
 
-    const title = reason ? "UA Violation" : "HWID Retry";
+    const title = reason.startsWith("hard_block_ua")
+        ? "Blacklisted Client"
+        : "Executor Spoof";
 
     const embed = {
         username: "a soft spot for love",
