@@ -162,8 +162,10 @@ async function reportBan(req) {
 }
 
 export async function POST(req) {
-    const path = new URL(req.url).pathname;
-    if (path.endsWith("/blacklist/report")) return reportBan(req);
+    const url = new URL(req.url);
+    const route = url.searchParams.get("__route");
+
+    if (route === "report") return reportBan(req);
 
     let body;
     try {
