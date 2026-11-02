@@ -368,103 +368,6 @@ function _3(_4, _5)
     return true
 end
 
-local SESSION = getgenv().__RAWR_SESSION
-if not SESSION or not SESSION.token or not SESSION.hwid then
-    warn("[payload] no session available - script fetches will fail")
-end
-
-local function _hashKeyHex(s)
-    if syn and syn.crypt and syn.crypt.hash then
-        local ok, r = pcall(syn.crypt.hash, s)
-        if ok and type(r) == "string" and #r >= 64 then return r end
-    end
-    if crypt and crypt.hash then
-        local ok, r = pcall(crypt.hash, s)
-        if ok and type(r) == "string" and #r >= 64 then return r end
-    end
-    return nil
-end
-
-local function _xorScript(cipher, token, hwid)
-    if type(cipher) ~= "string" or #cipher == 0 then return nil end
-    if type(token) ~= "string" or type(hwid) ~= "string" then return nil end
-
-    local keyHex = _hashKeyHex(token .. "|" .. hwid)
-    if not keyHex then return nil end
-
-    local key = {}
-    for i = 1, 64, 2 do
-        local b = tonumber(keyHex:sub(i, i + 1), 16)
-        if not b then return nil end
-        key[#key + 1] = string.char(b)
-    end
-    key = table.concat(key)
-    if #key ~= 32 then return nil end
-
-    local out = {}
-    local klen = #key
-    for i = 1, #cipher do
-        out[i] = string.char(bit32.bxor(cipher:byte(i), key:byte(((i - 1) % klen) + 1)))
-    end
-    return table.concat(out)
-end
-
-local function fetchScript(path)
-    if getgenv().__RAWR_ensureSession then
-        pcall(getgenv().__RAWR_ensureSession)
-    end
-
-    local S = getgenv().__RAWR_SESSION
-    if not S or not S.token or not S.hwid then
-        warn("[payload/fetchScript] no session for path: " .. tostring(path))
-        return nil
-    end
-
-    local url = "https://ur-4.vercel.app/api/f/" .. tostring(path)
-        .. "?t=" .. tostring(os.time())
-        .. "&s=" .. S.token
-
-    local req = (syn and syn.request) or (http and http.request) or request
-    if not req then
-        warn("[payload/fetchScript] no request function")
-        return nil
-    end
-
-    local ok, resp = pcall(req, {
-        Url = url,
-        Method = "GET",
-        Headers = {
-            ["x-session"] = S.token,
-            ["x-hwid"] = S.hwid,
-        },
-    })
-
-    if not ok or type(resp) ~= "table" then
-        warn("[payload/fetchScript] request threw for " .. tostring(path))
-        return nil
-    end
-
-    local code = tonumber(resp.StatusCode)
-    if code ~= 200 then
-        warn("[payload/fetchScript] HTTP " .. tostring(code) .. " for " .. tostring(path)
-            .. " body=" .. tostring(resp.Body and tostring(resp.Body):sub(1, 120)))
-        return nil
-    end
-
-    if type(resp.Body) ~= "string" or #resp.Body == 0 then
-        warn("[payload/fetchScript] empty body for " .. tostring(path))
-        return nil
-    end
-
-    local plaintext = _xorScript(resp.Body, S.token, S.hwid)
-    if not plaintext or #plaintext == 0 then
-        warn("[payload/fetchScript] decrypt failed for " .. tostring(path))
-        return nil
-    end
-
-    return plaintext
-end
-
 local function _12(_13)
     local _14 = "https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png&isCircular=false"
     local _8, _15 = pcall(function()
@@ -602,9 +505,7 @@ local _38 = "A94A07A9-74A6-4D86-A747-832EF519DAC7"
 local _39 = 0
 
 local _40, _41 = pcall(function()
-    local src = fetchScript("Adonis.lua")
-    if not src then error("fetchScript returned nil") end
-    return loadstring(src)()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Adonis.lua", true))()
 end)
 
 if not _40 then
@@ -654,20 +555,22 @@ end
 
 wait(1)
 
-local function _safeLoad(path)
-    local plaintext = fetchScript(path)
-    if not plaintext then return nil end
-    local chunk = loadstring(plaintext)
-    if not chunk then return nil end
-    local ok, res = pcall(chunk)
+local _47 = 'https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/'
+
+function _safeLoad(url)
+    local separator = url:find("?") and "&" or "?"
+    local freshUrl = url .. separator .. "t=" .. os.time()
+    local ok, res = pcall(function()
+        return loadstring(game:HttpGet(freshUrl))()
+    end)
     if ok and res then return res end
     return nil
 end
 
-local _48      = _safeLoad("Library.lua")
-local _49      = _safeLoad("addons/ThemeManager.lua")
-local _50      = _safeLoad("addons/SaveManager.lua")
-local Spotify  = _safeLoad("addons/Spotify.lua")
+local _48      = _safeLoad(_47 .. 'Library.lua')
+local _49      = _safeLoad(_47 .. 'addons/ThemeManager.lua')
+local _50      = _safeLoad(_47 .. 'addons/SaveManager.lua')
+local Spotify  = _safeLoad(_47 .. 'addons/Spotify.lua')
 Library = _48
 
 if not _48 then
@@ -677,10 +580,30 @@ end
 
 -- loader
 do
-    local env = getgenv and getgenv() or _G
+    local CACHE_BUST = tostring(os.time())
 
+    function fetch(url, bust)
+        local full = bust and (url .. (url:find("?", 1, true) and "&" or "?") .. "t=" .. CACHE_BUST) or url
+        local req = request or http_request or (syn and syn.request)
+        if req then
+            local ok, r = pcall(req, { Url = full, Method = "GET" })
+            if ok and type(r) == "table" and tonumber(r.StatusCode) == 200
+                and type(r.Body) == "string" and #r.Body > 0 then
+                return r.Body
+            end
+        end
+        local ok, b = pcall(game.HttpGet, game, full)
+        if ok and type(b) == "string" and #b > 0 then return b end
+        return nil
+    end
+
+    SPEEDKIT_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/SpeedKit.luau"
+    DECODER_URL  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifDecoder.luau"
+    RENDERER_URL = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Rendering/GifRenderer.luau"
+
+    local env = getgenv and getgenv() or _G
     if type(env.SpeedKit) ~= "table" or type(env.SpeedKit.Blend) ~= "function" then
-        local kitSrc = fetchScript("Rendering/SpeedKit.luau")
+        local kitSrc = fetch(SPEEDKIT_URL, true) or fetch(SPEEDKIT_URL, false)
         if kitSrc then
             local ok, kit = pcall(function()
                 local mod = loadstring(kitSrc)()
@@ -699,7 +622,7 @@ do
         end
     end
 
-    local decoderSrc = fetchScript("Rendering/GifDecoder.luau")
+    local decoderSrc = fetch(DECODER_URL, true) or fetch(DECODER_URL, false)
     if decoderSrc then
         local ok, decoded = pcall(function()
             local mod = loadstring(decoderSrc)()
@@ -711,7 +634,7 @@ do
         if ok and decoded then
             env.GifDecoder = decoded
 
-            local rendererSrc = fetchScript("Rendering/GifRenderer.luau")
+            local rendererSrc = fetch(RENDERER_URL, true) or fetch(RENDERER_URL, false)
             if rendererSrc then
                 local ok2, renderer = pcall(function()
                     local mod = loadstring(rendererSrc)()
@@ -10509,155 +10432,70 @@ if _128 or _129 then
 end
 
 SoundRegistry = {
-    ["1nn"]           = "1nn.mp3",
-    ["67"]            = "67.mp3",
-    ["BatHit"]        = "BatHit.mp3",
-    ["Beep"]          = "Beep.mp3",
-    ["Bonk"]          = "Bonk.mp3",
-    ["Bow"]           = "Bow.mp3",
-    ["Bubble"]        = "Bubble.mp3",
-    ["Bubble2"]       = "Bubble2.mp3",
-    ["CSGO"]          = "CSGO.mp3",
-    ["Cod"]           = "Cod.mp3",
-    ["Fairy1"]        = "Fairy1.mp3",
-    ["Fairy2"]        = "Fairy2.mp3",
-    ["Fatality"]      = "Fatality.mp3",
-    ["Fatality2"]     = "Fatality2.mp3",
-    ["Hentai1"]       = "Hentai1.mp3",
-    ["Hentai2"]       = "Hentai2.mp3",
-    ["Hentai3"]       = "Hentai3.mp3",
-    ["Lazer"]         = "Lazer.mp3",
-    ["MarioCoins"]    = "MarioCoins.mp3",
-    ["MinecraftXP"]   = "MinecraftXP.mp3",
-    ["Neverlose"]     = "Neverlose.mp3",
-    ["OSU"]           = "OSU.mp3",
-    ["PubgPan"]       = "PubgPan.mp3",
-    ["Rifk7"]         = "Rifk7.mp3",
-    ["RustHeadshot"]  = "RustHeadshot.mp3",
-    ["Skeet"]         = "Skeet.mp3",
-    ["SpanishMoan"]   = "SpanishMoan.mp3",
-    ["StaryKrow"]     = "StaryKrow.mp3",
-    ["Steve"]         = "Steve.mp3",
-    ["TF2Crit"]       = "TF2Crit.mp3",
-    ["TF2Default"]    = "TF2Default.mp3",
-    ["Windows"]       = "Windows.mp3",
-    ["boolean"]       = "boolean.ogg",
-    ["bumble"]        = "bumble.mp3",
-    ["disable"]       = "disable.ogg",
-    ["enable"]        = "enable.ogg",
-    ["keypress"]      = "keypress.ogg",
-    ["keyrelease"]    = "keyrelease.ogg",
-    ["lobby"]         = "lobby.mp3",
-    ["moan1"]         = "moan1.ogg",
-    ["moan2"]         = "moan2.ogg",
-    ["moan3"]         = "moan3.ogg",
-    ["moan4"]         = "moan4.ogg",
-    ["orthodox"]      = "orthodox.ogg",
-    ["pmsound"]       = "pmsound.ogg",
-    ["rifk"]          = "rifk.ogg",
-    ["Doggy"]         = "Doggy.mp3",
+    ["1nn"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/1nn.mp3",
+    ["67"]            = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/67.mp3",
+    ["BatHit"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/BatHit.mp3",
+    ["Beep"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Beep.mp3",
+    ["Bonk"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bonk.mp3",
+    ["Bow"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bow.mp3",
+    ["Bubble"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bubble.mp3",
+    ["Bubble2"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Bubble2.mp3",
+    ["CSGO"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/CSGO.mp3",
+    ["Cod"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Cod.mp3",
+    ["Fairy1"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fairy1.mp3",
+    ["Fairy2"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fairy2.mp3",
+    ["Fatality"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fatality.mp3",
+    ["Fatality2"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Fatality2.mp3",
+    ["Hentai1"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai1.mp3",
+    ["Hentai2"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai2.mp3",
+    ["Hentai3"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Hentai3.mp3",
+    ["Lazer"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Lazer.mp3",
+    ["MarioCoins"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/MarioCoins.mp3",
+    ["MinecraftXP"]   = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/MinecraftXP.mp3",
+    ["Neverlose"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Neverlose.mp3",
+    ["OSU"]           = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/OSU.mp3",
+    ["PubgPan"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/PubgPan.mp3",
+    ["Rifk7"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Rifk7.mp3",
+    ["RustHeadshot"]  = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/RustHeadshot.mp3",
+    ["Skeet"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Skeet.mp3",
+    ["SpanishMoan"]   = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/SpanishMoan.mp3",
+    ["StaryKrow"]     = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/StaryKrow.mp3",
+    ["Steve"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Steve.mp3",
+    ["TF2Crit"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/TF2Crit.mp3",
+    ["TF2Default"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/TF2Default.mp3",
+    ["Windows"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Windows.mp3",
+    ["boolean"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/boolean.ogg",
+    ["bumble"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/bumble.mp3",
+    ["disable"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/disable.ogg",
+    ["enable"]        = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/enable.ogg",
+    ["keypress"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/keypress.ogg",
+    ["keyrelease"]    = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/keyrelease.ogg",
+    ["lobby"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/lobby.mp3",
+    ["moan1"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan1.ogg",
+    ["moan2"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan2.ogg",
+    ["moan3"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan3.ogg",
+    ["moan4"]         = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/moan4.ogg",
+    ["orthodox"]      = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/orthodox.ogg",
+    ["pmsound"]       = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/pmsound.ogg",
+    ["rifk"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/rifk.ogg",
+    ["Doggy"]          = "https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/main/assets/sounds/Doggy.mp3",
 }
 
 _SoundService = game:GetService("SoundService")
 _SoundCache = {}
 
--- Local fallback for _xorScript in case the helper block isn't in scope
-local _localXorScript = _xorScript or function(cipher, token, hwid)
-    if type(cipher) ~= "string" or #cipher == 0 then return nil end
-    if type(token) ~= "string" or type(hwid) ~= "string" then return nil end
+function GetSoundAsset(url)
+    if _SoundCache[url] then return _SoundCache[url] end
+    local ok, bytes = pcall(game.HttpGet, game, url)
+    if not ok or type(bytes) ~= "string" then return nil end
 
-    local keyHex
-    if syn and syn.crypt and syn.crypt.hash then
-        local ok, r = pcall(syn.crypt.hash, token .. "|" .. hwid)
-        if ok and type(r) == "string" and #r >= 64 then keyHex = r end
-    end
-    if not keyHex and crypt and crypt.hash then
-        local ok, r = pcall(crypt.hash, token .. "|" .. hwid)
-        if ok and type(r) == "string" and #r >= 64 then keyHex = r end
-    end
-    if not keyHex then return nil end
-
-    local key = {}
-    for i = 1, 64, 2 do
-        local b = tonumber(keyHex:sub(i, i + 1), 16)
-        if not b then return nil end
-        key[#key + 1] = string.char(b)
-    end
-    key = table.concat(key)
-    if #key ~= 32 then return nil end
-
-    local out = {}
-    local klen = #key
-    for i = 1, #cipher do
-        out[i] = string.char(bit32.bxor(cipher:byte(i), key:byte(((i - 1) % klen) + 1)))
-    end
-    return table.concat(out)
-end
-
-local function fetchAsset(path)
-    if getgenv().__RAWR_ensureSession then
-        pcall(getgenv().__RAWR_ensureSession)
-    end
-
-    local S = getgenv().__RAWR_SESSION
-    if not S or not S.token or not S.hwid then
-        warn("[payload/sound] no session | " .. tostring(path))
-        return nil
-    end
-
-    local url = "https://ur-4.vercel.app/api/f/" .. path
-        .. "?t=" .. tostring(os.time())
-        .. "&s=" .. S.token
-
-    local req = (syn and syn.request) or (http and http.request) or request
-    if not req then return nil end
-
-    local ok, resp = pcall(req, {
-        Url = url,
-        Method = "GET",
-        Headers = { ["x-session"] = S.token, ["x-hwid"] = S.hwid },
-    })
-    if not ok or type(resp) ~= "table" then
-        warn("[payload/sound] request threw for " .. tostring(path))
-        return nil
-    end
-    if tonumber(resp.StatusCode) ~= 200 then
-        warn("[payload/sound] HTTP " .. tostring(resp.StatusCode)
-            .. " for " .. tostring(path)
-            .. " body=" .. tostring(resp.Body and tostring(resp.Body):sub(1, 120)))
-        return nil
-    end
-    if type(resp.Body) ~= "string" or #resp.Body == 0 then return nil end
-
-    local plaintext = _localXorScript(resp.Body, S.token, S.hwid)
-    if not plaintext or #plaintext == 0 then
-        warn("[payload/sound] decrypt failed for " .. tostring(path))
-        return nil
-    end
-    return plaintext
-end
-
-function GetSoundAsset(filename)
-    if _SoundCache[filename] then return _SoundCache[filename] end
-
-    local bytes = fetchAsset("assets/sounds/" .. tostring(filename))
-    if not bytes then
-        warn("[payload/sound] fetch failed for " .. tostring(filename))
-        return nil
-    end
-
+    local name = url:match("([^/]+)$")
     if writefile and getcustomasset then
-        local ok, writeErr = pcall(function()
-            writefile(filename, bytes)
-        end)
-        if ok then
-            local ok2, asset = pcall(getcustomasset, filename)
-            if ok2 and asset then
-                _SoundCache[filename] = asset
-                return asset
-            end
-        else
-            warn("[rawr/sound] writefile failed for " .. tostring(filename) .. ": " .. tostring(writeErr))
+        writefile(name, bytes)
+        local ok2, asset = pcall(getcustomasset, name)
+        if ok2 and asset then
+            _SoundCache[url] = asset
+            return asset
         end
     end
     return nil
@@ -10665,10 +10503,10 @@ end
 
 function PlaySoundByName(soundName, volume)
     if not soundName or soundName == "None" then return end
-    local filename = SoundRegistry[soundName]
-    if not filename then return end
+    local url = SoundRegistry[soundName]
+    if not url then return end
 
-    local asset = GetSoundAsset(filename)
+    local asset = GetSoundAsset(url)
     if not asset then return end
 
     local s = Instance.new("Sound")
@@ -10691,7 +10529,7 @@ end
 
 KillTracker = {
     lastTarget = nil,
-    firedFor = {},
+    firedFor = {},  -- [userId] = true, don't fire again for this player
 }
 
 function UpdateKillSound(target)
@@ -10702,12 +10540,14 @@ function UpdateKillSound(target)
 
     local userId = target.UserId
     if KillTracker.firedFor[userId] then
+        -- Already fired for this player, don't fire again
         KillTracker.lastTarget = target
         return
     end
 
     local char = target.Character
     if not char then
+        -- Character gone → treat as kill (once per userId)
         KillTracker.firedFor[userId] = true
         PlayKillSound()
         KillTracker.lastTarget = nil
@@ -18944,16 +18784,7 @@ end)
 _56.CharacterAdded:Connect(function()
     _G.IsReloading = false
 end)
-
-do
-    local src = fetchScript("Supporting/Commands.lua")
-    if src then
-        local chunk = loadstring(src)
-        if chunk then pcall(chunk) end
-    else
-        warn("[loader] Commands.lua fetch failed")
-    end
-end
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Commands.lua'))()
 
 _AA_cache = nil
 _AA_busy = false
@@ -19313,16 +19144,7 @@ if _56.Character then
         end
     end
 end
-
-do
-    local src = fetchScript("Supporting/Cilent.lua")
-    if src then
-        local chunk = loadstring(src)
-        if chunk then pcall(chunk) end
-    else
-        warn("[loader] Cilent.lua fetch failed")
-    end
-end
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Cilent.lua'))()
 
 _48:Notify('Bugs? Report them in discord.gg/eMpUQzFrNG <3', 15)
 
@@ -19719,13 +19541,7 @@ env.cleanupforhearts = Cleaner
 -- for das hood
 if game.PlaceId == 89723161599525 then pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/RangeHelper.lua'))() end) end
 
-pcall(function()
-    local src = fetchScript("Supporting/Jumpc.lua")
-    if not src then error("fetchScript returned nil") end
-    local chunk = loadstring(src)
-    if not chunk then error("loadstring failed") end
-    return chunk()
-end)
+loadstring(game:HttpGet('https://raw.githubusercontent.com/imcomingforyou6959-gif/UR4/refs/heads/main/Supporting/Jumpc.lua'))()
 return {
     targetaim = _104,
     togglevoid = _147,
