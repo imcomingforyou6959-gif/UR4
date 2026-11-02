@@ -3,7 +3,9 @@ const GH_REPO = "vaild";
 const GH_BRANCH = "main";
 const GH_TOKEN = process.env.GH_TOKEN;
 
-export async function readFile(path) {
+const MAX_RETRIES = 3;
+
+async function readOnce(path) {
     const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}?ref=${GH_BRANCH}`;
     const res = await fetch(url, {
         headers: {
@@ -21,7 +23,11 @@ export async function readFile(path) {
     return { sha: json.sha, data: JSON.parse(Buffer.from(json.content, "base64").toString("utf8")), missing: false };
 }
 
-export async function writeFile(path, data, sha, msg) {
+export async function readFile(path) {
+    return readOnce(path);
+}
+
+async function writeOnce(path, data, sha, msg) {
     const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`;
     const body = {
         message: msg,
@@ -39,6 +45,36 @@ export async function writeFile(path, data, sha, msg) {
         },
         body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`write ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-    return await res.json();
+    return res;
+}
+
+export async function writeFile(path, data, sha, msg) {
+    let currentSha = sha;
+    let currentData = data;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        const res = await writeOnce(path, currentData, currentSha, msg);
+        if (res.ok) return await res.json();
+        if (res.status !== 409) {
+            throw new Error(`write ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
+        }
+        const fresh = await readOnce(path);
+        if (!fresh.sha) {
+            throw new Error(`write ${path}: 409 but reread found no sha`);
+        }
+        currentSha = fresh.sha;
+        currentData = mergeData(fresh.data, currentData);
+        await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+    }
+    throw new Error(`write ${path}: exhausted retries after 409 conflicts`);
+}
+
+function mergeData(base, incoming) {
+    if (!base || typeof base !== "object") return incoming;
+    if (!incoming || typeof incoming !== "object") return incoming;
+    if (Array.isArray(base) || Array.isArray(incoming)) return incoming;
+    const out = { ...base };
+    for (const [k, v] of Object.entries(incoming)) {
+        out[k] = mergeData(base[k], v);
+    }
+    return out;
 }
