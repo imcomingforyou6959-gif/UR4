@@ -9,7 +9,8 @@
     }
   ],
   "rewrites": [
-    { "source": "/api/session/init", "destination": "/api/secure?__route=session_init" },
-    { "source": "/api/payload.enc",  "destination": "/api/secure?__route=payload_enc" }
+    { "source": "/api/session/init",  "destination": "/api/secure?__route=session_init" },
+    { "source": "/api/payload.enc",   "destination": "/api/secure?__route=payload_enc" },
+    { "source": "/api/asset/kitagawa","destination": "/api/secure?__route=asset_kitagawa" }
   ]
 }
