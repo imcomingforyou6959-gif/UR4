@@ -4,6 +4,20 @@ import { readFile, writeFile } from "../github.js";
 const db = Redis.fromEnv();
 const BOT_SECRET = process.env.BOT_SECRET;
 
+async function flagRedis(hwid, reason) {
+    try {
+        await db.set(
+            `banflag:${hwid}`,
+            JSON.stringify({ reason, at: Date.now() }),
+            { ex: 7 * 86400 }
+        );
+        return true;
+    } catch (e) {
+        console.error("[/blacklist/add] redis flag failed", { hwid: hwid.slice(0, 12), err: String(e) });
+        return false;
+    }
+}
+
 export async function POST(req) {
     const secret = req.headers.get("x-bot-secret");
     if (!BOT_SECRET || secret !== BOT_SECRET) return Response.json({ err: "unauthorized" }, { status: 401 });
@@ -37,7 +51,13 @@ export async function POST(req) {
     if (!hist.data.rebans) hist.data.rebans = {};
 
     if (main.data.banned_hwids[hwid]) {
-        return Response.json({ err: "already_banned" }, { status: 409 });
+        const existingReason = main.data.banned_hwids[hwid].reason || "banned";
+        const flagged = await flagRedis(hwid, existingReason);
+        return Response.json({
+            err: "already_banned",
+            reason: existingReason,
+            redisFlagged: flagged,
+        }, { status: 409 });
     }
 
     const existingHistory = main.data.violations[hwid] || null;
@@ -173,10 +193,13 @@ export async function POST(req) {
         return Response.json({ err: "gh_write", msg: String(e) }, { status: 502 });
     }
 
+    const flagged = await flagRedis(hwid, reason);
+
     return Response.json({
         ok: true,
         entry: main.data.banned_hwids[hwid],
         hadHistory: !!existingHistory,
         linkedHwids: linkedHwids.length,
+        redisFlagged: flagged,
     });
 }
