@@ -42,6 +42,8 @@ const KNOWN_EXECUTORS = [
     "oxygen", "celery", "rce", "vexon", "sirius",
 ];
 
+const FORWARD_BASE_URL = "https://ur-4.vercel.app";
+
 async function getBanList() {
     const now = Date.now();
     if (banCache.data && now - banCache.at < BAN_CACHE_TTL_MS) {
@@ -102,9 +104,9 @@ function classifyUA(ua, claimedExecutor) {
     return { action: "none", reason: "ok" };
 }
 
-async function forwardBanReport(baseUrl, payload) {
+async function forwardBanReport(payload) {
     try {
-        await fetch(baseUrl + "/blacklist/report", {
+        await fetch(FORWARD_BASE_URL + "/api/blacklist/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
@@ -112,7 +114,7 @@ async function forwardBanReport(baseUrl, payload) {
     } catch {}
 }
 
-async function createSession(body, req, baseUrl) {
+async function createSession(body, req) {
     const { hwid, executor, placeId, jobId, userId, userName, displayName } = body || {};
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
         return { status: 400, body: { err: "missing_hwid" } };
@@ -126,11 +128,11 @@ async function createSession(body, req, baseUrl) {
         };
     }
 
-    const ua = String(req?.headers?.["user-agent"] || "");
+    const ua = String(req?.headers?.get?.("user-agent") || req?.headers?.["user-agent"] || "");
     const uaClass = classifyUA(ua, executor);
 
     if (uaClass.action === "block") {
-        forwardBanReport(baseUrl, {
+        forwardBanReport({
             hwid,
             username: String(userName || "?"),
             displayName: String(displayName || userName || "?"),
@@ -147,7 +149,7 @@ async function createSession(body, req, baseUrl) {
     }
 
     if (uaClass.action === "report") {
-        forwardBanReport(baseUrl, {
+        forwardBanReport({
             hwid,
             username: String(userName || "?"),
             displayName: String(displayName || userName || "?"),
@@ -365,8 +367,7 @@ export default async function handler(req, res) {
         if (!body || typeof body !== "object") {
             return res.status(400).json({ err: "bad_json" });
         }
-        const baseUrl = `https://${req.headers.host || "localhost"}`;
-        const result = await createSession(body, req, baseUrl);
+        const result = await createSession(body, req);
         return res.status(result.status).json(result.body);
     }
 
