@@ -23,7 +23,7 @@ const USER = "one love for security";
 const VAL_MAX = 1024;
 const THUMB_MAX = 512;
 
-const BAN_HOOK = process.env.BAN_HOOK || process.env.DISCORD_WEBHOOK_URL;
+const BAN_HOOK = process.env.BAN_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
 const BAN_COL = 0xff4444;
 
 function clean(s, max) {
