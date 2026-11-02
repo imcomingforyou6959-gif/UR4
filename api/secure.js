@@ -25,24 +25,46 @@ const SCRIPT_ALLOWED_PREFIXES = [
 const SCRIPT_CACHE_TTL_MS = 5 * 60 * 1000;
 const scriptCache = new Map();
 
+let banCache = { data: null, at: 0 };
+const BAN_CACHE_TTL_MS = 3000;
+
+async function getBanList() {
+    const now = Date.now();
+    if (banCache.data && now - banCache.at < BAN_CACHE_TTL_MS) {
+        return banCache.data;
+    }
+    try {
+        const res = await fetch(HWID_JSON_URL, { cache: "no-store" });
+        if (!res.ok) return banCache.data || null;
+        const data = await res.json();
+        banCache = { data, at: now };
+        return data;
+    } catch {
+        return banCache.data || null;
+    }
+}
+
+async function checkBanned(hwid) {
+    if (!hwid || typeof hwid !== "string") return null;
+    const data = await getBanList();
+    if (!data) return null;
+    const bans = (data && data.banned_hwids) || {};
+    return bans[hwid] || null;
+}
+
 async function createSession(body) {
     const { hwid, executor, placeId, jobId, userId, userName } = body || {};
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
         return { status: 400, body: { err: "missing_hwid" } };
     }
-    try {
-        const res = await fetch(HWID_JSON_URL, { cache: "no-store" });
-        if (res.ok) {
-            const data = await res.json();
-            const bans = (data && data.banned_hwids) || {};
-            if (bans[hwid]) {
-                return {
-                    status: 403,
-                    body: { err: "banned", reason: bans[hwid].reason || "banned" },
-                };
-            }
-        }
-    } catch {}
+
+    const banEntry = await checkBanned(hwid);
+    if (banEntry) {
+        return {
+            status: 403,
+            body: { err: "banned", reason: banEntry.reason || "banned" },
+        };
+    }
 
     const token = crypto.randomBytes(32).toString("hex");
     const nonce = crypto.randomBytes(12).toString("hex");
@@ -258,6 +280,18 @@ export default async function handler(req, res) {
             (path === "/api/secure" && route === "asset_kitagawa")) &&
         req.method === "GET"
     ) {
+        const token = url.searchParams.get("s");
+        const hwid = req.headers["x-hwid"];
+
+        if (!token || !hwid) {
+            return res.status(403).json({ err: "no_session" });
+        }
+
+        const session = await getSession(token, hwid);
+        if (!session) {
+            return res.status(403).json({ err: "invalid_session" });
+        }
+
         const result = await buildAsset();
         if (result.isBinary) {
             res.setHeader("Content-Type", result.contentType);
