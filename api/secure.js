@@ -40,6 +40,9 @@ const KNOWN_EXECUTORS = [
     "fluxus", "hydrogen", "argon", "nihon", "xeno", "electron",
     "codex", "trigon", "valyse", "swift", "void", "jjsploit",
     "oxygen", "celery", "rce", "vexon", "sirius",
+    "volt", "potassium", "synapse z", "madium", "seliware", "real",
+    "isaeva", "velocity", "volcano", "cosmic", "macsploit", "opiumware",
+    "vega x", "cryptic", "scriptware", "arceus x"
 ];
 
 const FORWARD_BASE_URL = "https://ur-4.vercel.app";
@@ -78,29 +81,38 @@ async function checkBanned(hwid) {
 }
 
 function classifyUA(ua, claimedExecutor) {
-    const uaLower = String(ua || "").toLowerCase();
-    const claimedLower = String(claimedExecutor || "").toLowerCase();
+    const uaLower = String(ua || "").toLowerCase().trim();
+    const claimedLower = String(claimedExecutor || "").toLowerCase().trim();
 
+    // No UA at all — don't report, just let it through
     if (!uaLower) return { action: "none", reason: "no_ua" };
 
+    // 1) Hard block: known scripted/bot clients
     for (const block of HARD_BLOCK_UAS) {
         if (uaLower.startsWith(block) || uaLower.includes(block)) {
             return { action: "block", reason: "hard_block_ua:" + block };
         }
     }
 
-    const looksLikeExecutor = KNOWN_EXECUTORS.some((e) => uaLower.includes(e));
-    if (!looksLikeExecutor) {
-        return { action: "report", reason: "unknown_ua", ua };
+    // Detect which known executor (if any) the UA actually matches
+    const uaExecutor = KNOWN_EXECUTORS.find((e) => uaLower.includes(e)) || null;
+    const claimedExecutorKnown = claimedLower
+        ? KNOWN_EXECUTORS.find((e) => claimedLower.includes(e)) || null
+        : null;
+
+    // 2) Report ONLY on genuine spoofing:
+    //    - claim names a known executor, UA names a DIFFERENT known executor
+    if (claimedExecutorKnown && uaExecutor && uaExecutor !== claimedExecutorKnown) {
+        return {
+            action: "report",
+            reason: "ua_mismatch",
+            ua,
+            claimed: claimedExecutor,
+        };
     }
 
-    if (claimedLower && !uaLower.includes(claimedLower)) {
-        const claimedIsKnown = KNOWN_EXECUTORS.some((e) => claimedLower.includes(e));
-        if (claimedIsKnown) {
-            return { action: "report", reason: "ua_mismatch", ua, claimed: claimedExecutor };
-        }
-    }
-
+    // 3) Everything else (normal Roblox clients, browsers, unknown UAs,
+    //    matching executor UAs, no known executor in either) => allow, no report
     return { action: "none", reason: "ok" };
 }
 
