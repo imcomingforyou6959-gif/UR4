@@ -22,9 +22,14 @@ export async function POST(request) {
     await redis.set(rateKey, String(count + 1), { ex: RL_WIN });
 
     const token = generateToken();
-    const expiresAt = Math.floor(Date.now() / 1000) + 60;
+    const expiresAt = Math.floor(Date.now() / 1000) + 50;
 
-    await redis.set(`token:${token}`, "unused", { ex: 60, nx: true });
+    const r = await redis.set(`token:${token}`, "unused", { ex: 60 });
+    if (r !== "OK") {
+        console.error("[/token] redis set failed", { r, tokenPrefix: token.slice(0, 8) });
+        return Response.json({ error: "token_store_failed" }, { status: 500 });
+    }
 
+    console.log("[/token] issued", { tokenPrefix: token.slice(0, 8), expiresAt, ip });
     return Response.json({ token, expiresAt });
 }
