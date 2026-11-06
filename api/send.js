@@ -23,7 +23,7 @@ const USER = "one love for security";
 const VAL_MAX = 1024;
 const THUMB_MAX = 512;
 
-const ALT_HOOK = process.env.ALT_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
+const BAN_HOOK = process.env.BAN_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
 const BAN_COL = 0xff4444;
 
 const ALLOWED_REASONS = /^(ua_mismatch|hard_block_ua:.+|AUTH_NETWORK|SEND_FAILED|SEND_HTTP_\d+|JSON_ENCODE|TOKEN_FAILED|UNKNOWN)$/;
@@ -79,6 +79,18 @@ function check(emb) {
     };
 }
 
+async function readBody(req) {
+    if (!req || req.body === undefined || req.body === null) return null;
+    const body = req.body;
+    if (typeof body === "object" && typeof body.getReader !== "function" && !Buffer.isBuffer(body)) return body;
+    if (typeof body === "string") { try { return JSON.parse(body); } catch { return null; } }
+    if (Buffer.isBuffer(body)) { try { return JSON.parse(body.toString("utf8")); } catch { return null; } }
+    if (typeof body === "object" && typeof body.getReader === "function") {
+        try { const text = await new Response(body).text(); return JSON.parse(text); } catch { return null; }
+    }
+    return null;
+}
+
 async function sendToDiscord(out) {
     const url = process.env.DISCORD_WEBHOOK_URL;
     if (!url) {
@@ -124,8 +136,8 @@ async function sendToDiscord(out) {
 
 async function sendBatchEmbed(items) {
     if (!items || items.length === 0) return;
-    if (!ALT_HOOK) {
-        console.error("[/send?report] ALT_HOOK env var missing");
+    if (!BAN_HOOK) {
+        console.error("[/send?report] BAN_HOOK env var missing");
         return;
     }
 
@@ -181,7 +193,7 @@ async function sendBatchEmbed(items) {
 
     try {
         console.log("[/send?report] dispatching batched ban embed", { count: items.length, title });
-        const res = await fetch(ALT_HOOK, {
+        const res = await fetch(BAN_HOOK, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(embed),
@@ -193,9 +205,10 @@ async function sendBatchEmbed(items) {
     }
 }
 
-async function reportBan(req) {
-    let b;
-    try { b = await req.json(); } catch { return Response.json({ err: "bad_json" }, { status: 400 }); }
+async function reportBan(b) {
+    if (!b || typeof b !== "object") {
+        return Response.json({ err: "bad_json" }, { status: 400 });
+    }
 
     const hwid = b.hwid, un = b.username, dn = b.displayName, uid = b.userId;
     const pid = b.placeId, jid = b.jobId, ts = b.timestamp, ex = b.executor;
@@ -243,7 +256,7 @@ async function reportBan(req) {
         return Response.json({ ok: true, buffered: true });
     }
 
-    const ownsFlush = (got === "OK" || got === true);
+    const ownsFlush = (got === "OK" || got === true || (got && typeof got === "object" && got.result === "OK"));
 
     if (!ownsFlush) {
         console.log("[/send?report] buffered (another flush in progress)", { hwid });
@@ -280,15 +293,21 @@ async function reportBan(req) {
 }
 
 export async function POST(req) {
-    const url = new URL(req.url);
+    let url;
+    try {
+        url = new URL(req.url);
+    } catch {
+        url = new URL(req.url, "https://ur-4.vercel.app");
+    }
     const route = url.searchParams.get("__route");
 
-    if (route === "report") return reportBan(req);
+    const body = await readBody(req);
 
-    let body;
-    try {
-        body = await req.json();
-    } catch {
+    if (route === "report") {
+        return reportBan(body);
+    }
+
+    if (!body || typeof body !== "object") {
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
