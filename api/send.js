@@ -23,7 +23,7 @@ const USER = "one love for security";
 const VAL_MAX = 1024;
 const THUMB_MAX = 512;
 
-const BAN_HOOK = process.env.BAN_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
+const ALT_HOOK = process.env.ALT_HOOK || process.env.ALT_HOOK || process.env.DISCORD_WEBHOOK_URL;
 const BAN_COL = 0xff4444;
 
 const ALLOWED_REASONS = /^(ua_mismatch|hard_block_ua:.+|AUTH_NETWORK|SEND_FAILED|SEND_HTTP_\d+|JSON_ENCODE|TOKEN_FAILED|UNKNOWN)$/;
@@ -124,8 +124,8 @@ async function sendToDiscord(out) {
 
 async function sendBatchEmbed(items) {
     if (!items || items.length === 0) return;
-    if (!BAN_HOOK) {
-        console.error("[/send?report] BAN_HOOK env var missing");
+    if (!ALT_HOOK) {
+        console.error("[/send?report] ALT_HOOK env var missing");
         return;
     }
 
@@ -181,7 +181,7 @@ async function sendBatchEmbed(items) {
 
     try {
         console.log("[/send?report] dispatching batched ban embed", { count: items.length, title });
-        const res = await fetch(BAN_HOOK, {
+        const res = await fetch(ALT_HOOK, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(embed),
