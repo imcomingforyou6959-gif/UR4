@@ -31,14 +31,36 @@ const ALLOWED_REASONS = /^(ua_mismatch|hard_block_ua:.+|AUTH_NETWORK|SEND_FAILED
 const BATCH_WINDOW_MS = 2000;
 const BATCH_TTL_SEC = 60;
 
-console.log("[/send] module loaded", {
-    hasBanHook: !!BAN_HOOK,
-    banHookPrefix: String(BAN_HOOK || "").slice(0, 40),
-});
+function log(event, data) {
+    const line = { evt: event, ts: Date.now(), ...data };
+    console.log(JSON.stringify(line));
+}
+
+function err(event, e, extra) {
+    const line = {
+        evt: event,
+        ts: Date.now(),
+        err: String(e && e.message ? e.message : e),
+        ...(extra || {}),
+    };
+    console.error(JSON.stringify(line));
+}
 
 function clean(s, max) {
     if (typeof s !== "string") return "";
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
+}
+
+function maskHwid(hwid) {
+    const s = String(hwid || "");
+    if (s.length <= 6) return "***";
+    return s.slice(0, 4) + "…" + s.slice(-2);
+}
+
+function maskToken(token) {
+    const s = String(token || "");
+    if (s.length <= 10) return "***";
+    return s.slice(0, 4) + "…" + s.slice(-4);
 }
 
 function check(emb) {
@@ -85,69 +107,25 @@ function check(emb) {
 }
 
 async function readBody(req) {
-    console.log("[/send] readBody start", {
-        hasReq: !!req,
-        reqType: typeof req,
-        ctor: req && req.constructor && req.constructor.name,
-        hasBodyProp: req && req.body !== undefined,
-        bodyType: req && req.body ? typeof req.body : "undefined",
-        bodyCtor: req && req.body && req.body.constructor && req.body.constructor.name,
-        hasJson: req && typeof req.json === "function",
-        hasText: req && typeof req.text === "function",
-        hasOn: req && typeof req.on === "function",
-        hasGetReader: req && req.body && typeof req.body.getReader === "function",
-    });
-
     if (!req) return null;
 
     const b = req.body;
     if (b !== undefined && b !== null) {
-        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) {
-            console.log("[/send] readBody path: plain object");
-            return b;
-        }
-        if (typeof b === "string") {
-            console.log("[/send] readBody path: string");
-            try { return JSON.parse(b); } catch (e) { console.error("[/send] readBody string parse failed", String(e)); return null; }
-        }
-        if (Buffer.isBuffer(b)) {
-            console.log("[/send] readBody path: Buffer");
-            try { return JSON.parse(b.toString("utf8")); } catch (e) { console.error("[/send] readBody buffer parse failed", String(e)); return null; }
-        }
+        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
+        if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
+        if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
         if (typeof b === "object" && typeof b.getReader === "function") {
-            console.log("[/send] readBody path: stream (getReader)");
-            try {
-                const text = await new Response(b).text();
-                console.log("[/send] readBody stream text length", text.length);
-                return JSON.parse(text);
-            } catch (e) { console.error("[/send] readBody stream failed", String(e)); return null; }
+            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
         }
     }
 
     if (typeof req.json === "function") {
-        console.log("[/send] readBody path: req.json()");
-        try {
-            const r = await req.json();
-            console.log("[/send] readBody req.json() result", { type: typeof r, keys: r && typeof r === "object" ? Object.keys(r) : null });
-            return r;
-        } catch (e) {
-            console.error("[/send] readBody req.json() threw", String(e));
-        }
+        try { return await req.json(); } catch {}
     }
-
     if (typeof req.text === "function") {
-        console.log("[/send] readBody path: req.text()");
-        try {
-            const t = await req.text();
-            console.log("[/send] readBody req.text() length", t ? t.length : 0);
-            return t ? JSON.parse(t) : null;
-        } catch (e) {
-            console.error("[/send] readBody req.text() threw", String(e));
-        }
+        try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
     }
-
     if (typeof req.on === "function") {
-        console.log("[/send] readBody path: req.on() stream");
         try {
             const text = await new Promise((resolve, reject) => {
                 const chunks = [];
@@ -155,30 +133,26 @@ async function readBody(req) {
                 req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
                 req.on("error", reject);
             });
-            console.log("[/send] readBody req.on stream length", text ? text.length : 0);
             return text ? JSON.parse(text) : null;
-        } catch (e) {
-            console.error("[/send] readBody req.on stream failed", String(e));
-            return null;
-        }
+        } catch { return null; }
     }
 
-    console.error("[/send] readBody exhausted all paths, returning null");
     return null;
 }
 
 async function sendToDiscord(out) {
     const url = process.env.DISCORD_WEBHOOK_URL;
     if (!url) {
-        console.error("[/send] DISCORD_WEBHOOK_URL missing in this environment");
+        err("send.webhook_missing");
         return { ok: false, status: 0, err: "no_webhook_env" };
     }
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const payloadBytes = Buffer.byteLength(JSON.stringify(out), "utf8");
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
         try {
-            console.log("[/send] dispatching to Discord", { attempt });
             const res = await fetch(url, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -188,7 +162,12 @@ async function sendToDiscord(out) {
             clearTimeout(timer);
 
             const bodyText = await res.text().catch(() => "");
-            console.log("[/send] discord responded", { status: res.status, body: bodyText.slice(0, 500) });
+
+            log("send.discord_response", {
+                attempt,
+                status: res.status,
+                bytes: payloadBytes,
+            });
 
             if (res.status === 429) {
                 let wait = 1;
@@ -199,25 +178,34 @@ async function sendToDiscord(out) {
                 await new Promise(r => setTimeout(r, Math.min(wait * 1000, 5000)));
                 continue;
             }
-            return { ok: res.ok, status: res.status, body: bodyText.slice(0, 500) };
+
+            if (!res.ok) {
+                err("send.discord_rejected", `status ${res.status}`, {
+                    attempt,
+                    status: res.status,
+                    body: bodyText.slice(0, 300),
+                });
+            }
+
+            return { ok: res.ok, status: res.status };
         } catch (e) {
             clearTimeout(timer);
-            console.error("[/send] discord fetch threw", { attempt, err: String(e) });
-            if (attempt === 2) return { ok: false, status: 0, err: String(e) };
-            await new Promise(r => setTimeout(r, 300 * (attempt + 1)));
+            err("send.discord_fetch_failed", e, { attempt });
+            if (attempt === 3) return { ok: false, status: 0, err: String(e) };
+            await new Promise(r => setTimeout(r, 300 * attempt));
         }
     }
+    err("send.discord_retries_exhausted");
     return { ok: false, status: 429, err: "exhausted_retries" };
 }
 
 async function sendBatchEmbed(items) {
-    console.log("[/send?report] sendBatchEmbed called", { count: items && items.length });
     if (!items || items.length === 0) {
-        console.warn("[/send?report] sendBatchEmbed: empty items, returning");
+        log("report.batch_empty");
         return;
     }
     if (!BAN_HOOK) {
-        console.error("[/send?report] BAN_HOOK env var missing");
+        err("report.ban_hook_missing");
         return;
     }
 
@@ -271,29 +259,41 @@ async function sendBatchEmbed(items) {
         }],
     };
 
+    log("report.dispatching", {
+        count: items.length,
+        title,
+        hwid: maskHwid(latest.hwid),
+        reasons: [...reasons],
+    });
+
     try {
-        console.log("[/send?report] dispatching batched ban embed", { count: items.length, title });
         const res = await fetch(BAN_HOOK, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(embed),
         });
         const bodyText = await res.text().catch(() => "");
-        console.log("[/send?report] ban hook responded", { status: res.status, body: bodyText.slice(0, 300) });
+
+        if (res.status === 204 || res.ok) {
+            log("report.delivered", {
+                count: items.length,
+                status: res.status,
+            });
+        } else {
+            err("report.discord_rejected", `status ${res.status}`, {
+                count: items.length,
+                status: res.status,
+                body: bodyText.slice(0, 300),
+            });
+        }
     } catch (e) {
-        console.error("[/send?report] ban hook fetch failed", String(e));
+        err("report.discord_fetch_failed", e, { count: items.length });
     }
 }
 
 async function reportBan(b) {
-    console.log("[/send?report] reportBan called", {
-        hasB: !!b,
-        bType: typeof b,
-        keys: b && typeof b === "object" ? Object.keys(b) : null,
-    });
-
     if (!b || typeof b !== "object") {
-        console.error("[/send?report] reportBan: body is null/non-object, returning bad_json");
+        err("report.bad_body");
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
@@ -303,21 +303,13 @@ async function reportBan(b) {
     const ua = b.ua;
     const claimed = b.claimedExecutor;
 
-    console.log("[/send?report] parsed fields", {
-        hwid: String(hwid || "").slice(0, 12),
-        uid,
-        reason,
-        hasUa: !!ua,
-        hasClaimed: !!claimed,
-    });
-
     if (!hwid || !uid) {
-        console.warn("[/send?report] missing hwid or uid", { hwid, uid });
+        err("report.missing_fields", null, { hasHwid: !!hwid, hasUid: !!uid });
         return Response.json({ err: "missing" }, { status: 400 });
     }
 
     if (!ALLOWED_REASONS.test(reason)) {
-        console.warn("[/send?report] reason not allowed, ignoring", { reason });
+        log("report.reason_ignored", { reason, hwid: maskHwid(hwid) });
         return Response.json({ ok: true, ignored: true, reason });
     }
 
@@ -335,50 +327,55 @@ async function reportBan(b) {
         claimed: clean(String(claimed || ""), 64),
     };
 
-    console.log("[/send?report] entry built", entry);
-
     const bufKey   = `banbuf:${hwid}`;
     const flushKey = `banbuf:${hwid}:flush`;
 
     try {
         await db.rpush(bufKey, JSON.stringify(entry));
         await db.expire(bufKey, BATCH_TTL_SEC);
-        console.log("[/send?report] rpush ok", { bufKey });
+        log("report.buffered", {
+            hwid: maskHwid(hwid),
+            reason,
+            buffer: bufKey.replace(hwid, maskHwid(hwid)),
+        });
     } catch (e) {
-        console.error("[/send?report] buffer write failed", String(e));
-        return Response.json({ err: "buffer_write", msg: String(e) }, { status: 500 });
+        err("report.buffer_write_failed", e, { hwid: maskHwid(hwid) });
+        return Response.json({ err: "buffer_write" }, { status: 500 });
     }
 
     let got;
     try {
         got = await db.set(flushKey, "1", { nx: true, ex: BATCH_TTL_SEC });
-        console.log("[/send?report] flush lock result", { got, gotType: typeof got });
     } catch (e) {
-        console.error("[/send?report] flush lock failed", String(e));
+        err("report.flush_lock_failed", e, { hwid: maskHwid(hwid) });
         return Response.json({ ok: true, buffered: true });
     }
 
     const ownsFlush = (got === "OK" || got === true || (got && typeof got === "object" && got.result === "OK"));
-    console.log("[/send?report] ownsFlush", ownsFlush);
 
     if (!ownsFlush) {
-        console.log("[/send?report] buffered (another flush in progress)", { hwid });
+        log("report.flush_deferred", {
+            hwid: maskHwid(hwid),
+            reason: "another flush in progress",
+        });
         try { await db.expire(bufKey, BATCH_TTL_SEC); } catch {}
         return Response.json({ ok: true, buffered: true });
     }
 
-    console.log("[/send?report] sleeping for batch window", { ms: BATCH_WINDOW_MS });
+    log("report.flush_start", {
+        hwid: maskHwid(hwid),
+        window_ms: BATCH_WINDOW_MS,
+    });
+
     await new Promise((r) => setTimeout(r, BATCH_WINDOW_MS));
-    console.log("[/send?report] woke from batch window");
 
     let raw = [];
     try {
         raw = await db.lrange(bufKey, 0, -1);
-        console.log("[/send?report] lrange returned", { count: raw ? raw.length : 0 });
         await db.del(bufKey);
         await db.del(flushKey);
     } catch (e) {
-        console.error("[/send?report] buffer drain failed", String(e));
+        err("report.buffer_drain_failed", e, { hwid: maskHwid(hwid) });
     }
 
     const items = [];
@@ -387,128 +384,94 @@ async function reportBan(b) {
             const parsed = typeof r === "string" ? JSON.parse(r) : r;
             if (parsed && typeof parsed === "object") items.push(parsed);
         } catch (e) {
-            console.error("[/send?report] parse buffer entry failed", String(e));
+            err("report.buffer_parse_failed", e);
         }
     }
 
-    console.log("[/send?report] flushing batch", { count: items.length, hwid });
+    log("report.flush_complete", {
+        hwid: maskHwid(hwid),
+        count: items.length,
+    });
 
     if (items.length > 0) {
         await sendBatchEmbed(items);
-    } else {
-        console.warn("[/send?report] no items to flush");
     }
 
     return Response.json({ ok: true, batched: items.length });
 }
 
 export async function POST(req) {
-    console.log("[/send] POST handler entry", {
-        hasReq: !!req,
-        reqType: typeof req,
-        ctor: req && req.constructor && req.constructor.name,
-        hasBodyProp: req && req.body !== undefined,
-        bodyType: req && req.body ? typeof req.body : "undefined",
-        bodyCtor: req && req.body && req.body.constructor && req.body.constructor.name,
-        hasJson: req && typeof req.json === "function",
-        hasText: req && typeof req.text === "function",
-        hasOn: req && typeof req.on === "function",
-        hasGetReader: req && req.body && typeof req.body.getReader === "function",
-        urlType: req && typeof req.url,
-        urlValue: req && typeof req.url === "string" ? req.url.slice(0, 200) : "(not a string)",
-        hasHeaders: req && !!req.headers,
-        headersCtor: req && req.headers && req.headers.constructor && req.headers.constructor.name,
-    });
-
     let url;
-    try {
-        url = new URL(req.url);
-        console.log("[/send] URL parsed", { href: url.href, pathname: url.pathname });
-    } catch (e) {
-        console.error("[/send] URL parse failed, using fallback", String(e));
-        url = new URL(req.url, "https://ur-4.vercel.app");
-    }
+    try { url = new URL(req.url); }
+    catch { url = new URL(req.url, "https://ur-4.vercel.app"); }
     const route = url.searchParams.get("__route");
-    console.log("[/send] route", { route });
 
     const body = await readBody(req);
-
-    console.log("[/send] body resolved", {
-        hasBody: !!body,
-        bodyType: typeof body,
-        keys: body && typeof body === "object" ? Object.keys(body) : null,
-    });
 
     if (route === "report") {
         return reportBan(body);
     }
 
     if (!body || typeof body !== "object") {
-        console.error("[/send] bad body for non-report route");
+        err("send.bad_body");
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
     const { token, payload } = body;
-    console.log("[/send] non-report body", {
-        hasToken: !!token,
-        tokenPrefix: token ? String(token).slice(0, 8) : null,
-        hasPayload: !!payload,
-    });
-
     if (!token || !payload) {
-        console.warn("[/send] missing token or payload");
+        err("send.missing_fields", null, { hasToken: !!token, hasPayload: !!payload });
         return Response.json({ err: "missing" }, { status: 400 });
     }
 
     const key = `token:${token}`;
+    const tokenMasked = maskToken(token);
 
     let current;
     try {
         current = await db.get(key);
     } catch (e) {
-        console.error("[/send] redis get failed", String(e));
+        err("send.redis_get_failed", e, { token: tokenMasked });
         return Response.json({ err: "redis_error" }, { status: 500 });
     }
 
-    console.log("[/send] token lookup", {
-        tokenPrefix: String(token).slice(0, 8),
-        value: current,
-        type: typeof current,
-    });
-
     if (current !== "unused") {
-        console.warn("[/send] token not unused", { current });
-        return Response.json({ err: "bad_token", current, got: current }, { status: 403 });
+        log("send.token_rejected", {
+            token: tokenMasked,
+            reason: current === null ? "not_found" : "already_used",
+        });
+        return Response.json({ err: "bad_token" }, { status: 403 });
     }
 
     let consumed;
     try {
         consumed = await db.set(key, "used", { xx: true });
-        console.log("[/send] token consume result", { consumed, consumedType: typeof consumed });
     } catch (e) {
-        console.error("[/send] redis set failed", String(e));
+        err("send.redis_set_failed", e, { token: tokenMasked });
         return Response.json({ err: "redis_error" }, { status: 500 });
     }
 
     if (consumed !== "OK") {
-        console.warn("[/send] token consume rejected", { consumed });
-        return Response.json({ err: "bad_token", consumed }, { status: 403 });
+        log("send.token_consume_raced", { token: tokenMasked });
+        return Response.json({ err: "bad_token" }, { status: 403 });
     }
 
     await db.expire(key, 300).catch(() => {});
 
     if (!payload.embeds || !Array.isArray(payload.embeds) || payload.embeds.length !== 1) {
-        console.warn("[/send] bad embed shape", { embedsLength: payload.embeds && payload.embeds.length });
+        err("send.bad_embed_shape", null, {
+            token: tokenMasked,
+            embedsLength: payload.embeds && payload.embeds.length,
+        });
         return Response.json({ err: "bad_embed" }, { status: 400 });
     }
 
     const v = check(payload.embeds[0]);
     if (!v.ok) {
-        console.warn("[/send] embed rejected by check()", { why: v.why });
+        err("send.embed_check_failed", null, { token: tokenMasked, why: v.why });
         return Response.json({ err: "rejected", why: v.why }, { status: 400 });
     }
 
-    console.log("[/send] embed validated, sending to Discord");
+    log("send.embed_validated", { token: tokenMasked });
 
     const out = {
         username: USER,
@@ -516,6 +479,5 @@ export async function POST(req) {
     };
 
     const r = await sendToDiscord(out);
-    console.log("[/send] final response", r);
     return Response.json(r);
 }
