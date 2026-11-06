@@ -34,6 +34,9 @@ const SCRIPT_ALLOWED_PREFIXES = [
     "private/",
     "addons/", "Rendering/", "Supporting/", "assets/",
 ];
+const SCRIPT_PRIVATE_ALLOWLIST = [
+    "private/librarys/hash.lua",
+];
 const SCRIPT_CACHE_TTL_MS = 5 * 60 * 1000;
 const scriptCache = new Map();
 
@@ -657,6 +660,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
     const now = Date.now();
     const cached = scriptCache.get(norm);
     const isAsset = norm.startsWith("assets/");
+    const isPrivate = norm.startsWith("private/");
     let plaintext;
     let isBinaryContent = false;
 
@@ -664,6 +668,25 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
         plaintext = cached.data;
         isBinaryContent = cached.isBinaryContent || false;
         log("script.cache_hit", { path: norm });
+    } else if (isPrivate) {
+        if (!SCRIPT_PRIVATE_ALLOWLIST.includes(norm)) {
+            err("script.private_not_allowed", null, { path: norm.slice(0, 80) });
+            return { status: 403, body: { err: "private_path_not_allowed" } };
+        }
+        const privatePath = norm.slice("private/".length);
+        if (!PAYLOAD_REPO_TOKEN) {
+            err("script.private_token_missing");
+            return { status: 500, body: { err: "private_token_missing" } };
+        }
+        try {
+            plaintext = await fetchPrivateFile(PAYLOAD_REPO, privatePath, PAYLOAD_REPO_TOKEN);
+            if (!plaintext || plaintext.length < 5) throw new Error("empty");
+            scriptCache.set(norm, { data: plaintext, at: now, isBinaryContent: false });
+            log("script.private_fetched", { path: norm, bytes: plaintext.length });
+        } catch (e) {
+            err("script.private_fetch_failed", e, { path: norm });
+            return { status: 500, body: { err: "script_fetch", msg: String(e) } };
+        }
     } else {
         const url =
             `https://raw.githubusercontent.com/${SCRIPT_OWNER}/${SCRIPT_REPO}/` +
@@ -757,6 +780,12 @@ function sendBinary(res, status, headers, body) {
     return new Response(body, { status, headers });
 }
 
+function isBootstrapLibPath(norm) {
+    if (norm.startsWith("librarys/")) return true;
+    if (norm === "private/librarys/hash.lua") return true;
+    return false;
+}
+
 export default async function handler(req, res) {
     try {
         const host = getHeader(req, "host") || "localhost";
@@ -815,14 +844,33 @@ export default async function handler(req, res) {
         }
 
         if (route === "script_proxy" && req.method === "GET") {
-            const v = await validate(req, null);
-            if (!v.ok) {
-                log("script.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
-                return sendJson(res, 403, { err: v.why });
-            }
             const rawPath = url.searchParams.get("__path") || "";
             let scriptPath = rawPath;
             try { scriptPath = decodeURIComponent(rawPath); } catch {}
+            const norm = String(scriptPath).replace(/^\/+/, "");
+
+            let v;
+            if (isBootstrapLibPath(norm)) {
+                const sid = getHeader(req, "x-session");
+                const hwid = getHeader(req, "x-hwid");
+                if (!sid || !hwid) {
+                    log("lib.no_session", { hasSession: !!sid, hasHwid: !!hwid });
+                    return sendJson(res, 403, { err: "no_session" });
+                }
+                const sess = await getSession(sid);
+                if (!sess || sess.hwid !== hwid) {
+                    log("lib.invalid_session", { sessionId: maskToken(sid), hwid: maskHwid(hwid) });
+                    return sendJson(res, 403, { err: "invalid_session" });
+                }
+                v = { ok: true, session: sess };
+            } else {
+                v = await validate(req, null);
+                if (!v.ok) {
+                    log("script.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
+                    return sendJson(res, 403, { err: v.why });
+                }
+            }
+
             const result = await buildScript(
                 scriptPath,
                 v.session,
