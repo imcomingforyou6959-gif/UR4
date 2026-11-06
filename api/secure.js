@@ -8,9 +8,9 @@ const NONCE_TTL = 60;
 const PAD_TTL = 60;
 const MAX_TS_DRIFT_MS = 30_000;
 
-const RATE_SESSION_PER_MIN = 61;
-const RATE_HWID_PER_HOUR = 70000;
-const RATE_IP_PER_MIN = 120;
+const RATE_SESSION_PER_MIN = 70;
+const RATE_HWID_PER_HOUR = 3000;
+const RATE_IP_PER_MIN = 125;
 
 const ILOVEUBABY = process.env.ILOVEUBABY || "";
 const PAYLOAD_REPO_TOKEN = process.env.REPOTK;
@@ -128,14 +128,15 @@ function diffieHellman(privateKey, publicKey) {
     return crypto.diffieHellman({ privateKey, publicKey });
 }
 
-function aesGcmEncrypt(key, plaintext) {
-    const nonce = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce);
+function aesCtrEncrypt(key, plaintext) {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv("aes-256-ctr", key, iv);
     const ct = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const tag = crypto.createHmac("sha256", key).update(iv).update(ct).digest("hex");
     return {
-        nonce_b64: nonce.toString("base64"),
+        iv_b64: iv.toString("base64"),
         ciphertext_b64: ct.toString("base64"),
-        tag_b64: cipher.getAuthTag().toString("base64"),
+        tag_hex: tag,
     };
 }
 
@@ -234,16 +235,9 @@ async function forwardBanReport(payload) {
         });
         const bodyText = await res.text().catch(() => "");
         if (res.ok) {
-            log("ban_forward.ok", {
-                status: res.status,
-                reason: payload.reason,
-                hwid: maskHwid(payload.hwid),
-            });
+            log("ban_forward.ok", { status: res.status, reason: payload.reason, hwid: maskHwid(payload.hwid) });
         } else {
-            err("ban_forward.rejected", `status ${res.status}`, {
-                status: res.status,
-                body: bodyText.slice(0, 300),
-            });
+            err("ban_forward.rejected", `status ${res.status}`, { status: res.status, body: bodyText.slice(0, 300) });
         }
     } catch (e) {
         err("ban_forward.threw", e);
@@ -282,14 +276,8 @@ async function checkRateLimits(sessionId, hwid, ip) {
 
 async function readBody(req) {
     if (!req) return null;
-
     let b;
-    try {
-        b = req.body;
-    } catch {
-        b = undefined;
-    }
-
+    try { b = req.body; } catch { b = undefined; }
     if (b !== undefined && b !== null) {
         if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
         if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
@@ -298,7 +286,6 @@ async function readBody(req) {
             try { return JSON.parse(await new Response(b).text()); } catch { return null; }
         }
     }
-
     if (typeof req.json === "function") { try { return await req.json(); } catch {} }
     if (typeof req.text === "function") {
         try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
@@ -390,10 +377,7 @@ export { validate };
 async function createSession(body, req) {
     const { hwid, executor, placeId, jobId, userId, userName, displayName, client_pub_b64 } = body || {};
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
-        err("session.missing_hwid", null, {
-            hasHwid: !!hwid,
-            hwidLen: typeof hwid === "string" ? hwid.length : 0,
-        });
+        err("session.missing_hwid", null, { hasHwid: !!hwid, hwidLen: typeof hwid === "string" ? hwid.length : 0 });
         return { status: 400, body: { err: "missing_hwid" } };
     }
 
@@ -457,10 +441,7 @@ async function createSession(body, req) {
             try {
                 await db.set(
                     `banflag:${hwid}`,
-                    {
-                        reason: "ua_mismatch:claimed=" + String(uaClass.claimed || "?") + " ua=" + ua.substring(0, 100),
-                        at: Date.now(),
-                    },
+                    { reason: "ua_mismatch:claimed=" + String(uaClass.claimed || "?") + " ua=" + ua.substring(0, 100), at: Date.now() },
                     { ex: 86400 }
                 );
             } catch (e) {
@@ -479,26 +460,17 @@ async function createSession(body, req) {
             const clientPub = importPublicKey(client_pub_b64);
             const { publicKey: serverPub, privateKey: serverPriv } = generateX25519();
             const shared = diffieHellman(serverPriv, clientPub);
-            sessionKey = hkdfSha256(
-                shared,
-                Buffer.from(sessionId, "hex"),
-                Buffer.from("rawr-session-v2", "utf8"),
-                32
-            );
+            sessionKey = hkdfSha256(shared, Buffer.from(sessionId, "hex"), Buffer.from("rawr-session-v2", "utf8"), 32);
             serverPubB64 = exportPublicKey(serverPub);
             mode = "x25519";
         } catch (e) {
             err("session.x25519_failed", e, { hwid: maskHwid(hwid) });
-            if (!ILOVEUBABY) {
-                return { status: 500, body: { err: "crypto_unavailable" } };
-            }
+            if (!ILOVEUBABY) return { status: 500, body: { err: "crypto_unavailable" } };
             sessionKey = deriveFallbackSessionKey(ILOVEUBABY, sessionId, hwid);
             mode = "fallback";
         }
     } else {
-        if (!ILOVEUBABY) {
-            return { status: 500, body: { err: "crypto_unavailable" } };
-        }
+        if (!ILOVEUBABY) return { status: 500, body: { err: "crypto_unavailable" } };
         sessionKey = deriveFallbackSessionKey(ILOVEUBABY, sessionId, hwid);
         mode = "fallback";
     }
@@ -506,28 +478,19 @@ async function createSession(body, req) {
     const expiresAt = Date.now() + SESSION_TTL * 1000;
 
     try {
-        await db.set(
-            `sess:${sessionId}`,
-            {
-                hwid,
-                session_key_hex: sessionKey.toString("hex"),
-                expiresAt,
-                executor: String(executor || ""),
-                ua: ua.substring(0, 256),
-                placeId: Number(placeId) || 0,
-                jobId: String(jobId || ""),
-                userId: Number(userId) || 0,
-                userName: String(userName || ""),
-                mode,
-            },
-            { ex: SESSION_TTL }
-        );
-        log("session.created", {
-            hwid: maskHwid(hwid),
-            sessionId: maskToken(sessionId),
+        await db.set(`sess:${sessionId}`, {
+            hwid,
+            session_key_hex: sessionKey.toString("hex"),
+            expiresAt,
+            executor: String(executor || ""),
+            ua: ua.substring(0, 256),
+            placeId: Number(placeId) || 0,
+            jobId: String(jobId || ""),
+            userId: Number(userId) || 0,
+            userName: String(userName || ""),
             mode,
-            user: String(userName || "?").slice(0, 40),
-        });
+        }, { ex: SESSION_TTL });
+        log("session.created", { hwid: maskHwid(hwid), sessionId: maskToken(sessionId), mode, user: String(userName || "?").slice(0, 40) });
     } catch (e) {
         err("session.store_failed", e, { hwid: maskHwid(hwid) });
         return { status: 503, body: { err: "session_store", msg: String(e) } };
@@ -546,16 +509,10 @@ async function createSession(body, req) {
 }
 
 async function fetchPrivateFile(repo, path, token) {
-    const res = await fetch(
-        `https://api.github.com/repos/${repo}/contents/${path}`,
-        {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/vnd.github.v3.raw",
-            },
-            cache: "no-store",
-        }
-    );
+    const res = await fetch(`https://api.github.com/repos/${repo}/contents/${path}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github.v3.raw" },
+        cache: "no-store",
+    });
     if (!res.ok) throw new Error(`gh ${res.status}`);
     return await res.text();
 }
@@ -583,34 +540,25 @@ async function buildPayload(session, sessionId, hwid) {
     const buf = Buffer.from(plaintext, "utf8");
     const pad = randomBytes(buf.length);
     const xored = xorBuffers(buf, pad);
-    const padEnc = aesGcmEncrypt(sessionKey, pad);
+    const padEnc = aesCtrEncrypt(sessionKey, pad);
 
     const padId = randomHex(16);
     try {
-        await db.set(
-            `pad:${padId}`,
-            { one_time: true, session_id: sessionId, at: Date.now() },
-            { ex: PAD_TTL }
-        );
+        await db.set(`pad:${padId}`, { one_time: true, session_id: sessionId, at: Date.now() }, { ex: PAD_TTL });
     } catch (e) {
         err("payload.pad_store_failed", e, { sessionId: maskToken(sessionId) });
         return { status: 500, body: { err: "pad_store" } };
     }
 
-    log("payload.delivered", {
-        sessionId: maskToken(sessionId),
-        hwid: maskHwid(hwid),
-        bytes: xored.length,
-        padId: maskToken(padId),
-    });
+    log("payload.delivered", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid), bytes: xored.length, padId: maskToken(padId) });
 
     return {
         status: 200,
         body: {
             pad_id: padId,
-            nonce_b64: padEnc.nonce_b64,
+            iv_b64: padEnc.iv_b64,
             encrypted_pad_b64: padEnc.ciphertext_b64,
-            tag_b64: padEnc.tag_b64,
+            tag_hex: padEnc.tag_hex,
             ciphertext_b64: xored.toString("base64"),
             ttl: PAD_TTL,
         },
@@ -621,22 +569,13 @@ async function buildAsset() {
     const now = Date.now();
     if (assetCache.data && now - assetCache.at < ASSET_CACHE_TTL_MS) {
         log("asset.cache_hit", { bytes: assetCache.data.length });
-        return {
-            status: 200,
-            body: assetCache.data,
-            contentType: assetCache.contentType,
-            isBinary: true,
-        };
+        return { status: 200, body: assetCache.data, contentType: assetCache.contentType, isBinary: true };
     }
     try {
         const res = await fetch(ASSET_URL, { cache: "no-store" });
         if (!res.ok) throw new Error(`raw ${res.status}`);
         const buf = Buffer.from(await res.arrayBuffer());
-        assetCache = {
-            data: buf,
-            at: now,
-            contentType: res.headers.get("content-type") || "image/webp",
-        };
+        assetCache = { data: buf, at: now, contentType: res.headers.get("content-type") || "image/webp" };
         log("asset.fetched", { bytes: buf.length });
         return { status: 200, body: buf, contentType: assetCache.contentType, isBinary: true };
     } catch (e) {
@@ -688,9 +627,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
             return { status: 500, body: { err: "script_fetch", msg: String(e) } };
         }
     } else {
-        const url =
-            `https://raw.githubusercontent.com/${SCRIPT_OWNER}/${SCRIPT_REPO}/` +
-            `${SCRIPT_BRANCH}/${norm}`;
+        const url = `https://raw.githubusercontent.com/${SCRIPT_OWNER}/${SCRIPT_REPO}/${SCRIPT_BRANCH}/${norm}`;
         try {
             const res = await fetch(url, { cache: "no-store" });
             if (!res.ok) throw new Error(`raw ${res.status}`);
@@ -710,52 +647,33 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
     }
 
     if (isBootstrapLibPath(norm)) {
-        log("script.bootstrap_delivered", {
-            path: norm,
-            sessionId: maskToken(sessionId),
-            hwid: maskHwid(hwid),
-            bytes: isBinaryContent ? plaintext.length : plaintext.length,
-        });
-        return {
-            status: 200,
-            body: isBinaryContent ? plaintext : String(plaintext),
-            rawText: true,
-        };
+        log("script.bootstrap_delivered", { path: norm, sessionId: maskToken(sessionId), hwid: maskHwid(hwid), bytes: isBinaryContent ? plaintext.length : plaintext.length });
+        return { status: 200, body: isBinaryContent ? plaintext : String(plaintext), rawText: true };
     }
 
     const sessionKey = Buffer.from(session.session_key_hex, "hex");
     const buf = isBinaryContent ? Buffer.from(plaintext) : Buffer.from(plaintext, "utf8");
     const pad = randomBytes(buf.length);
     const xored = xorBuffers(buf, pad);
-    const padEnc = aesGcmEncrypt(sessionKey, pad);
+    const padEnc = aesCtrEncrypt(sessionKey, pad);
 
     const padId = randomHex(16);
     try {
-        await db.set(
-            `pad:${padId}`,
-            { one_time: true, session_id: sessionId, at: Date.now() },
-            { ex: PAD_TTL }
-        );
+        await db.set(`pad:${padId}`, { one_time: true, session_id: sessionId, at: Date.now() }, { ex: PAD_TTL });
     } catch (e) {
         err("script.pad_store_failed", e, { sessionId: maskToken(sessionId) });
         return { status: 500, body: { err: "pad_store" } };
     }
 
-    log("script.delivered", {
-        path: norm,
-        sessionId: maskToken(sessionId),
-        hwid: maskHwid(hwid),
-        bytes: xored.length,
-        padId: maskToken(padId),
-    });
+    log("script.delivered", { path: norm, sessionId: maskToken(sessionId), hwid: maskHwid(hwid), bytes: xored.length, padId: maskToken(padId) });
 
     return {
         status: 200,
         body: {
             pad_id: padId,
-            nonce_b64: padEnc.nonce_b64,
+            iv_b64: padEnc.iv_b64,
             encrypted_pad_b64: padEnc.ciphertext_b64,
-            tag_b64: padEnc.tag_b64,
+            tag_hex: padEnc.tag_hex,
             ciphertext_b64: xored.toString("base64"),
             ttl: PAD_TTL,
         },
@@ -769,15 +687,9 @@ function sendJson(res, status, obj) {
     if (res && typeof res.setHeader === "function") {
         res.statusCode = status;
         res.setHeader("Content-Type", "application/json");
-        if (typeof res.end === "function") {
-            res.end(JSON.stringify(obj));
-            return;
-        }
+        if (typeof res.end === "function") { res.end(JSON.stringify(obj)); return; }
     }
-    return new Response(JSON.stringify(obj), {
-        status,
-        headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 }
 
 function sendBinary(res, status, headers, body) {
@@ -809,11 +721,7 @@ export default async function handler(req, res) {
         const path = url.pathname;
         const route = url.searchParams.get("__route");
 
-        if (
-            (path === "/api/session/init" ||
-                (path === "/api/secure" && route === "session_init")) &&
-            req.method === "POST"
-        ) {
+        if ((path === "/api/session/init" || (path === "/api/secure" && route === "session_init")) && req.method === "POST") {
             const body = await readBody(req);
             if (!body || typeof body !== "object") {
                 err("session.bad_body", null, { route, method: req.method });
@@ -823,11 +731,7 @@ export default async function handler(req, res) {
             return sendJson(res, result.status, result.body);
         }
 
-        if (
-            (path === "/api/payload.enc" ||
-                (path === "/api/secure" && route === "payload_enc")) &&
-            req.method === "GET"
-        ) {
+        if ((path === "/api/payload.enc" || (path === "/api/secure" && route === "payload_enc")) && req.method === "GET") {
             const v = await validate(req, null);
             if (!v.ok) {
                 log("payload.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
@@ -837,11 +741,7 @@ export default async function handler(req, res) {
             return sendJson(res, result.status, result.body);
         }
 
-        if (
-            (path === "/api/asset/kitagawa" ||
-                (path === "/api/secure" && route === "asset_kitagawa")) &&
-            req.method === "GET"
-        ) {
+        if ((path === "/api/asset/kitagawa" || (path === "/api/secure" && route === "asset_kitagawa")) && req.method === "GET") {
             const v = await validate(req, null);
             if (!v.ok) {
                 log("asset.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
@@ -849,10 +749,7 @@ export default async function handler(req, res) {
             }
             const result = await buildAsset();
             if (result.isBinary) {
-                return sendBinary(res, 200, {
-                    "Content-Type": result.contentType,
-                    "Cache-Control": "public, max-age=3600",
-                }, result.body);
+                return sendBinary(res, 200, { "Content-Type": result.contentType, "Cache-Control": "public, max-age=3600" }, result.body);
             }
             return sendJson(res, result.status, result.body);
         }
@@ -885,17 +782,9 @@ export default async function handler(req, res) {
                 }
             }
 
-            const result = await buildScript(
-                scriptPath,
-                v.session,
-                getHeader(req, "x-session"),
-                getHeader(req, "x-hwid")
-            );
+            const result = await buildScript(scriptPath, v.session, getHeader(req, "x-session"), getHeader(req, "x-hwid"));
             if (result.rawText) {
-                return sendBinary(res, result.status, {
-                    "Content-Type": "text/plain; charset=utf-8",
-                    "Cache-Control": "no-store",
-                }, result.body);
+                return sendBinary(res, result.status, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" }, result.body);
             }
             return sendJson(res, result.status, result.body);
         }
