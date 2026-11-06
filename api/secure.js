@@ -84,24 +84,19 @@ function classifyUA(ua, claimedExecutor) {
     const uaLower = String(ua || "").toLowerCase().trim();
     const claimedLower = String(claimedExecutor || "").toLowerCase().trim();
 
-    // No UA at all — don't report, just let it through
     if (!uaLower) return { action: "none", reason: "no_ua" };
 
-    // 1) Hard block: known scripted/bot clients
     for (const block of HARD_BLOCK_UAS) {
         if (uaLower.startsWith(block) || uaLower.includes(block)) {
             return { action: "block", reason: "hard_block_ua:" + block };
         }
     }
 
-    // Detect which known executor (if any) the UA actually matches
     const uaExecutor = KNOWN_EXECUTORS.find((e) => uaLower.includes(e)) || null;
     const claimedExecutorKnown = claimedLower
         ? KNOWN_EXECUTORS.find((e) => claimedLower.includes(e)) || null
         : null;
 
-    // 2) Report ONLY on genuine spoofing:
-    //    - claim names a known executor, UA names a DIFFERENT known executor
     if (claimedExecutorKnown && uaExecutor && uaExecutor !== claimedExecutorKnown) {
         return {
             action: "report",
@@ -111,14 +106,12 @@ function classifyUA(ua, claimedExecutor) {
         };
     }
 
-    // 3) Everything else (normal Roblox clients, browsers, unknown UAs,
-    //    matching executor UAs, no known executor in either) => allow, no report
     return { action: "none", reason: "ok" };
 }
 
 async function forwardBanReport(payload) {
     try {
-        await fetch(FORWARD_BASE_URL + "/api/blacklist/report", {
+        await fetch(FORWARD_BASE_URL + "/api/send?__route=report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
