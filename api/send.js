@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { validate } from "./secure.js";
 
 const db = Redis.fromEnv();
 
@@ -32,18 +33,16 @@ const BATCH_WINDOW_MS = 2000;
 const BATCH_TTL_SEC = 60;
 
 function log(event, data) {
-    const line = { evt: event, ts: Date.now(), ...data };
-    console.log(JSON.stringify(line));
+    console.log(JSON.stringify({ evt: event, ts: Date.now(), ...data }));
 }
 
 function err(event, e, extra) {
-    const line = {
+    console.error(JSON.stringify({
         evt: event,
         ts: Date.now(),
         err: String(e && e.message ? e.message : e),
         ...(extra || {}),
-    };
-    console.error(JSON.stringify(line));
+    }));
 }
 
 function clean(s, max) {
@@ -108,20 +107,16 @@ function check(emb) {
 
 async function readBody(req) {
     if (!req) return null;
-
     const b = req.body;
     if (b !== undefined && b !== null) {
         if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
         if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
         if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
         if (typeof b === "object" && typeof b.getReader === "function") {
-            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
+            try { return JSON.parse(await new Response(b).text()); } catch { return null; }
         }
     }
-
-    if (typeof req.json === "function") {
-        try { return await req.json(); } catch {}
-    }
+    if (typeof req.json === "function") { try { return await req.json(); } catch {} }
     if (typeof req.text === "function") {
         try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
     }
@@ -136,7 +131,6 @@ async function readBody(req) {
             return text ? JSON.parse(text) : null;
         } catch { return null; }
     }
-
     return null;
 }
 
@@ -160,14 +154,8 @@ async function sendToDiscord(out) {
                 signal: controller.signal,
             });
             clearTimeout(timer);
-
             const bodyText = await res.text().catch(() => "");
-
-            log("send.discord_response", {
-                attempt,
-                status: res.status,
-                bytes: payloadBytes,
-            });
+            log("send.discord_response", { attempt, status: res.status, bytes: payloadBytes });
 
             if (res.status === 429) {
                 let wait = 1;
@@ -186,7 +174,6 @@ async function sendToDiscord(out) {
                     body: bodyText.slice(0, 300),
                 });
             }
-
             return { ok: res.ok, status: res.status };
         } catch (e) {
             clearTimeout(timer);
@@ -224,14 +211,14 @@ async function sendBatchEmbed(items) {
     }
 
     const fields = [
-        { name: "HWID",     value: clean(String(latest.hwid), 128), inline: false },
-        { name: "User",     value: clean(String(latest.user || "?"), 64), inline: true },
-        { name: "Display",  value: clean(String(latest.disp || "?"), 64), inline: true },
-        { name: "UID",      value: String(latest.uid),               inline: true },
-        { name: "Exec",     value: clean(String(latest.exec || "?"), 64), inline: true },
-        { name: "Place",    value: String(latest.pid || 0),          inline: true },
-        { name: "Job",      value: clean(String(latest.jid || "?"), 40), inline: true },
-        { name: "When",     value: `<t:${latest.when || Math.floor(Date.now() / 1000)}:R>`, inline: false },
+        { name: "HWID",    value: clean(String(latest.hwid), 128), inline: false },
+        { name: "User",    value: clean(String(latest.user || "?"), 64), inline: true },
+        { name: "Display", value: clean(String(latest.disp || "?"), 64), inline: true },
+        { name: "UID",     value: String(latest.uid), inline: true },
+        { name: "Exec",    value: clean(String(latest.exec || "?"), 64), inline: true },
+        { name: "Place",   value: String(latest.pid || 0), inline: true },
+        { name: "Job",     value: clean(String(latest.jid || "?"), 40), inline: true },
+        { name: "When",    value: `<t:${latest.when || Math.floor(Date.now() / 1000)}:R>`, inline: false },
     ];
 
     if (items.length === 1) {
@@ -273,12 +260,8 @@ async function sendBatchEmbed(items) {
             body: JSON.stringify(embed),
         });
         const bodyText = await res.text().catch(() => "");
-
         if (res.status === 204 || res.ok) {
-            log("report.delivered", {
-                count: items.length,
-                status: res.status,
-            });
+            log("report.delivered", { count: items.length, status: res.status });
         } else {
             err("report.discord_rejected", `status ${res.status}`, {
                 count: items.length,
@@ -362,11 +345,7 @@ async function reportBan(b) {
         return Response.json({ ok: true, buffered: true });
     }
 
-    log("report.flush_start", {
-        hwid: maskHwid(hwid),
-        window_ms: BATCH_WINDOW_MS,
-    });
-
+    log("report.flush_start", { hwid: maskHwid(hwid), window_ms: BATCH_WINDOW_MS });
     await new Promise((r) => setTimeout(r, BATCH_WINDOW_MS));
 
     let raw = [];
@@ -388,15 +367,8 @@ async function reportBan(b) {
         }
     }
 
-    log("report.flush_complete", {
-        hwid: maskHwid(hwid),
-        count: items.length,
-    });
-
-    if (items.length > 0) {
-        await sendBatchEmbed(items);
-    }
-
+    log("report.flush_complete", { hwid: maskHwid(hwid), count: items.length });
+    if (items.length > 0) await sendBatchEmbed(items);
     return Response.json({ ok: true, batched: items.length });
 }
 
@@ -417,67 +389,44 @@ export async function POST(req) {
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
-    const { token, payload } = body;
-    if (!token || !payload) {
-        err("send.missing_fields", null, { hasToken: !!token, hasPayload: !!payload });
+    const v = await validate(req, body);
+    if (!v.ok) {
+        log("send.unauthorized", {
+            why: v.why,
+            hwid: maskHwid(req.headers?.get?.("x-hwid") || req.headers?.["x-hwid"] || ""),
+        });
+        return Response.json({ err: "unauthorized", why: v.why }, { status: 403 });
+    }
+
+    const payload = body.payload;
+
+    if (!payload) {
+        err("send.missing_payload");
         return Response.json({ err: "missing" }, { status: 400 });
     }
 
-    const key = `token:${token}`;
-    const tokenMasked = maskToken(token);
-
-    let current;
-    try {
-        current = await db.get(key);
-    } catch (e) {
-        err("send.redis_get_failed", e, { token: tokenMasked });
-        return Response.json({ err: "redis_error" }, { status: 500 });
-    }
-
-    if (current !== "unused") {
-        log("send.token_rejected", {
-            token: tokenMasked,
-            reason: current === null ? "not_found" : "already_used",
-        });
-        return Response.json({ err: "bad_token" }, { status: 403 });
-    }
-
-    let consumed;
-    try {
-        consumed = await db.set(key, "used", { xx: true });
-    } catch (e) {
-        err("send.redis_set_failed", e, { token: tokenMasked });
-        return Response.json({ err: "redis_error" }, { status: 500 });
-    }
-
-    if (consumed !== "OK") {
-        log("send.token_consume_raced", { token: tokenMasked });
-        return Response.json({ err: "bad_token" }, { status: 403 });
-    }
-
-    await db.expire(key, 300).catch(() => {});
-
     if (!payload.embeds || !Array.isArray(payload.embeds) || payload.embeds.length !== 1) {
         err("send.bad_embed_shape", null, {
-            token: tokenMasked,
+            session: maskToken(req.headers?.get?.("x-session") || ""),
             embedsLength: payload.embeds && payload.embeds.length,
         });
         return Response.json({ err: "bad_embed" }, { status: 400 });
     }
 
-    const v = check(payload.embeds[0]);
-    if (!v.ok) {
-        err("send.embed_check_failed", null, { token: tokenMasked, why: v.why });
-        return Response.json({ err: "rejected", why: v.why }, { status: 400 });
+    const v2 = check(payload.embeds[0]);
+    if (!v2.ok) {
+        err("send.embed_check_failed", null, {
+            session: maskToken(req.headers?.get?.("x-session") || ""),
+            why: v2.why,
+        });
+        return Response.json({ err: "rejected", why: v2.why }, { status: 400 });
     }
 
-    log("send.embed_validated", { token: tokenMasked });
+    log("send.embed_validated", {
+        session: maskToken(req.headers?.get?.("x-session") || ""),
+    });
 
-    const out = {
-        username: USER,
-        embeds: [v.out],
-    };
-
+    const out = { username: USER, embeds: [v2.out] };
     const r = await sendToDiscord(out);
     return Response.json(r);
 }
