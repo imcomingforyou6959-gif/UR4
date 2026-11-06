@@ -80,14 +80,25 @@ function check(emb) {
 }
 
 async function readBody(req) {
-    if (!req || req.body === undefined || req.body === null) return null;
-    const body = req.body;
-    if (typeof body === "object" && typeof body.getReader !== "function" && !Buffer.isBuffer(body)) return body;
-    if (typeof body === "string") { try { return JSON.parse(body); } catch { return null; } }
-    if (Buffer.isBuffer(body)) { try { return JSON.parse(body.toString("utf8")); } catch { return null; } }
-    if (typeof body === "object" && typeof body.getReader === "function") {
-        try { const text = await new Response(body).text(); return JSON.parse(text); } catch { return null; }
+    if (!req) return null;
+
+    const b = req.body;
+    if (b !== undefined && b !== null) {
+        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
+        if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
+        if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
+        if (typeof b === "object" && typeof b.getReader === "function") {
+            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
+        }
     }
+
+    if (typeof req.json === "function") {
+        try { return await req.json(); } catch {}
+    }
+    if (typeof req.text === "function") {
+        try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
+    }
+
     return null;
 }
 
@@ -294,11 +305,8 @@ async function reportBan(b) {
 
 export async function POST(req) {
     let url;
-    try {
-        url = new URL(req.url);
-    } catch {
-        url = new URL(req.url, "https://ur-4.vercel.app");
-    }
+    try { url = new URL(req.url); }
+    catch { url = new URL(req.url, "https://ur-4.vercel.app"); }
     const route = url.searchParams.get("__route");
 
     const body = await readBody(req);
