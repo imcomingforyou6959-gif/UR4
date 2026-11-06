@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { validate } from "./secure.js";
 
 const db = Redis.fromEnv();
 const BOT_SECRET = process.env.BOT_SECRET;
@@ -15,9 +16,22 @@ function clean(s, max) {
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
 }
 
+function log(event, data) {
+    console.log(JSON.stringify({ evt: event, ts: Date.now(), ...data }));
+}
+
+function err(event, e, extra) {
+    console.error(JSON.stringify({
+        evt: event,
+        ts: Date.now(),
+        err: String(e && e.message ? e.message : e),
+        ...(extra || {}),
+    }));
+}
+
 async function fireFallback(payload) {
     if (!FALLBACK_HOOK) {
-        console.error("[/clients] fallback: FALLBACK_HOOK missing in env");
+        err("clients.fallback.no_hook", "FALLBACK_HOOK missing in env");
         return { ok: false, why: "no_hook" };
     }
     const embed = {
@@ -39,7 +53,7 @@ async function fireFallback(payload) {
             footer: { text: "payload never reached /send" },
         }],
     };
-    console.log("[/clients] fallback: dispatching", {
+    log("clients.fallback.dispatch", {
         hwid: payload.hwid,
         user: payload.username,
         executor: payload.executor,
@@ -51,7 +65,7 @@ async function fireFallback(payload) {
             body: JSON.stringify(embed),
         });
         const body = await res.text().catch(() => "");
-        console.log("[/clients] fallback: hook responded", {
+        log("clients.fallback.hook_response", {
             hwid: payload.hwid,
             status: res.status,
             ok: res.ok,
@@ -59,10 +73,7 @@ async function fireFallback(payload) {
         });
         return { ok: res.ok, status: res.status };
     } catch (e) {
-        console.error("[/clients] fallback: hook threw", {
-            hwid: payload.hwid,
-            err: String(e),
-        });
+        err("clients.fallback.hook_threw", e, { hwid: payload.hwid });
         return { ok: false, why: String(e) };
     }
 }
@@ -76,11 +87,11 @@ async function maybeFallback(payload) {
     try {
         sent = await db.get(sentKey);
     } catch (e) {
-        console.error("[/clients] fallback: db.get sent failed", { hwid, err: String(e) });
+        err("clients.fallback.sent_get_failed", e, { hwid });
         return null;
     }
     if (sent) {
-        console.log("[/clients] fallback: skip (send already delivered)", { hwid });
+        log("clients.fallback.skip_sent", { hwid });
         return null;
     }
 
@@ -89,7 +100,7 @@ async function maybeFallback(payload) {
     try {
         recent = await db.get(`seen:${hwid}`);
     } catch (e) {
-        console.error("[/clients] fallback: db.get seen failed", { hwid, err: String(e) });
+        err("clients.fallback.seen_get_failed", e, { hwid });
         return null;
     }
 
@@ -98,9 +109,9 @@ async function maybeFallback(payload) {
         try {
             await db.set(`seen:${hwid}`, String(Date.now()), { ex: FALLBACK_WINDOW });
         } catch (e) {
-            console.error("[/clients] fallback: db.set seen failed", { hwid, err: String(e) });
+            err("clients.fallback.seen_set_failed", e, { hwid });
         }
-        console.log("[/clients] fallback: arm window (first heartbeat)", {
+        log("clients.fallback.window_armed", {
             hwid,
             windowSeconds: FALLBACK_WINDOW,
         });
@@ -109,7 +120,7 @@ async function maybeFallback(payload) {
 
     const ageSeconds = Math.floor((Date.now() - firstSeen) / 1000);
     if (firstSeen > since) {
-        console.log("[/clients] fallback: skip (within grace window)", {
+        log("clients.fallback.skip_grace", {
             hwid,
             ageSeconds,
             remaining: Math.max(0, Math.floor((firstSeen - since) / 1000)),
@@ -122,21 +133,21 @@ async function maybeFallback(payload) {
     try {
         cooling = await db.get(coolKey);
     } catch (e) {
-        console.error("[/clients] fallback: db.get cooldown failed", { hwid, err: String(e) });
+        err("clients.fallback.cooldown_get_failed", e, { hwid });
         return null;
     }
     if (cooling) {
-        console.log("[/clients] fallback: skip (cooldown active)", { hwid });
+        log("clients.fallback.skip_cooldown", { hwid });
         return null;
     }
 
     try {
         await db.set(coolKey, "1", { ex: FALLBACK_COOLDOWN });
     } catch (e) {
-        console.error("[/clients] fallback: db.set cooldown failed", { hwid, err: String(e) });
+        err("clients.fallback.cooldown_set_failed", e, { hwid });
     }
 
-    console.log("[/clients] fallback: firing", {
+    log("clients.fallback.firing", {
         hwid,
         ageSeconds,
         cooldownSeconds: FALLBACK_COOLDOWN,
@@ -144,74 +155,102 @@ async function maybeFallback(payload) {
     return await fireFallback(payload);
 }
 
-export async function POST(req) {
-    let body;
-    try {
-        body = await req.json();
-    } catch {
-        console.warn("[/clients] rejected: bad_json");
-        return Response.json({ err: "bad_json" }, { status: 400 });
-    }
-
-    if (body.action === "list") {
-        console.log("[/clients] list: requested");
-        const secret = req.headers.get("x-bot-secret");
-        if (!BOT_SECRET || secret !== BOT_SECRET) {
-            console.warn("[/clients] list: unauthorized", {
-                hasSecret: !!secret,
-                secretConfigured: !!BOT_SECRET,
-            });
-            return Response.json({ err: "unauthorized" }, { status: 401 });
+async function readBody(req) {
+    if (!req) return null;
+    const b = req.body;
+    if (b !== undefined && b !== null) {
+        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
+        if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
+        if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
+        if (typeof b === "object" && typeof b.getReader === "function") {
+            try { return JSON.parse(await new Response(b).text()); } catch { return null; }
         }
-
-        let keys;
+    }
+    if (typeof req.json === "function") { try { return await req.json(); } catch {} }
+    if (typeof req.text === "function") {
+        try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
+    }
+    if (typeof req.on === "function") {
         try {
-            keys = await db.keys("client:*");
-        } catch (e) {
-            console.error("[/clients] list: db.keys failed", String(e));
-            return Response.json({ err: "redis_error", msg: String(e) }, { status: 500 });
-        }
+            const text = await new Promise((resolve, reject) => {
+                const chunks = [];
+                req.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+                req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+                req.on("error", reject);
+            });
+            return text ? JSON.parse(text) : null;
+        } catch { return null; }
+    }
+    return null;
+}
 
-        if (!keys || keys.length === 0) {
-            console.log("[/clients] list: no keys");
-            return Response.json({ ok: true, count: 0, clients: [] });
-        }
+function getHeader(req, name) {
+    if (!req || !req.headers) return "";
+    if (typeof req.headers.get === "function") return String(req.headers.get(name) || "");
+    const raw = req.headers[name] || req.headers[name.toLowerCase()];
+    return raw ? String(raw) : "";
+}
 
-        console.log("[/clients] list: scanning", { keys: keys.length });
-
-        const rows = await Promise.all(keys.map(async (k) => {
-            const v = await db.get(k).catch(() => null);
-            if (!v) return null;
-            try {
-                return typeof v === "string" ? JSON.parse(v) : v;
-            } catch {
-                console.warn("[/clients] list: bad json in key", k);
-                return null;
-            }
-        }));
-
-        const now = Date.now();
-        const live = rows.filter(r => r && (now - (r.seen || 0)) < TTL * 1000);
-        live.sort((a, b) => b.seen - a.seen);
-
-        console.log("[/clients] list: done", {
-            scanned: keys.length,
-            live: live.length,
-            dropped: keys.length - live.length,
+async function handleList(req) {
+    log("clients.list.requested", {});
+    const secret = getHeader(req, "x-bot-secret");
+    if (!BOT_SECRET || secret !== BOT_SECRET) {
+        log("clients.list.unauthorized", {
+            hasSecret: !!secret,
+            secretConfigured: !!BOT_SECRET,
         });
-
-        return Response.json({ ok: true, count: live.length, clients: live });
+        return Response.json({ err: "unauthorized" }, { status: 401 });
     }
 
+    let keys;
+    try {
+        keys = await db.keys("client:*");
+    } catch (e) {
+        err("clients.list.keys_failed", e);
+        return Response.json({ err: "redis_error", msg: String(e) }, { status: 500 });
+    }
+
+    if (!keys || keys.length === 0) {
+        log("clients.list.empty", {});
+        return Response.json({ ok: true, count: 0, clients: [] });
+    }
+
+    log("clients.list.scanning", { keys: keys.length });
+
+    const rows = await Promise.all(keys.map(async (k) => {
+        const v = await db.get(k).catch(() => null);
+        if (!v) return null;
+        try {
+            return typeof v === "string" ? JSON.parse(v) : v;
+        } catch {
+            err("clients.list.bad_json", "parse failed", { key: k });
+            return null;
+        }
+    }));
+
+    const now = Date.now();
+    const live = rows.filter(r => r && (now - (r.seen || 0)) < TTL * 1000);
+    live.sort((a, b) => b.seen - a.seen);
+
+    log("clients.list.done", {
+        scanned: keys.length,
+        live: live.length,
+        dropped: keys.length - live.length,
+    });
+
+    return Response.json({ ok: true, count: live.length, clients: live });
+}
+
+async function handleHeartbeat(req, body) {
     const hwid = clean(String(body.hwid || ""), 128);
     if (!hwid) {
-        console.warn("[/clients] write: missing_hwid", { bodyKeys: Object.keys(body || {}) });
+        err("clients.write.missing_hwid", "no hwid in body", { bodyKeys: Object.keys(body || {}) });
         return Response.json({ err: "missing_hwid" }, { status: 400 });
     }
 
     const key = `client:${hwid}`;
     const prev = await db.get(key).catch((e) => {
-        console.error("[/clients] write: db.get prev failed", { hwid, err: String(e) });
+        err("clients.write.prev_get_failed", e, { hwid });
         return null;
     });
 
@@ -220,7 +259,7 @@ export async function POST(req) {
             const p = typeof prev === "string" ? JSON.parse(prev) : prev;
             if (p && p.seen && Date.now() - p.seen < MIN_HEARTBEAT * 1000) {
                 const ago = Math.floor((Date.now() - p.seen) / 1000);
-                console.log("[/clients] write: throttled", {
+                log("clients.write.throttled", {
                     hwid,
                     agoSeconds: ago,
                     minSeconds: MIN_HEARTBEAT,
@@ -228,7 +267,7 @@ export async function POST(req) {
                 return Response.json({ ok: true, skipped: true });
             }
         } catch (e) {
-            console.warn("[/clients] write: prev bad json, overwriting", { hwid });
+            err("clients.write.prev_bad_json", e, { hwid });
         }
     }
 
@@ -247,11 +286,11 @@ export async function POST(req) {
     try {
         await db.set(key, JSON.stringify(payload), { ex: TTL });
     } catch (e) {
-        console.error("[/clients] write: db.set failed", { hwid, err: String(e) });
+        err("clients.write.set_failed", e, { hwid });
         return Response.json({ err: "redis_error", msg: String(e) }, { status: 500 });
     }
 
-    console.log("[/clients] write: stored", {
+    log("clients.write.stored", {
         hwid,
         user: payload.username,
         executor: payload.executor,
@@ -262,8 +301,32 @@ export async function POST(req) {
     try {
         fallback = await maybeFallback(payload);
     } catch (e) {
-        console.error("[/clients] fallback: uncaught", { hwid, err: String(e) });
+        err("clients.fallback.uncaught", e, { hwid });
     }
 
     return Response.json({ ok: true, fallback });
+}
+
+export async function POST(req) {
+    const body = await readBody(req);
+
+    if (!body || typeof body !== "object") {
+        err("clients.bad_json", "could not parse body");
+        return Response.json({ err: "bad_json" }, { status: 400 });
+    }
+
+    if (body.action === "list") {
+        return handleList(req);
+    }
+
+    const v = await validate(req, body);
+    if (!v.ok) {
+        log("clients.write.unauthorized", {
+            why: v.why,
+            hwid: getHeader(req, "x-hwid").slice(0, 8) + "…",
+        });
+        return Response.json({ err: "unauthorized", why: v.why }, { status: 403 });
+    }
+
+    return handleHeartbeat(req, body);
 }
