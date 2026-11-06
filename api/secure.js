@@ -12,7 +12,7 @@ const RATE_SESSION_PER_MIN = 60;
 const RATE_HWID_PER_HOUR = 10;
 const RATE_IP_PER_MIN = 120;
 
-const MASTER_SECRET = process.env.MASTER_SECRET || "";
+const ILOVEUBABY = process.env.ILOVEUBABY || "";
 const PAYLOAD_REPO_TOKEN = process.env.REPOTK;
 const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/hosting";
 const PAYLOAD_PATH = process.env.PAYLOAD_PATH || "constructs/Loadstring.lua";
@@ -476,17 +476,17 @@ async function createSession(body, req) {
             mode = "x25519";
         } catch (e) {
             err("session.x25519_failed", e, { hwid: maskHwid(hwid) });
-            if (!MASTER_SECRET) {
+            if (!ILOVEUBABY) {
                 return { status: 500, body: { err: "crypto_unavailable" } };
             }
-            sessionKey = deriveFallbackSessionKey(MASTER_SECRET, sessionId, hwid);
+            sessionKey = deriveFallbackSessionKey(ILOVEUBABY, sessionId, hwid);
             mode = "fallback";
         }
     } else {
-        if (!MASTER_SECRET) {
+        if (!ILOVEUBABY) {
             return { status: 500, body: { err: "crypto_unavailable" } };
         }
-        sessionKey = deriveFallbackSessionKey(MASTER_SECRET, sessionId, hwid);
+        sessionKey = deriveFallbackSessionKey(ILOVEUBABY, sessionId, hwid);
         mode = "fallback";
     }
 
