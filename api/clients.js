@@ -157,7 +157,14 @@ async function maybeFallback(payload) {
 
 async function readBody(req) {
     if (!req) return null;
-    const b = req.body;
+
+    let b;
+    try {
+        b = req.body;
+    } catch {
+        b = undefined;
+    }
+
     if (b !== undefined && b !== null) {
         if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
         if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
@@ -166,6 +173,7 @@ async function readBody(req) {
             try { return JSON.parse(await new Response(b).text()); } catch { return null; }
         }
     }
+
     if (typeof req.json === "function") { try { return await req.json(); } catch {} }
     if (typeof req.text === "function") {
         try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
