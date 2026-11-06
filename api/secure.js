@@ -131,31 +131,23 @@ async function forwardBanReport(payload) {
 }
 
 async function readBody(req) {
-    if (!req || req.body === undefined || req.body === null) return null;
+    if (!req) return null;
 
-    const body = req.body;
-
-    // Already a parsed plain object (some runtimes)
-    if (typeof body === "object" && typeof body.getReader !== "function" && !Buffer.isBuffer(body)) {
-        return body;
+    const b = req.body;
+    if (b !== undefined && b !== null) {
+        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
+        if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
+        if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
+        if (typeof b === "object" && typeof b.getReader === "function") {
+            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
+        }
     }
 
-    // Raw string
-    if (typeof body === "string") {
-        try { return JSON.parse(body); } catch { return null; }
+    if (typeof req.json === "function") {
+        try { return await req.json(); } catch {}
     }
-
-    // Buffer
-    if (Buffer.isBuffer(body)) {
-        try { return JSON.parse(body.toString("utf8")); } catch { return null; }
-    }
-
-    // Web Request stream
-    if (typeof body === "object" && typeof body.getReader === "function") {
-        try {
-            const text = await new Response(body).text();
-            return JSON.parse(text);
-        } catch { return null; }
+    if (typeof req.text === "function") {
+        try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
     }
 
     return null;
@@ -440,7 +432,9 @@ function sendBinary(res, status, headers, body) {
 
 export default async function handler(req, res) {
     const host = getHeader(req, "host") || "localhost";
-    const url = new URL(req.url, `https://${host}`);
+    let url;
+    try { url = new URL(req.url, `https://${host}`); }
+    catch { url = new URL(req.url); }
     const path = url.pathname;
     const route = url.searchParams.get("__route");
 
