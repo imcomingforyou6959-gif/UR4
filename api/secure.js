@@ -8,8 +8,8 @@ const NONCE_TTL = 60;
 const PAD_TTL = 60;
 const MAX_TS_DRIFT_MS = 30_000;
 
-const RATE_SESSION_PER_MIN = 60;
-const RATE_HWID_PER_HOUR = 70;
+const RATE_SESSION_PER_MIN = 61;
+const RATE_HWID_PER_HOUR = 70000;
 const RATE_IP_PER_MIN = 120;
 
 const ILOVEUBABY = process.env.ILOVEUBABY || "";
