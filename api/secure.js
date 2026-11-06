@@ -709,6 +709,20 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
         }
     }
 
+    if (isBootstrapLibPath(norm)) {
+        log("script.bootstrap_delivered", {
+            path: norm,
+            sessionId: maskToken(sessionId),
+            hwid: maskHwid(hwid),
+            bytes: isBinaryContent ? plaintext.length : plaintext.length,
+        });
+        return {
+            status: 200,
+            body: isBinaryContent ? plaintext : String(plaintext),
+            rawText: true,
+        };
+    }
+
     const sessionKey = Buffer.from(session.session_key_hex, "hex");
     const buf = isBinaryContent ? Buffer.from(plaintext) : Buffer.from(plaintext, "utf8");
     const pad = randomBytes(buf.length);
@@ -877,6 +891,12 @@ export default async function handler(req, res) {
                 getHeader(req, "x-session"),
                 getHeader(req, "x-hwid")
             );
+            if (result.rawText) {
+                return sendBinary(res, result.status, {
+                    "Content-Type": "text/plain; charset=utf-8",
+                    "Cache-Control": "no-store",
+                }, result.body);
+            }
             return sendJson(res, result.status, result.body);
         }
 
