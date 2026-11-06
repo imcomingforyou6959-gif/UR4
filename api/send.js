@@ -31,6 +31,11 @@ const ALLOWED_REASONS = /^(ua_mismatch|hard_block_ua:.+|AUTH_NETWORK|SEND_FAILED
 const BATCH_WINDOW_MS = 2000;
 const BATCH_TTL_SEC = 60;
 
+console.log("[/send] module loaded", {
+    hasBanHook: !!BAN_HOOK,
+    banHookPrefix: String(BAN_HOOK || "").slice(0, 40),
+});
+
 function clean(s, max) {
     if (typeof s !== "string") return "";
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
@@ -80,25 +85,85 @@ function check(emb) {
 }
 
 async function readBody(req) {
+    console.log("[/send] readBody start", {
+        hasReq: !!req,
+        reqType: typeof req,
+        ctor: req && req.constructor && req.constructor.name,
+        hasBodyProp: req && req.body !== undefined,
+        bodyType: req && req.body ? typeof req.body : "undefined",
+        bodyCtor: req && req.body && req.body.constructor && req.body.constructor.name,
+        hasJson: req && typeof req.json === "function",
+        hasText: req && typeof req.text === "function",
+        hasOn: req && typeof req.on === "function",
+        hasGetReader: req && req.body && typeof req.body.getReader === "function",
+    });
+
     if (!req) return null;
 
     const b = req.body;
     if (b !== undefined && b !== null) {
-        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
-        if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
-        if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
+        if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) {
+            console.log("[/send] readBody path: plain object");
+            return b;
+        }
+        if (typeof b === "string") {
+            console.log("[/send] readBody path: string");
+            try { return JSON.parse(b); } catch (e) { console.error("[/send] readBody string parse failed", String(e)); return null; }
+        }
+        if (Buffer.isBuffer(b)) {
+            console.log("[/send] readBody path: Buffer");
+            try { return JSON.parse(b.toString("utf8")); } catch (e) { console.error("[/send] readBody buffer parse failed", String(e)); return null; }
+        }
         if (typeof b === "object" && typeof b.getReader === "function") {
-            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
+            console.log("[/send] readBody path: stream (getReader)");
+            try {
+                const text = await new Response(b).text();
+                console.log("[/send] readBody stream text length", text.length);
+                return JSON.parse(text);
+            } catch (e) { console.error("[/send] readBody stream failed", String(e)); return null; }
         }
     }
 
     if (typeof req.json === "function") {
-        try { return await req.json(); } catch {}
-    }
-    if (typeof req.text === "function") {
-        try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
+        console.log("[/send] readBody path: req.json()");
+        try {
+            const r = await req.json();
+            console.log("[/send] readBody req.json() result", { type: typeof r, keys: r && typeof r === "object" ? Object.keys(r) : null });
+            return r;
+        } catch (e) {
+            console.error("[/send] readBody req.json() threw", String(e));
+        }
     }
 
+    if (typeof req.text === "function") {
+        console.log("[/send] readBody path: req.text()");
+        try {
+            const t = await req.text();
+            console.log("[/send] readBody req.text() length", t ? t.length : 0);
+            return t ? JSON.parse(t) : null;
+        } catch (e) {
+            console.error("[/send] readBody req.text() threw", String(e));
+        }
+    }
+
+    if (typeof req.on === "function") {
+        console.log("[/send] readBody path: req.on() stream");
+        try {
+            const text = await new Promise((resolve, reject) => {
+                const chunks = [];
+                req.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+                req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+                req.on("error", reject);
+            });
+            console.log("[/send] readBody req.on stream length", text ? text.length : 0);
+            return text ? JSON.parse(text) : null;
+        } catch (e) {
+            console.error("[/send] readBody req.on stream failed", String(e));
+            return null;
+        }
+    }
+
+    console.error("[/send] readBody exhausted all paths, returning null");
     return null;
 }
 
@@ -146,7 +211,11 @@ async function sendToDiscord(out) {
 }
 
 async function sendBatchEmbed(items) {
-    if (!items || items.length === 0) return;
+    console.log("[/send?report] sendBatchEmbed called", { count: items && items.length });
+    if (!items || items.length === 0) {
+        console.warn("[/send?report] sendBatchEmbed: empty items, returning");
+        return;
+    }
     if (!BAN_HOOK) {
         console.error("[/send?report] BAN_HOOK env var missing");
         return;
@@ -217,7 +286,14 @@ async function sendBatchEmbed(items) {
 }
 
 async function reportBan(b) {
+    console.log("[/send?report] reportBan called", {
+        hasB: !!b,
+        bType: typeof b,
+        keys: b && typeof b === "object" ? Object.keys(b) : null,
+    });
+
     if (!b || typeof b !== "object") {
+        console.error("[/send?report] reportBan: body is null/non-object, returning bad_json");
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
@@ -227,7 +303,18 @@ async function reportBan(b) {
     const ua = b.ua;
     const claimed = b.claimedExecutor;
 
-    if (!hwid || !uid) return Response.json({ err: "missing" }, { status: 400 });
+    console.log("[/send?report] parsed fields", {
+        hwid: String(hwid || "").slice(0, 12),
+        uid,
+        reason,
+        hasUa: !!ua,
+        hasClaimed: !!claimed,
+    });
+
+    if (!hwid || !uid) {
+        console.warn("[/send?report] missing hwid or uid", { hwid, uid });
+        return Response.json({ err: "missing" }, { status: 400 });
+    }
 
     if (!ALLOWED_REASONS.test(reason)) {
         console.warn("[/send?report] reason not allowed, ignoring", { reason });
@@ -248,12 +335,15 @@ async function reportBan(b) {
         claimed: clean(String(claimed || ""), 64),
     };
 
+    console.log("[/send?report] entry built", entry);
+
     const bufKey   = `banbuf:${hwid}`;
     const flushKey = `banbuf:${hwid}:flush`;
 
     try {
         await db.rpush(bufKey, JSON.stringify(entry));
         await db.expire(bufKey, BATCH_TTL_SEC);
+        console.log("[/send?report] rpush ok", { bufKey });
     } catch (e) {
         console.error("[/send?report] buffer write failed", String(e));
         return Response.json({ err: "buffer_write", msg: String(e) }, { status: 500 });
@@ -262,12 +352,14 @@ async function reportBan(b) {
     let got;
     try {
         got = await db.set(flushKey, "1", { nx: true, ex: BATCH_TTL_SEC });
+        console.log("[/send?report] flush lock result", { got, gotType: typeof got });
     } catch (e) {
         console.error("[/send?report] flush lock failed", String(e));
         return Response.json({ ok: true, buffered: true });
     }
 
     const ownsFlush = (got === "OK" || got === true || (got && typeof got === "object" && got.result === "OK"));
+    console.log("[/send?report] ownsFlush", ownsFlush);
 
     if (!ownsFlush) {
         console.log("[/send?report] buffered (another flush in progress)", { hwid });
@@ -275,11 +367,14 @@ async function reportBan(b) {
         return Response.json({ ok: true, buffered: true });
     }
 
+    console.log("[/send?report] sleeping for batch window", { ms: BATCH_WINDOW_MS });
     await new Promise((r) => setTimeout(r, BATCH_WINDOW_MS));
+    console.log("[/send?report] woke from batch window");
 
     let raw = [];
     try {
         raw = await db.lrange(bufKey, 0, -1);
+        console.log("[/send?report] lrange returned", { count: raw ? raw.length : 0 });
         await db.del(bufKey);
         await db.del(flushKey);
     } catch (e) {
@@ -291,36 +386,77 @@ async function reportBan(b) {
         try {
             const parsed = typeof r === "string" ? JSON.parse(r) : r;
             if (parsed && typeof parsed === "object") items.push(parsed);
-        } catch {}
+        } catch (e) {
+            console.error("[/send?report] parse buffer entry failed", String(e));
+        }
     }
 
     console.log("[/send?report] flushing batch", { count: items.length, hwid });
 
     if (items.length > 0) {
         await sendBatchEmbed(items);
+    } else {
+        console.warn("[/send?report] no items to flush");
     }
 
     return Response.json({ ok: true, batched: items.length });
 }
 
 export async function POST(req) {
+    console.log("[/send] POST handler entry", {
+        hasReq: !!req,
+        reqType: typeof req,
+        ctor: req && req.constructor && req.constructor.name,
+        hasBodyProp: req && req.body !== undefined,
+        bodyType: req && req.body ? typeof req.body : "undefined",
+        bodyCtor: req && req.body && req.body.constructor && req.body.constructor.name,
+        hasJson: req && typeof req.json === "function",
+        hasText: req && typeof req.text === "function",
+        hasOn: req && typeof req.on === "function",
+        hasGetReader: req && req.body && typeof req.body.getReader === "function",
+        urlType: req && typeof req.url,
+        urlValue: req && typeof req.url === "string" ? req.url.slice(0, 200) : "(not a string)",
+        hasHeaders: req && !!req.headers,
+        headersCtor: req && req.headers && req.headers.constructor && req.headers.constructor.name,
+    });
+
     let url;
-    try { url = new URL(req.url); }
-    catch { url = new URL(req.url, "https://ur-4.vercel.app"); }
+    try {
+        url = new URL(req.url);
+        console.log("[/send] URL parsed", { href: url.href, pathname: url.pathname });
+    } catch (e) {
+        console.error("[/send] URL parse failed, using fallback", String(e));
+        url = new URL(req.url, "https://ur-4.vercel.app");
+    }
     const route = url.searchParams.get("__route");
+    console.log("[/send] route", { route });
 
     const body = await readBody(req);
+
+    console.log("[/send] body resolved", {
+        hasBody: !!body,
+        bodyType: typeof body,
+        keys: body && typeof body === "object" ? Object.keys(body) : null,
+    });
 
     if (route === "report") {
         return reportBan(body);
     }
 
     if (!body || typeof body !== "object") {
+        console.error("[/send] bad body for non-report route");
         return Response.json({ err: "bad_json" }, { status: 400 });
     }
 
     const { token, payload } = body;
+    console.log("[/send] non-report body", {
+        hasToken: !!token,
+        tokenPrefix: token ? String(token).slice(0, 8) : null,
+        hasPayload: !!payload,
+    });
+
     if (!token || !payload) {
+        console.warn("[/send] missing token or payload");
         return Response.json({ err: "missing" }, { status: 400 });
     }
 
@@ -341,12 +477,14 @@ export async function POST(req) {
     });
 
     if (current !== "unused") {
+        console.warn("[/send] token not unused", { current });
         return Response.json({ err: "bad_token", current, got: current }, { status: 403 });
     }
 
     let consumed;
     try {
         consumed = await db.set(key, "used", { xx: true });
+        console.log("[/send] token consume result", { consumed, consumedType: typeof consumed });
     } catch (e) {
         console.error("[/send] redis set failed", String(e));
         return Response.json({ err: "redis_error" }, { status: 500 });
@@ -360,6 +498,7 @@ export async function POST(req) {
     await db.expire(key, 300).catch(() => {});
 
     if (!payload.embeds || !Array.isArray(payload.embeds) || payload.embeds.length !== 1) {
+        console.warn("[/send] bad embed shape", { embedsLength: payload.embeds && payload.embeds.length });
         return Response.json({ err: "bad_embed" }, { status: 400 });
     }
 
@@ -369,11 +508,14 @@ export async function POST(req) {
         return Response.json({ err: "rejected", why: v.why }, { status: 400 });
     }
 
+    console.log("[/send] embed validated, sending to Discord");
+
     const out = {
         username: USER,
         embeds: [v.out],
     };
 
     const r = await sendToDiscord(out);
+    console.log("[/send] final response", r);
     return Response.json(r);
 }
