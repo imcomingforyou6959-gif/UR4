@@ -31,6 +31,7 @@ const SCRIPT_BRANCH = "main";
 const SCRIPT_ALLOWED_PREFIXES = [
     "Adonis.lua", "Library.lua",
     "librarys/",
+    "private/",
     "addons/", "Rendering/", "Supporting/", "assets/",
 ];
 const SCRIPT_CACHE_TTL_MS = 5 * 60 * 1000;
