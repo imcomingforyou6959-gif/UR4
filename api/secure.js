@@ -1,20 +1,5 @@
 import { Redis } from "@upstash/redis";
 import crypto from "node:crypto";
-import {
-    hmacSha256,
-    timingSafeEqualHex,
-    hkdfSha256,
-    generateX25519,
-    exportPublicKey,
-    importPublicKey,
-    diffieHellman,
-    deriveFallbackSessionKey,
-    aesGcmEncrypt,
-    aesGcmDecrypt,
-    randomHex,
-    randomBytes,
-    xorBuffers,
-} from "./crypto.js";
 
 const db = Redis.fromEnv();
 
@@ -28,9 +13,8 @@ const RATE_HWID_PER_HOUR = 10;
 const RATE_IP_PER_MIN = 120;
 
 const MASTER_SECRET = process.env.MASTER_SECRET || "";
-
 const PAYLOAD_REPO_TOKEN = process.env.REPOTK;
-const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/rawr-payload";
+const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/hosting";
 const PAYLOAD_PATH = process.env.PAYLOAD_PATH || "constructs/Loadstring.lua";
 
 const HWID_JSON_URL =
@@ -68,7 +52,7 @@ const KNOWN_EXECUTORS = [
     "oxygen", "celery", "rce", "vexon", "sirius",
     "volt", "potassium", "synapse z", "madium", "seliware", "real",
     "isaeva", "velocity", "volcano", "cosmic", "macsploit", "opiumware",
-    "vega x", "cryptic", "scriptware", "arceus x", "roblox",
+    "vega x", "cryptic", "scriptware", "arceus x", "roblox"
 ];
 
 const FORWARD_BASE_URL = "https://ur-4.vercel.app";
@@ -96,6 +80,82 @@ function maskToken(token) {
     const s = String(token || "");
     if (s.length <= 10) return "***";
     return s.slice(0, 4) + "…" + s.slice(-4);
+}
+
+function hmacSha256(key, message) {
+    return crypto.createHmac("sha256", key).update(message).digest("hex");
+}
+
+function timingSafeEqualHex(a, b) {
+    const ba = Buffer.from(String(a || ""), "hex");
+    const bb = Buffer.from(String(b || ""), "hex");
+    if (ba.length !== bb.length || ba.length === 0) return false;
+    return crypto.timingSafeEqual(ba, bb);
+}
+
+function hkdfSha256(ikm, salt, info, length = 32) {
+    return Buffer.from(crypto.hkdfSync(
+        "sha256",
+        Buffer.isBuffer(ikm) ? ikm : Buffer.from(ikm, "utf8"),
+        Buffer.isBuffer(salt) ? salt : Buffer.from(salt || "", "utf8"),
+        Buffer.isBuffer(info) ? info : Buffer.from(info || "", "utf8"),
+        length
+    ));
+}
+
+function generateX25519() {
+    return crypto.generateKeyPairSync("x25519");
+}
+
+function exportPublicKey(key) {
+    return key.export({ format: "der", type: "spki" }).toString("base64");
+}
+
+function importPublicKey(b64) {
+    return crypto.createPublicKey({
+        key: Buffer.from(b64, "base64"),
+        format: "der",
+        type: "spki",
+    });
+}
+
+function diffieHellman(privateKey, publicKey) {
+    return crypto.diffieHellman({ privateKey, publicKey });
+}
+
+function aesGcmEncrypt(key, plaintext) {
+    const nonce = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce);
+    const ct = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    return {
+        nonce_b64: nonce.toString("base64"),
+        ciphertext_b64: ct.toString("base64"),
+        tag_b64: cipher.getAuthTag().toString("base64"),
+    };
+}
+
+function randomHex(bytes = 16) {
+    return crypto.randomBytes(bytes).toString("hex");
+}
+
+function randomBytes(length) {
+    return crypto.randomBytes(length);
+}
+
+function xorBuffers(a, b) {
+    if (a.length !== b.length) throw new Error("xor length mismatch");
+    const out = Buffer.alloc(a.length);
+    for (let i = 0; i < a.length; i++) out[i] = a[i] ^ b[i];
+    return out;
+}
+
+function deriveFallbackSessionKey(masterSecretHex, sessionId, hwid) {
+    return hkdfSha256(
+        Buffer.from(masterSecretHex, "hex"),
+        Buffer.from(sessionId, "hex"),
+        Buffer.from(`rawr-session-v2|${hwid}`, "utf8"),
+        32
+    );
 }
 
 async function getBanList() {
@@ -161,10 +221,7 @@ function classifyUA(ua, claimedExecutor) {
 
 async function forwardBanReport(payload) {
     try {
-        log("ban_forward.start", {
-            reason: payload.reason,
-            hwid: maskHwid(payload.hwid),
-        });
+        log("ban_forward.start", { reason: payload.reason, hwid: maskHwid(payload.hwid) });
         const res = await fetch(FORWARD_BASE_URL + "/api/blacklist/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -186,6 +243,36 @@ async function forwardBanReport(payload) {
     } catch (e) {
         err("ban_forward.threw", e);
     }
+}
+
+async function bumpLimit(key, max, windowSec) {
+    try {
+        const count = await db.incr(key);
+        if (count === 1) await db.expire(key, windowSec);
+        return count <= max;
+    } catch (e) {
+        err("ratelimit.redis_failed", e, { key });
+        return true;
+    }
+}
+
+async function checkRateLimits(sessionId, hwid, ip) {
+    if (sessionId) {
+        if (!(await bumpLimit(`rate:sess:${sessionId}`, RATE_SESSION_PER_MIN, 60))) {
+            return { ok: false, why: "session_rate" };
+        }
+    }
+    if (hwid) {
+        if (!(await bumpLimit(`rate:hwid:${hwid}`, RATE_HWID_PER_HOUR, 3600))) {
+            return { ok: false, why: "hwid_rate" };
+        }
+    }
+    if (ip) {
+        if (!(await bumpLimit(`rate:ip:${ip}`, RATE_IP_PER_MIN, 60))) {
+            return { ok: false, why: "ip_rate" };
+        }
+    }
+    return { ok: true };
 }
 
 async function readBody(req) {
@@ -219,9 +306,7 @@ async function readBody(req) {
 
 function getHeader(req, name) {
     if (!req || !req.headers) return "";
-    if (typeof req.headers.get === "function") {
-        return String(req.headers.get(name) || "");
-    }
+    if (typeof req.headers.get === "function") return String(req.headers.get(name) || "");
     const raw = req.headers[name] || req.headers[name.toLowerCase()];
     return raw ? String(raw) : "";
 }
@@ -231,9 +316,7 @@ async function getSession(sessionId) {
     let s;
     try {
         s = await db.get(`sess:${sessionId}`);
-        if (typeof s === "string") {
-            try { s = JSON.parse(s); } catch { return null; }
-        }
+        if (typeof s === "string") { try { s = JSON.parse(s); } catch { return null; } }
     } catch (e) {
         err("session.read_failed", e, { sessionId: maskToken(sessionId) });
         return null;
@@ -289,9 +372,10 @@ async function validate(req, body) {
     return { ok: true, session };
 }
 
+export { validate };
+
 async function createSession(body, req) {
     const { hwid, executor, placeId, jobId, userId, userName, displayName, client_pub_b64 } = body || {};
-
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
         err("session.missing_hwid", null, {
             hasHwid: !!hwid,
@@ -300,9 +384,7 @@ async function createSession(body, req) {
         return { status: 400, body: { err: "missing_hwid" } };
     }
 
-    const ip = String(
-        getHeader(req, "x-forwarded-for") || ""
-    ).split(",")[0].trim();
+    const ip = String(getHeader(req, "x-forwarded-for") || "").split(",")[0].trim();
 
     const rate = await checkRateLimits(null, hwid, ip);
     if (!rate.ok) {
@@ -313,10 +395,7 @@ async function createSession(body, req) {
     const banEntry = await checkBanned(hwid);
     if (banEntry) {
         log("session.banned", { hwid: maskHwid(hwid), reason: banEntry.reason || "banned" });
-        return {
-            status: 403,
-            body: { err: "banned", reason: banEntry.reason || "banned" },
-        };
+        return { status: 403, body: { err: "banned", reason: banEntry.reason || "banned" } };
     }
 
     const ua = getHeader(req, "user-agent");
@@ -361,7 +440,6 @@ async function createSession(body, req) {
             ua,
             claimedExecutor: uaClass.claimed || String(executor || ""),
         });
-
         if (uaClass.reason === "ua_mismatch") {
             try {
                 await db.set(
@@ -489,20 +567,16 @@ async function buildPayload(session, sessionId, hwid) {
     }
 
     const sessionKey = Buffer.from(session.session_key_hex, "hex");
-    const ciphertext = Buffer.from(plaintext, "utf8");
-    const pad = randomBytes(ciphertext.length);
-    const xored = xorBuffers(ciphertext, pad);
+    const buf = Buffer.from(plaintext, "utf8");
+    const pad = randomBytes(buf.length);
+    const xored = xorBuffers(buf, pad);
     const padEnc = aesGcmEncrypt(sessionKey, pad);
 
     const padId = randomHex(16);
     try {
         await db.set(
             `pad:${padId}`,
-            {
-                one_time: true,
-                session_id: sessionId,
-                at: Date.now(),
-            },
+            { one_time: true, session_id: sessionId, at: Date.now() },
             { ex: PAD_TTL }
         );
     } catch (e) {
@@ -541,7 +615,6 @@ async function buildAsset() {
             isBinary: true,
         };
     }
-
     try {
         const res = await fetch(ASSET_URL, { cache: "no-store" });
         if (!res.ok) throw new Error(`raw ${res.status}`);
@@ -552,12 +625,7 @@ async function buildAsset() {
             contentType: res.headers.get("content-type") || "image/webp",
         };
         log("asset.fetched", { bytes: buf.length });
-        return {
-            status: 200,
-            body: buf,
-            contentType: assetCache.contentType,
-            isBinary: true,
-        };
+        return { status: 200, body: buf, contentType: assetCache.contentType, isBinary: true };
     } catch (e) {
         err("asset.fetch_failed", e);
         return { status: 500, body: { err: "asset_fetch", msg: String(e) } };
@@ -570,9 +638,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
         err("script.bad_path", null, { path: norm.slice(0, 80) });
         return { status: 400, body: { err: "bad_path" } };
     }
-    const allowed = SCRIPT_ALLOWED_PREFIXES.some(
-        (p) => norm === p || norm.startsWith(p)
-    );
+    const allowed = SCRIPT_ALLOWED_PREFIXES.some((p) => norm === p || norm.startsWith(p));
     if (!allowed) {
         err("script.path_not_allowed", null, { path: norm.slice(0, 80) });
         return { status: 403, body: { err: "path_not_allowed" } };
@@ -592,7 +658,6 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
         const url =
             `https://raw.githubusercontent.com/${SCRIPT_OWNER}/${SCRIPT_REPO}/` +
             `${SCRIPT_BRANCH}/${norm}`;
-
         try {
             const res = await fetch(url, { cache: "no-store" });
             if (!res.ok) throw new Error(`raw ${res.status}`);
@@ -604,10 +669,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
                 if (!plaintext || plaintext.length < 5) throw new Error("empty");
             }
             scriptCache.set(norm, { data: plaintext, at: now, isBinaryContent });
-            log("script.fetched", {
-                path: norm,
-                bytes: isBinaryContent ? plaintext.length : plaintext.length,
-            });
+            log("script.fetched", { path: norm, bytes: plaintext.length });
         } catch (e) {
             err("script.fetch_failed", e, { path: norm });
             return { status: 500, body: { err: "script_fetch", msg: String(e) } };
@@ -615,9 +677,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
     }
 
     const sessionKey = Buffer.from(session.session_key_hex, "hex");
-    const buf = isBinaryContent
-        ? Buffer.from(plaintext)
-        : Buffer.from(plaintext, "utf8");
+    const buf = isBinaryContent ? Buffer.from(plaintext) : Buffer.from(plaintext, "utf8");
     const pad = randomBytes(buf.length);
     const xored = xorBuffers(buf, pad);
     const padEnc = aesGcmEncrypt(sessionKey, pad);
@@ -626,11 +686,7 @@ async function buildScript(scriptPath, session, sessionId, hwid) {
     try {
         await db.set(
             `pad:${padId}`,
-            {
-                one_time: true,
-                session_id: sessionId,
-                at: Date.now(),
-            },
+            { one_time: true, session_id: sessionId, at: Date.now() },
             { ex: PAD_TTL }
         );
     } catch (e) {
@@ -719,21 +775,12 @@ export default async function handler(req, res) {
                 (path === "/api/secure" && route === "payload_enc")) &&
             req.method === "GET"
         ) {
-            const sessionId = url.searchParams.get("s");
-            const hwid = getHeader(req, "x-hwid");
-
-            if (!sessionId || !hwid) {
-                log("payload.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
-                return sendJson(res, 403, { err: "no_session" });
+            const v = await validate(req, null);
+            if (!v.ok) {
+                log("payload.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
+                return sendJson(res, 403, { err: v.why });
             }
-
-            const session = await getSession(sessionId);
-            if (!session || session.hwid !== hwid) {
-                log("payload.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
-                return sendJson(res, 403, { err: "invalid_session" });
-            }
-
-            const result = await buildPayload(session, sessionId, hwid);
+            const result = await buildPayload(v.session, getHeader(req, "x-session"), getHeader(req, "x-hwid"));
             return sendJson(res, result.status, result.body);
         }
 
@@ -742,20 +789,11 @@ export default async function handler(req, res) {
                 (path === "/api/secure" && route === "asset_kitagawa")) &&
             req.method === "GET"
         ) {
-            const sessionId = url.searchParams.get("s");
-            const hwid = getHeader(req, "x-hwid");
-
-            if (!sessionId || !hwid) {
-                log("asset.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
-                return sendJson(res, 403, { err: "no_session" });
+            const v = await validate(req, null);
+            if (!v.ok) {
+                log("asset.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
+                return sendJson(res, 403, { err: v.why });
             }
-
-            const session = await getSession(sessionId);
-            if (!session || session.hwid !== hwid) {
-                log("asset.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
-                return sendJson(res, 403, { err: "invalid_session" });
-            }
-
             const result = await buildAsset();
             if (result.isBinary) {
                 return sendBinary(res, 200, {
@@ -767,24 +805,20 @@ export default async function handler(req, res) {
         }
 
         if (route === "script_proxy" && req.method === "GET") {
-            const sessionId = url.searchParams.get("s");
-            const hwid = getHeader(req, "x-hwid");
-
-            if (!sessionId || !hwid) {
-                log("script.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
-                return sendJson(res, 403, { err: "no_session" });
+            const v = await validate(req, null);
+            if (!v.ok) {
+                log("script.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
+                return sendJson(res, 403, { err: v.why });
             }
-
-            const session = await getSession(sessionId);
-            if (!session || session.hwid !== hwid) {
-                log("script.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
-                return sendJson(res, 403, { err: "invalid_session" });
-            }
-
             const rawPath = url.searchParams.get("__path") || "";
             let scriptPath = rawPath;
             try { scriptPath = decodeURIComponent(rawPath); } catch {}
-            const result = await buildScript(scriptPath, session, sessionId, hwid);
+            const result = await buildScript(
+                scriptPath,
+                v.session,
+                getHeader(req, "x-session"),
+                getHeader(req, "x-hwid")
+            );
             return sendJson(res, result.status, result.body);
         }
 
