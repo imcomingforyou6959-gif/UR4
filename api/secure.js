@@ -111,12 +111,63 @@ function classifyUA(ua, claimedExecutor) {
 
 async function forwardBanReport(payload) {
     try {
-        await fetch(FORWARD_BASE_URL + "/api/send?__route=report", {
+        console.log("[forwardBanReport] firing", {
+            reason: payload.reason,
+            hwid: String(payload.hwid || "").slice(0, 12),
+        });
+        const res = await fetch(FORWARD_BASE_URL + "/api/blacklist/report", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
         });
-    } catch {}
+        const bodyText = await res.text().catch(() => "");
+        console.log("[forwardBanReport] response", {
+            status: res.status,
+            body: bodyText.slice(0, 300),
+        });
+    } catch (e) {
+        console.error("[forwardBanReport] threw", String(e));
+    }
+}
+
+async function readBody(req) {
+    if (!req || req.body === undefined || req.body === null) return null;
+
+    const body = req.body;
+
+    // Already a parsed plain object (some runtimes)
+    if (typeof body === "object" && typeof body.getReader !== "function" && !Buffer.isBuffer(body)) {
+        return body;
+    }
+
+    // Raw string
+    if (typeof body === "string") {
+        try { return JSON.parse(body); } catch { return null; }
+    }
+
+    // Buffer
+    if (Buffer.isBuffer(body)) {
+        try { return JSON.parse(body.toString("utf8")); } catch { return null; }
+    }
+
+    // Web Request stream
+    if (typeof body === "object" && typeof body.getReader === "function") {
+        try {
+            const text = await new Response(body).text();
+            return JSON.parse(text);
+        } catch { return null; }
+    }
+
+    return null;
+}
+
+function getHeader(req, name) {
+    if (!req || !req.headers) return "";
+    if (typeof req.headers.get === "function") {
+        return String(req.headers.get(name) || "");
+    }
+    const raw = req.headers[name] || req.headers[name.toLowerCase()];
+    return raw ? String(raw) : "";
 }
 
 async function createSession(body, req) {
@@ -133,11 +184,11 @@ async function createSession(body, req) {
         };
     }
 
-    const ua = String(req?.headers?.get?.("user-agent") || req?.headers?.["user-agent"] || "");
+    const ua = getHeader(req, "user-agent");
     const uaClass = classifyUA(ua, executor);
 
     if (uaClass.action === "block") {
-        forwardBanReport({
+        await forwardBanReport({
             hwid,
             username: String(userName || "?"),
             displayName: String(displayName || userName || "?"),
@@ -154,7 +205,7 @@ async function createSession(body, req) {
     }
 
     if (uaClass.action === "report") {
-        forwardBanReport({
+        await forwardBanReport({
             hwid,
             username: String(userName || "?"),
             displayName: String(displayName || userName || "?"),
@@ -355,8 +406,41 @@ async function buildScript(scriptPath, token, hwid) {
     };
 }
 
+function sendJson(res, status, obj) {
+    if (res && typeof res.status === "function" && typeof res.json === "function") {
+        return res.status(status).json(obj);
+    }
+    if (res && typeof res.setHeader === "function") {
+        res.statusCode = status;
+        res.setHeader("Content-Type", "application/json");
+        if (typeof res.end === "function") {
+            res.end(JSON.stringify(obj));
+            return;
+        }
+    }
+    return new Response(JSON.stringify(obj), {
+        status,
+        headers: { "Content-Type": "application/json" },
+    });
+}
+
+function sendBinary(res, status, headers, body) {
+    if (res && typeof res.setHeader === "function" && typeof res.send === "function") {
+        res.statusCode = status;
+        for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+        return res.send(body);
+    }
+    if (res && typeof res.setHeader === "function" && typeof res.end === "function") {
+        res.statusCode = status;
+        for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+        return res.end(body);
+    }
+    return new Response(body, { status, headers });
+}
+
 export default async function handler(req, res) {
-    const url = new URL(req.url, `https://${req.headers.host || "localhost"}`);
+    const host = getHeader(req, "host") || "localhost";
+    const url = new URL(req.url, `https://${host}`);
     const path = url.pathname;
     const route = url.searchParams.get("__route");
 
@@ -365,15 +449,12 @@ export default async function handler(req, res) {
             (path === "/api/secure" && route === "session_init")) &&
         req.method === "POST"
     ) {
-        let body = req.body;
-        if (typeof body === "string") {
-            try { body = JSON.parse(body); } catch { body = null; }
-        }
+        const body = await readBody(req);
         if (!body || typeof body !== "object") {
-            return res.status(400).json({ err: "bad_json" });
+            return sendJson(res, 400, { err: "bad_json" });
         }
         const result = await createSession(body, req);
-        return res.status(result.status).json(result.body);
+        return sendJson(res, result.status, result.body);
     }
 
     if (
@@ -382,24 +463,25 @@ export default async function handler(req, res) {
         req.method === "GET"
     ) {
         const token = url.searchParams.get("s");
-        const hwid = req.headers["x-hwid"];
+        const hwid = getHeader(req, "x-hwid");
 
         if (!token || !hwid) {
-            return res.status(403).json({ err: "no_session" });
+            return sendJson(res, 403, { err: "no_session" });
         }
 
         const session = await getSession(token, hwid);
         if (!session) {
-            return res.status(403).json({ err: "invalid_session" });
+            return sendJson(res, 403, { err: "invalid_session" });
         }
 
         const result = await buildPayload(session, token, hwid);
         if (result.isBinary) {
-            res.setHeader("Content-Type", "application/octet-stream");
-            res.setHeader("Cache-Control", "no-store");
-            return res.status(200).send(result.body);
+            return sendBinary(res, 200, {
+                "Content-Type": "application/octet-stream",
+                "Cache-Control": "no-store",
+            }, result.body);
         }
-        return res.status(result.status).json(result.body);
+        return sendJson(res, result.status, result.body);
     }
 
     if (
@@ -408,37 +490,38 @@ export default async function handler(req, res) {
         req.method === "GET"
     ) {
         const token = url.searchParams.get("s");
-        const hwid = req.headers["x-hwid"];
+        const hwid = getHeader(req, "x-hwid");
 
         if (!token || !hwid) {
-            return res.status(403).json({ err: "no_session" });
+            return sendJson(res, 403, { err: "no_session" });
         }
 
         const session = await getSession(token, hwid);
         if (!session) {
-            return res.status(403).json({ err: "invalid_session" });
+            return sendJson(res, 403, { err: "invalid_session" });
         }
 
         const result = await buildAsset();
         if (result.isBinary) {
-            res.setHeader("Content-Type", result.contentType);
-            res.setHeader("Cache-Control", "public, max-age=3600");
-            return res.status(200).send(result.body);
+            return sendBinary(res, 200, {
+                "Content-Type": result.contentType,
+                "Cache-Control": "public, max-age=3600",
+            }, result.body);
         }
-        return res.status(result.status).json(result.body);
+        return sendJson(res, result.status, result.body);
     }
 
     if (route === "script_proxy" && req.method === "GET") {
         const token = url.searchParams.get("s");
-        const hwid = req.headers["x-hwid"];
+        const hwid = getHeader(req, "x-hwid");
 
         if (!token || !hwid) {
-            return res.status(403).json({ err: "no_session" });
+            return sendJson(res, 403, { err: "no_session" });
         }
 
         const session = await getSession(token, hwid);
         if (!session) {
-            return res.status(403).json({ err: "invalid_session" });
+            return sendJson(res, 403, { err: "invalid_session" });
         }
 
         const rawPath = url.searchParams.get("__path") || "";
@@ -446,12 +529,13 @@ export default async function handler(req, res) {
         try { scriptPath = decodeURIComponent(rawPath); } catch {}
         const result = await buildScript(scriptPath, token, hwid);
         if (result.isBinary) {
-            res.setHeader("Content-Type", "application/octet-stream");
-            res.setHeader("Cache-Control", "no-store");
-            return res.status(200).send(result.body);
+            return sendBinary(res, 200, {
+                "Content-Type": "application/octet-stream",
+                "Cache-Control": "no-store",
+            }, result.body);
         }
-        return res.status(result.status).json(result.body);
+        return sendJson(res, result.status, result.body);
     }
 
-    return res.status(404).json({ err: "not_found", path });
+    return sendJson(res, 404, { err: "not_found", path });
 }
