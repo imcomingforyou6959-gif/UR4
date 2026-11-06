@@ -15,11 +15,6 @@ function clean(s, max) {
     return s.slice(0, max).replace(/[\u0000-\u001F\u007F]/g, "?");
 }
 
-function short(s) {
-    if (typeof s !== "string") return String(s);
-    return s.length > 16 ? s.slice(0, 12) + "…" : s;
-}
-
 async function fireFallback(payload) {
     if (!FALLBACK_HOOK) {
         console.error("[/clients] fallback: FALLBACK_HOOK missing in env");
@@ -45,7 +40,7 @@ async function fireFallback(payload) {
         }],
     };
     console.log("[/clients] fallback: dispatching", {
-        hwid: short(payload.hwid),
+        hwid: payload.hwid,
         user: payload.username,
         executor: payload.executor,
     });
@@ -57,7 +52,7 @@ async function fireFallback(payload) {
         });
         const body = await res.text().catch(() => "");
         console.log("[/clients] fallback: hook responded", {
-            hwid: short(payload.hwid),
+            hwid: payload.hwid,
             status: res.status,
             ok: res.ok,
             body: body.slice(0, 200),
@@ -65,7 +60,7 @@ async function fireFallback(payload) {
         return { ok: res.ok, status: res.status };
     } catch (e) {
         console.error("[/clients] fallback: hook threw", {
-            hwid: short(payload.hwid),
+            hwid: payload.hwid,
             err: String(e),
         });
         return { ok: false, why: String(e) };
@@ -81,11 +76,11 @@ async function maybeFallback(payload) {
     try {
         sent = await db.get(sentKey);
     } catch (e) {
-        console.error("[/clients] fallback: db.get sent failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] fallback: db.get sent failed", { hwid, err: String(e) });
         return null;
     }
     if (sent) {
-        console.log("[/clients] fallback: skip (send already delivered)", { hwid: short(hwid) });
+        console.log("[/clients] fallback: skip (send already delivered)", { hwid });
         return null;
     }
 
@@ -94,7 +89,7 @@ async function maybeFallback(payload) {
     try {
         recent = await db.get(`seen:${hwid}`);
     } catch (e) {
-        console.error("[/clients] fallback: db.get seen failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] fallback: db.get seen failed", { hwid, err: String(e) });
         return null;
     }
 
@@ -103,10 +98,10 @@ async function maybeFallback(payload) {
         try {
             await db.set(`seen:${hwid}`, String(Date.now()), { ex: FALLBACK_WINDOW });
         } catch (e) {
-            console.error("[/clients] fallback: db.set seen failed", { hwid: short(hwid), err: String(e) });
+            console.error("[/clients] fallback: db.set seen failed", { hwid, err: String(e) });
         }
         console.log("[/clients] fallback: arm window (first heartbeat)", {
-            hwid: short(hwid),
+            hwid,
             windowSeconds: FALLBACK_WINDOW,
         });
         return null;
@@ -115,7 +110,7 @@ async function maybeFallback(payload) {
     const ageSeconds = Math.floor((Date.now() - firstSeen) / 1000);
     if (firstSeen > since) {
         console.log("[/clients] fallback: skip (within grace window)", {
-            hwid: short(hwid),
+            hwid,
             ageSeconds,
             remaining: Math.max(0, Math.floor((firstSeen - since) / 1000)),
         });
@@ -127,22 +122,22 @@ async function maybeFallback(payload) {
     try {
         cooling = await db.get(coolKey);
     } catch (e) {
-        console.error("[/clients] fallback: db.get cooldown failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] fallback: db.get cooldown failed", { hwid, err: String(e) });
         return null;
     }
     if (cooling) {
-        console.log("[/clients] fallback: skip (cooldown active)", { hwid: short(hwid) });
+        console.log("[/clients] fallback: skip (cooldown active)", { hwid });
         return null;
     }
 
     try {
         await db.set(coolKey, "1", { ex: FALLBACK_COOLDOWN });
     } catch (e) {
-        console.error("[/clients] fallback: db.set cooldown failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] fallback: db.set cooldown failed", { hwid, err: String(e) });
     }
 
     console.log("[/clients] fallback: firing", {
-        hwid: short(hwid),
+        hwid,
         ageSeconds,
         cooldownSeconds: FALLBACK_COOLDOWN,
     });
@@ -216,7 +211,7 @@ export async function POST(req) {
 
     const key = `client:${hwid}`;
     const prev = await db.get(key).catch((e) => {
-        console.error("[/clients] write: db.get prev failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] write: db.get prev failed", { hwid, err: String(e) });
         return null;
     });
 
@@ -226,14 +221,14 @@ export async function POST(req) {
             if (p && p.seen && Date.now() - p.seen < MIN_HEARTBEAT * 1000) {
                 const ago = Math.floor((Date.now() - p.seen) / 1000);
                 console.log("[/clients] write: throttled", {
-                    hwid: short(hwid),
+                    hwid,
                     agoSeconds: ago,
                     minSeconds: MIN_HEARTBEAT,
                 });
                 return Response.json({ ok: true, skipped: true });
             }
         } catch (e) {
-            console.warn("[/clients] write: prev bad json, overwriting", { hwid: short(hwid) });
+            console.warn("[/clients] write: prev bad json, overwriting", { hwid });
         }
     }
 
@@ -252,12 +247,12 @@ export async function POST(req) {
     try {
         await db.set(key, JSON.stringify(payload), { ex: TTL });
     } catch (e) {
-        console.error("[/clients] write: db.set failed", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] write: db.set failed", { hwid, err: String(e) });
         return Response.json({ err: "redis_error", msg: String(e) }, { status: 500 });
     }
 
     console.log("[/clients] write: stored", {
-        hwid: short(hwid),
+        hwid,
         user: payload.username,
         executor: payload.executor,
         game: payload.gameName,
@@ -267,7 +262,7 @@ export async function POST(req) {
     try {
         fallback = await maybeFallback(payload);
     } catch (e) {
-        console.error("[/clients] fallback: uncaught", { hwid: short(hwid), err: String(e) });
+        console.error("[/clients] fallback: uncaught", { hwid, err: String(e) });
     }
 
     return Response.json({ ok: true, fallback });
