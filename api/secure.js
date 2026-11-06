@@ -1,12 +1,38 @@
 import { Redis } from "@upstash/redis";
 import crypto from "node:crypto";
+import {
+    hmacSha256,
+    timingSafeEqualHex,
+    hkdfSha256,
+    generateX25519,
+    exportPublicKey,
+    importPublicKey,
+    diffieHellman,
+    deriveFallbackSessionKey,
+    aesGcmEncrypt,
+    aesGcmDecrypt,
+    randomHex,
+    randomBytes,
+    xorBuffers,
+} from "./crypto.js";
 
 const db = Redis.fromEnv();
 
 const SESSION_TTL = 300;
+const NONCE_TTL = 60;
+const PAD_TTL = 60;
+const MAX_TS_DRIFT_MS = 30_000;
+
+const RATE_SESSION_PER_MIN = 60;
+const RATE_HWID_PER_HOUR = 10;
+const RATE_IP_PER_MIN = 120;
+
+const MASTER_SECRET = process.env.MASTER_SECRET || "";
+
 const PAYLOAD_REPO_TOKEN = process.env.REPOTK;
-const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/hosting";
+const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/rawr-payload";
 const PAYLOAD_PATH = process.env.PAYLOAD_PATH || "constructs/Loadstring.lua";
+
 const HWID_JSON_URL =
     "https://raw.githubusercontent.com/madeformeanduu/vaild/refs/heads/main/Storage/HWID.json";
 
@@ -42,24 +68,22 @@ const KNOWN_EXECUTORS = [
     "oxygen", "celery", "rce", "vexon", "sirius",
     "volt", "potassium", "synapse z", "madium", "seliware", "real",
     "isaeva", "velocity", "volcano", "cosmic", "macsploit", "opiumware",
-    "vega x", "cryptic", "scriptware", "arceus x", "roblox"
+    "vega x", "cryptic", "scriptware", "arceus x", "roblox",
 ];
 
 const FORWARD_BASE_URL = "https://ur-4.vercel.app";
 
 function log(event, data) {
-    const line = { evt: event, ts: Date.now(), ...data };
-    console.log(JSON.stringify(line));
+    console.log(JSON.stringify({ evt: event, ts: Date.now(), ...data }));
 }
 
 function err(event, e, extra) {
-    const line = {
+    console.error(JSON.stringify({
         evt: event,
         ts: Date.now(),
         err: String(e && e.message ? e.message : e),
         ...(extra || {}),
-    };
-    console.error(JSON.stringify(line));
+    }));
 }
 
 function maskHwid(hwid) {
@@ -76,9 +100,7 @@ function maskToken(token) {
 
 async function getBanList() {
     const now = Date.now();
-    if (banCache.data && now - banCache.at < BAN_CACHE_TTL_MS) {
-        return banCache.data;
-    }
+    if (banCache.data && now - banCache.at < BAN_CACHE_TTL_MS) return banCache.data;
     try {
         const res = await fetch(HWID_JSON_URL, { cache: "no-store" });
         if (!res.ok) {
@@ -131,12 +153,7 @@ function classifyUA(ua, claimedExecutor) {
         : null;
 
     if (claimedExecutorKnown && uaExecutor && uaExecutor !== claimedExecutorKnown) {
-        return {
-            action: "report",
-            reason: "ua_mismatch",
-            ua,
-            claimed: claimedExecutor,
-        };
+        return { action: "report", reason: "ua_mismatch", ua, claimed: claimedExecutor };
     }
 
     return { action: "none", reason: "ok" };
@@ -173,20 +190,16 @@ async function forwardBanReport(payload) {
 
 async function readBody(req) {
     if (!req) return null;
-
     const b = req.body;
     if (b !== undefined && b !== null) {
         if (typeof b === "object" && typeof b.getReader !== "function" && !Buffer.isBuffer(b)) return b;
         if (typeof b === "string") { try { return JSON.parse(b); } catch { return null; } }
         if (Buffer.isBuffer(b)) { try { return JSON.parse(b.toString("utf8")); } catch { return null; } }
         if (typeof b === "object" && typeof b.getReader === "function") {
-            try { const text = await new Response(b).text(); return JSON.parse(text); } catch { return null; }
+            try { return JSON.parse(await new Response(b).text()); } catch { return null; }
         }
     }
-
-    if (typeof req.json === "function") {
-        try { return await req.json(); } catch {}
-    }
+    if (typeof req.json === "function") { try { return await req.json(); } catch {} }
     if (typeof req.text === "function") {
         try { const t = await req.text(); return t ? JSON.parse(t) : null; } catch {}
     }
@@ -201,7 +214,6 @@ async function readBody(req) {
             return text ? JSON.parse(text) : null;
         } catch { return null; }
     }
-
     return null;
 }
 
@@ -214,14 +226,88 @@ function getHeader(req, name) {
     return raw ? String(raw) : "";
 }
 
+async function getSession(sessionId) {
+    if (!sessionId) return null;
+    let s;
+    try {
+        s = await db.get(`sess:${sessionId}`);
+        if (typeof s === "string") {
+            try { s = JSON.parse(s); } catch { return null; }
+        }
+    } catch (e) {
+        err("session.read_failed", e, { sessionId: maskToken(sessionId) });
+        return null;
+    }
+    if (!s || !s.expiresAt || s.expiresAt < Date.now()) return null;
+    return s;
+}
+
+async function validate(req, body) {
+    const sessionId = getHeader(req, "x-session");
+    const nonce = getHeader(req, "x-nonce");
+    const tsRaw = getHeader(req, "x-timestamp");
+    const sig = getHeader(req, "x-signature");
+    const hwid = getHeader(req, "x-hwid");
+
+    if (!sessionId || !nonce || !tsRaw || !sig || !hwid) {
+        return { ok: false, why: "missing_headers" };
+    }
+
+    const ts = Number(tsRaw);
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > MAX_TS_DRIFT_MS) {
+        return { ok: false, why: "stale_timestamp" };
+    }
+
+    const session = await getSession(sessionId);
+    if (!session) return { ok: false, why: "no_session" };
+    if (session.hwid !== hwid) return { ok: false, why: "hwid_mismatch" };
+
+    const nonceKey = `nonce:${sessionId}:${nonce}`;
+    try {
+        const seen = await db.get(nonceKey);
+        if (seen) return { ok: false, why: "replay" };
+        await db.set(nonceKey, "1", { ex: NONCE_TTL });
+    } catch (e) {
+        err("auth.nonce_failed", e, { sessionId: maskToken(sessionId) });
+        return { ok: false, why: "nonce_store" };
+    }
+
+    const url = new URL(req.url, "https://ur-4.vercel.app");
+    const bodyHash = hmacSha256("", JSON.stringify(body || {}));
+    const expected = hmacSha256(
+        Buffer.from(session.session_key_hex, "hex"),
+        `${req.method}|${url.pathname}|${nonce}|${ts}|${bodyHash}`
+    );
+
+    if (!timingSafeEqualHex(sig, expected)) {
+        return { ok: false, why: "bad_signature" };
+    }
+
+    const rate = await checkRateLimits(sessionId, hwid, null);
+    if (!rate.ok) return { ok: false, why: rate.why };
+
+    return { ok: true, session };
+}
+
 async function createSession(body, req) {
-    const { hwid, executor, placeId, jobId, userId, userName, displayName } = body || {};
+    const { hwid, executor, placeId, jobId, userId, userName, displayName, client_pub_b64 } = body || {};
+
     if (!hwid || typeof hwid !== "string" || hwid.length < 8) {
         err("session.missing_hwid", null, {
             hasHwid: !!hwid,
             hwidLen: typeof hwid === "string" ? hwid.length : 0,
         });
         return { status: 400, body: { err: "missing_hwid" } };
+    }
+
+    const ip = String(
+        getHeader(req, "x-forwarded-for") || ""
+    ).split(",")[0].trim();
+
+    const rate = await checkRateLimits(null, hwid, ip);
+    if (!rate.ok) {
+        log("session.rate_limited", { hwid: maskHwid(hwid), why: rate.why });
+        return { status: 429, body: { err: "rate_limited", why: rate.why } };
     }
 
     const banEntry = await checkBanned(hwid);
@@ -292,16 +378,48 @@ async function createSession(body, req) {
         }
     }
 
-    const token = crypto.randomBytes(32).toString("hex");
-    const nonce = crypto.randomBytes(12).toString("hex");
-    const expiresAt = Math.floor(Date.now() / 1000) + SESSION_TTL;
+    const sessionId = randomHex(16);
+    let sessionKey;
+    let serverPubB64 = null;
+    let mode = "fallback";
+
+    if (client_pub_b64) {
+        try {
+            const clientPub = importPublicKey(client_pub_b64);
+            const { publicKey: serverPub, privateKey: serverPriv } = generateX25519();
+            const shared = diffieHellman(serverPriv, clientPub);
+            sessionKey = hkdfSha256(
+                shared,
+                Buffer.from(sessionId, "hex"),
+                Buffer.from("rawr-session-v2", "utf8"),
+                32
+            );
+            serverPubB64 = exportPublicKey(serverPub);
+            mode = "x25519";
+        } catch (e) {
+            err("session.x25519_failed", e, { hwid: maskHwid(hwid) });
+            if (!MASTER_SECRET) {
+                return { status: 500, body: { err: "crypto_unavailable" } };
+            }
+            sessionKey = deriveFallbackSessionKey(MASTER_SECRET, sessionId, hwid);
+            mode = "fallback";
+        }
+    } else {
+        if (!MASTER_SECRET) {
+            return { status: 500, body: { err: "crypto_unavailable" } };
+        }
+        sessionKey = deriveFallbackSessionKey(MASTER_SECRET, sessionId, hwid);
+        mode = "fallback";
+    }
+
+    const expiresAt = Date.now() + SESSION_TTL * 1000;
 
     try {
         await db.set(
-            `sess:${token}`,
+            `sess:${sessionId}`,
             {
                 hwid,
-                nonce,
+                session_key_hex: sessionKey.toString("hex"),
                 expiresAt,
                 executor: String(executor || ""),
                 ua: ua.substring(0, 256),
@@ -309,12 +427,14 @@ async function createSession(body, req) {
                 jobId: String(jobId || ""),
                 userId: Number(userId) || 0,
                 userName: String(userName || ""),
+                mode,
             },
             { ex: SESSION_TTL }
         );
         log("session.created", {
             hwid: maskHwid(hwid),
-            token: maskToken(token),
+            sessionId: maskToken(sessionId),
+            mode,
             user: String(userName || "?").slice(0, 40),
         });
     } catch (e) {
@@ -322,31 +442,34 @@ async function createSession(body, req) {
         return { status: 503, body: { err: "session_store", msg: String(e) } };
     }
 
-    return { status: 200, body: { token, nonce, expiresAt } };
+    return {
+        status: 200,
+        body: {
+            session_id: sessionId,
+            session_key_hex: mode === "fallback" ? sessionKey.toString("hex") : undefined,
+            server_pub_b64: serverPubB64,
+            mode,
+            expires_at: expiresAt,
+        },
+    };
 }
 
-async function getSession(token, hwid) {
-    if (!token || !hwid) return null;
-    let s;
-    try {
-        s = await db.get(`sess:${token}`);
-        if (typeof s === "string") {
-            try { s = JSON.parse(s); } catch {}
+async function fetchPrivateFile(repo, path, token) {
+    const res = await fetch(
+        `https://api.github.com/repos/${repo}/contents/${path}`,
+        {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github.v3.raw",
+            },
+            cache: "no-store",
         }
-    } catch (e) {
-        err("session.read_failed", e, { token: maskToken(token) });
-        return null;
-    }
-    if (!s || s.hwid !== hwid) return null;
-    if (Math.floor(Date.now() / 1000) > s.expiresAt) {
-        await db.del(`sess:${token}`).catch(() => {});
-        log("session.expired", { token: maskToken(token) });
-        return null;
-    }
-    return s;
+    );
+    if (!res.ok) throw new Error(`gh ${res.status}`);
+    return await res.text();
 }
 
-async function buildPayload(session, token, hwid) {
+async function buildPayload(session, sessionId, hwid) {
     if (!PAYLOAD_REPO_TOKEN) {
         err("payload.token_missing");
         return { status: 500, body: { err: "payload_token_missing" } };
@@ -354,20 +477,9 @@ async function buildPayload(session, token, hwid) {
 
     let plaintext;
     try {
-        const res = await fetch(
-            `https://api.github.com/repos/${PAYLOAD_REPO}/contents/${PAYLOAD_PATH}`,
-            {
-                headers: {
-                    Authorization: `Bearer ${PAYLOAD_REPO_TOKEN}`,
-                    Accept: "application/vnd.github.v3.raw",
-                },
-                cache: "no-store",
-            }
-        );
-        if (!res.ok) throw new Error(`gh ${res.status}`);
-        plaintext = await res.text();
+        plaintext = await fetchPrivateFile(PAYLOAD_REPO, PAYLOAD_PATH, PAYLOAD_REPO_TOKEN);
     } catch (e) {
-        err("payload.fetch_failed", e, { token: maskToken(token) });
+        err("payload.fetch_failed", e, { sessionId: maskToken(sessionId) });
         return { status: 500, body: { err: "payload_fetch", msg: String(e) } };
     }
 
@@ -376,20 +488,46 @@ async function buildPayload(session, token, hwid) {
         return { status: 500, body: { err: "payload_empty" } };
     }
 
-    const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
-    const buf = Buffer.from(plaintext, "utf8");
-    const out = Buffer.alloc(buf.length);
-    for (let i = 0; i < buf.length; i++) {
-        out[i] = buf[i] ^ key[i % key.length];
+    const sessionKey = Buffer.from(session.session_key_hex, "hex");
+    const ciphertext = Buffer.from(plaintext, "utf8");
+    const pad = randomBytes(ciphertext.length);
+    const xored = xorBuffers(ciphertext, pad);
+    const padEnc = aesGcmEncrypt(sessionKey, pad);
+
+    const padId = randomHex(16);
+    try {
+        await db.set(
+            `pad:${padId}`,
+            {
+                one_time: true,
+                session_id: sessionId,
+                at: Date.now(),
+            },
+            { ex: PAD_TTL }
+        );
+    } catch (e) {
+        err("payload.pad_store_failed", e, { sessionId: maskToken(sessionId) });
+        return { status: 500, body: { err: "pad_store" } };
     }
 
     log("payload.delivered", {
-        token: maskToken(token),
+        sessionId: maskToken(sessionId),
         hwid: maskHwid(hwid),
-        bytes: out.length,
+        bytes: xored.length,
+        padId: maskToken(padId),
     });
 
-    return { status: 200, body: out, isBinary: true };
+    return {
+        status: 200,
+        body: {
+            pad_id: padId,
+            nonce_b64: padEnc.nonce_b64,
+            encrypted_pad_b64: padEnc.ciphertext_b64,
+            tag_b64: padEnc.tag_b64,
+            ciphertext_b64: xored.toString("base64"),
+            ttl: PAD_TTL,
+        },
+    };
 }
 
 async function buildAsset() {
@@ -426,7 +564,7 @@ async function buildAsset() {
     }
 }
 
-async function buildScript(scriptPath, token, hwid) {
+async function buildScript(scriptPath, session, sessionId, hwid) {
     const norm = String(scriptPath || "").replace(/^\/+/, "");
     if (!norm || norm.includes("..") || norm.length > 200) {
         err("script.bad_path", null, { path: norm.slice(0, 80) });
@@ -476,27 +614,48 @@ async function buildScript(scriptPath, token, hwid) {
         }
     }
 
-    const key = crypto.createHash("sha256").update(token + "|" + hwid).digest();
+    const sessionKey = Buffer.from(session.session_key_hex, "hex");
     const buf = isBinaryContent
         ? Buffer.from(plaintext)
         : Buffer.from(plaintext, "utf8");
-    const out = Buffer.alloc(buf.length);
-    for (let i = 0; i < buf.length; i++) {
-        out[i] = buf[i] ^ key[i % key.length];
+    const pad = randomBytes(buf.length);
+    const xored = xorBuffers(buf, pad);
+    const padEnc = aesGcmEncrypt(sessionKey, pad);
+
+    const padId = randomHex(16);
+    try {
+        await db.set(
+            `pad:${padId}`,
+            {
+                one_time: true,
+                session_id: sessionId,
+                at: Date.now(),
+            },
+            { ex: PAD_TTL }
+        );
+    } catch (e) {
+        err("script.pad_store_failed", e, { sessionId: maskToken(sessionId) });
+        return { status: 500, body: { err: "pad_store" } };
     }
 
     log("script.delivered", {
         path: norm,
-        token: maskToken(token),
+        sessionId: maskToken(sessionId),
         hwid: maskHwid(hwid),
-        bytes: out.length,
+        bytes: xored.length,
+        padId: maskToken(padId),
     });
 
     return {
         status: 200,
-        body: out,
-        contentType: "application/octet-stream",
-        isBinary: true,
+        body: {
+            pad_id: padId,
+            nonce_b64: padEnc.nonce_b64,
+            encrypted_pad_b64: padEnc.ciphertext_b64,
+            tag_b64: padEnc.tag_b64,
+            ciphertext_b64: xored.toString("base64"),
+            ttl: PAD_TTL,
+        },
     };
 }
 
@@ -560,27 +719,21 @@ export default async function handler(req, res) {
                 (path === "/api/secure" && route === "payload_enc")) &&
             req.method === "GET"
         ) {
-            const token = url.searchParams.get("s");
+            const sessionId = url.searchParams.get("s");
             const hwid = getHeader(req, "x-hwid");
 
-            if (!token || !hwid) {
-                log("payload.no_session", { hasToken: !!token, hasHwid: !!hwid });
+            if (!sessionId || !hwid) {
+                log("payload.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
                 return sendJson(res, 403, { err: "no_session" });
             }
 
-            const session = await getSession(token, hwid);
-            if (!session) {
-                log("payload.invalid_session", { token: maskToken(token), hwid: maskHwid(hwid) });
+            const session = await getSession(sessionId);
+            if (!session || session.hwid !== hwid) {
+                log("payload.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
                 return sendJson(res, 403, { err: "invalid_session" });
             }
 
-            const result = await buildPayload(session, token, hwid);
-            if (result.isBinary) {
-                return sendBinary(res, 200, {
-                    "Content-Type": "application/octet-stream",
-                    "Cache-Control": "no-store",
-                }, result.body);
-            }
+            const result = await buildPayload(session, sessionId, hwid);
             return sendJson(res, result.status, result.body);
         }
 
@@ -589,17 +742,17 @@ export default async function handler(req, res) {
                 (path === "/api/secure" && route === "asset_kitagawa")) &&
             req.method === "GET"
         ) {
-            const token = url.searchParams.get("s");
+            const sessionId = url.searchParams.get("s");
             const hwid = getHeader(req, "x-hwid");
 
-            if (!token || !hwid) {
-                log("asset.no_session", { hasToken: !!token, hasHwid: !!hwid });
+            if (!sessionId || !hwid) {
+                log("asset.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
                 return sendJson(res, 403, { err: "no_session" });
             }
 
-            const session = await getSession(token, hwid);
-            if (!session) {
-                log("asset.invalid_session", { token: maskToken(token), hwid: maskHwid(hwid) });
+            const session = await getSession(sessionId);
+            if (!session || session.hwid !== hwid) {
+                log("asset.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
                 return sendJson(res, 403, { err: "invalid_session" });
             }
 
@@ -614,30 +767,24 @@ export default async function handler(req, res) {
         }
 
         if (route === "script_proxy" && req.method === "GET") {
-            const token = url.searchParams.get("s");
+            const sessionId = url.searchParams.get("s");
             const hwid = getHeader(req, "x-hwid");
 
-            if (!token || !hwid) {
-                log("script.no_session", { hasToken: !!token, hasHwid: !!hwid });
+            if (!sessionId || !hwid) {
+                log("script.no_session", { hasSession: !!sessionId, hasHwid: !!hwid });
                 return sendJson(res, 403, { err: "no_session" });
             }
 
-            const session = await getSession(token, hwid);
-            if (!session) {
-                log("script.invalid_session", { token: maskToken(token), hwid: maskHwid(hwid) });
+            const session = await getSession(sessionId);
+            if (!session || session.hwid !== hwid) {
+                log("script.invalid_session", { sessionId: maskToken(sessionId), hwid: maskHwid(hwid) });
                 return sendJson(res, 403, { err: "invalid_session" });
             }
 
             const rawPath = url.searchParams.get("__path") || "";
             let scriptPath = rawPath;
             try { scriptPath = decodeURIComponent(rawPath); } catch {}
-            const result = await buildScript(scriptPath, token, hwid);
-            if (result.isBinary) {
-                return sendBinary(res, 200, {
-                    "Content-Type": "application/octet-stream",
-                    "Cache-Control": "no-store",
-                }, result.body);
-            }
+            const result = await buildScript(scriptPath, session, sessionId, hwid);
             return sendJson(res, result.status, result.body);
         }
 
