@@ -62,6 +62,12 @@ const KNOWN_EXECUTORS = [
     "vega x", "cryptic", "scriptware", "arceus x", "roblox"
 ];
 
+const GAME_MAP = {
+    ttk:     "games/TTK.lua",
+    tubbies: "games/tubbies.lua",
+    arc:     "games/arc.txt",
+};
+
 const FORWARD_BASE_URL = "https://ur-4.vercel.app";
 
 function log(event, data) {
@@ -620,6 +626,72 @@ async function buildPayload(session, sessionId, hwid) {
     };
 }
 
+async function buildGame(session, sessionId, hwid, gameName) {
+    if (!PAYLOAD_REPO_TOKEN) {
+        err("game.token_missing");
+        return { status: 500, body: { err: "game_token_missing" } };
+    }
+
+    const key = String(gameName || "").toLowerCase().trim();
+    const rel = GAME_MAP[key];
+    if (!rel) {
+        err("game.bad_name", null, { name: key.slice(0, 40) });
+        return { status: 400, body: { err: "bad_game", name: key.slice(0, 40) } };
+    }
+
+    let plaintext;
+    try {
+        plaintext = await fetchPrivateFile(PAYLOAD_REPO, rel, PAYLOAD_REPO_TOKEN);
+    } catch (e) {
+        err("game.fetch_failed", e, { gameName: key });
+        return { status: 500, body: { err: "game_fetch", msg: String(e) } };
+    }
+
+    if (!plaintext || plaintext.length < 10) {
+        err("game.empty", null, { gameName: key, length: plaintext ? plaintext.length : 0 });
+        return { status: 500, body: { err: "game_empty" } };
+    }
+
+    const sessionKey = Buffer.from(session.session_key_hex, "hex");
+    const buf = Buffer.from(plaintext, "utf8");
+    const pad = randomBytes(buf.length);
+    const xored = xorBuffers(buf, pad);
+    const padEnc = aesCtrEncrypt(sessionKey, pad);
+
+    const padId = randomHex(16);
+    try {
+        await db.set(
+            `pad:${padId}`,
+            { one_time: true, session_id: sessionId, at: Date.now() },
+            { ex: PAD_TTL }
+        );
+    } catch (e) {
+        err("game.pad_store_failed", e, { sessionId: maskToken(sessionId) });
+        return { status: 500, body: { err: "pad_store" } };
+    }
+
+    log("game.delivered", {
+        game: key,
+        path: rel,
+        sessionId: maskToken(sessionId),
+        hwid: maskHwid(hwid),
+        bytes: xored.length,
+        padId: maskToken(padId),
+    });
+
+    return {
+        status: 200,
+        body: {
+            pad_id: padId,
+            iv_b64: padEnc.iv_b64,
+            encrypted_pad_b64: padEnc.ciphertext_b64,
+            tag_hex: padEnc.tag_hex,
+            ciphertext_b64: xored.toString("base64"),
+            ttl: PAD_TTL,
+        },
+    };
+}
+
 async function buildAsset() {
     const now = Date.now();
     if (assetCache.data && now - assetCache.at < ASSET_CACHE_TTL_MS) {
@@ -810,6 +882,17 @@ export default async function handler(req, res) {
             }
             const result = await buildPayload(v.session, getHeader(req, "x-session"), getHeader(req, "x-hwid"));
             return sendJson(res, result.status, result.body);
+        }
+
+        if ((path === "/api/game.enc" || (path === "/api/secure" && route === "game_enc")) && req.method === "GET") {
+            const v = await validate(req, null);
+            if (!v.ok) {
+            log("game.invalid", { why: v.why, hwid: maskHwid(getHeader(req, "x-hwid")) });
+            return sendJson(res, 403, { err: v.why });
+        }
+        const gameName = url.searchParams.get("name") || "";
+        const result = await buildGame(v.session, getHeader(req, "x-session"), getHeader(req, "x-hwid"), gameName);
+        return sendJson(res, result.status, result.body);
         }
 
         if ((path === "/api/asset/kitagawa" || (path === "/api/secure" && route === "asset_kitagawa")) && req.method === "GET") {
