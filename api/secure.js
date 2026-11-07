@@ -33,6 +33,7 @@ const SCRIPT_ALLOWED_PREFIXES = [
     "Adonis.lua", "Library.lua",
     "librarys/",
     "private/",
+    "games/",
     "addons/", "Rendering/", "Supporting/", "assets/",
 ];
 const SCRIPT_PRIVATE_ALLOWLIST = [
