@@ -5,6 +5,7 @@
     { "source": "/api/payload.enc",      "destination": "/api/secure?__route=payload_enc" },
     { "source": "/api/asset/kitagawa",   "destination": "/api/secure?__route=asset_kitagawa" },
     { "source": "/api/f/(.*)",           "destination": "/api/secure?__route=script_proxy&__path=$1" },
+    { "source": "/api/game.enc",         "destination": "/api/secure?__route=game_enc" },
     { "source": "/api/blacklist/report", "destination": "/api/send?__route=report" }
   ]
 }
