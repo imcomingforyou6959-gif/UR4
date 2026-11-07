@@ -16,6 +16,7 @@ const ILOVEUBABY = process.env.ILOVEUBABY || "";
 const PAYLOAD_REPO_TOKEN = process.env.REPOTK;
 const PAYLOAD_REPO = process.env.PAYLOAD_REPO || "imcomingforyou6959-gif/hosting";
 const PAYLOAD_PATH = process.env.PAYLOAD_PATH || "constructs/Loadstring.lua";
+const LOADER_PATH = process.env.LOADER_PATH || "constructs/Loader.lua";
 
 const HWID_JSON_URL =
     "https://raw.githubusercontent.com/madeformeanduu/vaild/refs/heads/main/Storage/HWID.json";
@@ -517,6 +518,59 @@ async function fetchPrivateFile(repo, path, token) {
     return await res.text();
 }
 
+async function buildLoader(session, sessionId, hwid) {
+    if (!PAYLOAD_REPO_TOKEN) {
+        err("loader.token_missing");
+        return { status: 500, body: { err: "loader_token_missing" } };
+    }
+
+    let plaintext;
+    try {
+        plaintext = await fetchPrivateFile(PAYLOAD_REPO, LOADER_PATH, PAYLOAD_REPO_TOKEN);
+    } catch (e) {
+        err("loader.fetch_failed", e);
+        return { status: 500, body: { err: "loader_fetch", msg: String(e) } };
+    }
+
+    if (!plaintext || plaintext.length < 50) {
+        err("loader.empty", null, { length: plaintext ? plaintext.length : 0 });
+        return { status: 500, body: { err: "loader_empty" } };
+    }
+
+    const sessionKey = Buffer.from(session.session_key_hex, "hex");
+    const buf = Buffer.from(plaintext, "utf8");
+    const pad = randomBytes(buf.length);
+    const xored = xorBuffers(buf, pad);
+    const padEnc = aesCtrEncrypt(sessionKey, pad);
+
+    const padId = randomHex(16);
+    try {
+        await db.set(`pad:${padId}`, { one_time: true, session_id: sessionId, at: Date.now() }, { ex: PAD_TTL });
+    } catch (e) {
+        err("loader.pad_store_failed", e, { sessionId: maskToken(sessionId) });
+        return { status: 500, body: { err: "pad_store" } };
+    }
+
+    log("loader.delivered", {
+        sessionId: maskToken(sessionId),
+        hwid: maskHwid(hwid),
+        bytes: xored.length,
+        padId: maskToken(padId),
+    });
+
+    return {
+        status: 200,
+        body: {
+            pad_id: padId,
+            iv_b64: padEnc.iv_b64,
+            encrypted_pad_b64: padEnc.ciphertext_b64,
+            tag_hex: padEnc.tag_hex,
+            ciphertext_b64: xored.toString("base64"),
+            ttl: PAD_TTL,
+        },
+    };
+}
+
 async function buildPayload(session, sessionId, hwid) {
     if (!PAYLOAD_REPO_TOKEN) {
         err("payload.token_missing");
@@ -728,6 +782,22 @@ export default async function handler(req, res) {
                 return sendJson(res, 400, { err: "bad_json" });
             }
             const result = await createSession(body, req);
+            return sendJson(res, result.status, result.body);
+        }
+
+        if ((path === "/api/loader.enc" || (path === "/api/secure" && route === "loader_enc")) && req.method === "GET") {
+            const sid = getHeader(req, "x-session");
+            const hwid = getHeader(req, "x-hwid");
+            if (!sid || !hwid) {
+                log("loader.no_session", { hasSession: !!sid, hasHwid: !!hwid });
+                return sendJson(res, 403, { err: "no_session" });
+            }
+            const sess = await getSession(sid);
+            if (!sess || sess.hwid !== hwid) {
+                log("loader.invalid_session", { sessionId: maskToken(sid), hwid: maskHwid(hwid) });
+                return sendJson(res, 403, { err: "invalid_session" });
+            }
+            const result = await buildLoader(sess, sid, hwid);
             return sendJson(res, result.status, result.body);
         }
 
